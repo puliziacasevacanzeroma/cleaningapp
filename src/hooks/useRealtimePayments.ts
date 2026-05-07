@@ -16,6 +16,7 @@ import {
   type DebtCalcOverride,
   type DebtCalcInventoryItem,
 } from "~/lib/payments/debtCalculator";
+import { SYSTEM_ITEMS, OPTIONAL_ITEMS } from "~/lib/inventory/systemItems";
 
 // ══════════════════════════════════════════════════════════════════
 // ⚡ ARCHITETTURA PERFORMANCE
@@ -53,6 +54,8 @@ export interface Payment {
   isCreditTransfer?: boolean;
 }
 
+export type ItemCategoryGroup = "linen" | "kit_cortesia" | "servizi_extra" | "cleaning_product" | "altro";
+
 export interface OrderItemDetail {
   itemId: string;
   name: string;
@@ -60,6 +63,12 @@ export interface OrderItemDetail {
   unitPrice: number;
   totalPrice: number;
   categoryName: string;
+  /**
+   * Gruppo logico per la UI: distingue biancheria, kit cortesia,
+   * prodotti pulizia operatore (visibili nei dettagli admin per
+   * trasparenza interna ma esclusi dai TOTALI fatturati).
+   */
+  categoryGroup?: ItemCategoryGroup;
 }
 
 export interface ServiceDetail {
@@ -76,6 +85,14 @@ export interface ServiceDetail {
   hasOverride: boolean;
   overrideReason?: string;
   items?: OrderItemDetail[];
+  /** Solo articoli biancheria (lenzuola, federe, asciugamani, tappetini, ecc.). */
+  linenItems?: OrderItemDetail[];
+  /** Solo articoli kit cortesia (shampoo, saponetta, crema, bagnoschiuma). */
+  kitItems?: OrderItemDetail[];
+  /** Subtotale solo biancheria. */
+  linenSubtotal?: number;
+  /** Subtotale solo kit cortesia. */
+  kitSubtotal?: number;
   cleaningId?: string;
   laundryOrderId?: string;
   holidayFee?: number;
@@ -180,7 +197,8 @@ async function loadStaticData(): Promise<boolean> {
         id: doc.id,
         name: data.name || "",
         sellPrice: data.sellPrice || data.price || 0,
-        categoryName: data.categoryName || data.category || "Altro",
+        categoryName: data.categoryName || data.category || data.categoryId || "Altro",
+        categoryId: data.categoryId || data.category || undefined,
       };
       staticCache.inventory.set(doc.id, itemData);
       if (data.key) staticCache.inventory.set(data.key, itemData);
@@ -196,6 +214,100 @@ async function loadStaticData(): Promise<boolean> {
 }
 
 // ==================== UTILITÀ ====================
+
+/**
+ * Mappa rapida ID/key → SystemItem (include OPTIONAL_ITEMS) per fallback
+ * quando l'inventario in DB non ha registrato un articolo (legacy data).
+ */
+const SYSTEM_ITEMS_BY_KEY: Record<string, { name: string; categoryId: string }> = (() => {
+  const map: Record<string, { name: string; categoryId: string }> = {};
+  const all: Array<{ id: string; key: string; name: string; categoryId: string }> = [
+    ...SYSTEM_ITEMS.map(i => ({ id: i.id, key: i.key, name: i.name, categoryId: i.categoryId })),
+    ...OPTIONAL_ITEMS.map(i => ({ id: i.id, key: i.key, name: i.name, categoryId: i.categoryId })),
+  ];
+  all.forEach(({ id, key, name, categoryId }) => {
+    map[id] = { name, categoryId };
+    map[key] = { name, categoryId };
+    if (id.startsWith("item_")) map[id.replace("item_", "")] = { name, categoryId };
+  });
+  return map;
+})();
+
+/**
+ * Determina se una stringa "sembra" un ID tecnico (snake_case, camelCase,
+ * o ID Firestore alfanumerico) piuttosto che un nome leggibile.
+ */
+function looksLikeRawId(s: string): boolean {
+  if (!s || s.length < 4) return false;
+  if (/[\s-]/.test(s)) return false;
+  if (/^[a-z][a-z0-9_]*_[a-z0-9_]+$/.test(s)) return true;
+  if (/^[a-z][a-z0-9]*[A-Z]/.test(s)) return true;
+  if (/^[A-Z][a-z0-9]*$/.test(s)) return false;
+  if (s.length >= 12) {
+    const hasMultipleUpper = (s.match(/[A-Z]/g) || []).length >= 2;
+    const hasDigit = /[0-9]/.test(s);
+    if (hasMultipleUpper && hasDigit) return true;
+  }
+  return false;
+}
+
+/**
+ * Classifica un item in uno dei gruppi UI.
+ */
+function classifyItemAdmin(item: any, invItem: any): ItemCategoryGroup {
+  if (item.type === "cleaning_product") return "cleaning_product";
+
+  const itemCat = (item.categoryId || item.category || "").toLowerCase();
+  if (itemCat) {
+    if (itemCat === "prodotti_pulizia" || itemCat === "cleaning_products") return "cleaning_product";
+    if (itemCat === "kit_cortesia") return "kit_cortesia";
+    if (itemCat === "servizi_extra") return "servizi_extra";
+    if (itemCat === "biancheria_letto" || itemCat === "biancheria_bagno") return "linen";
+  }
+
+  const invCat = (invItem?.categoryId || invItem?.categoryName || "").toLowerCase();
+  if (invCat) {
+    if (invCat === "prodotti_pulizia" || invCat === "cleaning_products") return "cleaning_product";
+    if (invCat === "kit_cortesia") return "kit_cortesia";
+    if (invCat === "servizi_extra") return "servizi_extra";
+    if (invCat === "biancheria_letto" || invCat === "biancheria_bagno") return "linen";
+    if (invCat.includes("cortesia") || invCat.includes("kit")) return "kit_cortesia";
+    if (invCat.includes("extra")) return "servizi_extra";
+    if (invCat.includes("biancheria") || invCat.includes("linen")) return "linen";
+  }
+
+  const itemKey = item.itemId || item.id;
+  const sysItem = itemKey ? SYSTEM_ITEMS_BY_KEY[itemKey] : undefined;
+  if (sysItem) {
+    if (sysItem.categoryId === "biancheria_letto" || sysItem.categoryId === "biancheria_bagno") return "linen";
+    if (sysItem.categoryId === "kit_cortesia") return "kit_cortesia";
+    if (sysItem.categoryId === "servizi_extra") return "servizi_extra";
+    if (sysItem.categoryId === "prodotti_pulizia") return "cleaning_product";
+  }
+
+  return "altro";
+}
+
+/**
+ * Risolve nome leggibile dell'item (PRIORITÀ: inventario, poi
+ * SYSTEM_ITEMS, poi item.name solo se non sembra un id).
+ */
+function resolveItemNameAdmin(item: any, invItem: any): string | null {
+  const itemKey = item.itemId || item.id;
+  const sysItem = itemKey ? SYSTEM_ITEMS_BY_KEY[itemKey] : undefined;
+
+  if (invItem?.name && invItem.name.trim()) return invItem.name;
+  if (sysItem?.name) return sysItem.name;
+  if (item.name && typeof item.name === "string" && item.name.trim()) {
+    if (!looksLikeRawId(item.name)) return item.name;
+  }
+  return null;
+}
+
+function normNameAdmin(s: string): string {
+  return s.toLowerCase().replace(/[\s_-]+/g, "");
+}
+
 function mapCategoryToServiceType(category: string): ServiceType {
   const cat = category?.toLowerCase() || "";
   if (cat.includes("cortesia") || cat.includes("kit")) return "KIT_CORTESIA";
@@ -209,46 +321,100 @@ function isInMonth(date: any, month: number, year: number): boolean {
   return d.getMonth() === month - 1 && d.getFullYear() === year;
 }
 
+/**
+ * Processa un ordine biancheria/kit per la vista admin.
+ *
+ * 🔒 ESCLUSIONI dai TOTALI fatturati al proprietario:
+ *   - Items "cleaning_product" / categoria "prodotti_pulizia"
+ *   - Items orfani senza nome risolvibile
+ *
+ * 🏷️ CATEGORIZZAZIONE:
+ *   Ogni item ottiene `categoryGroup` (linen/kit_cortesia/cleaning_product/etc)
+ *   per permettere alla UI di mostrare sezioni separate.
+ *
+ * 🔄 DEDUPLICA: items con stesso nome normalizzato vengono fusi.
+ *
+ * Nota: a differenza della vista proprietario, l'admin VEDE i cleaning_product
+ * nei dettagli (sotto sezione separata) per trasparenza interna, ma il
+ * `calculatedTotal` (che è il totale fatturato) li ESCLUDE comunque.
+ */
 function processOrder(order: any): any {
+  const dedupMap = new Map<string, OrderItemDetail>();
+  const cleaningProductItems: OrderItemDetail[] = [];
   let calculatedTotal = 0;
-  const itemDetails: OrderItemDetail[] = [];
+  let linenSubtotal = 0;
+  let kitSubtotal = 0;
   let mainCategory = "Biancheria";
-  let maxCategoryTotal = 0;
-  const categoryTotals: { [key: string]: number } = {};
 
   if (order.items && Array.isArray(order.items)) {
-    order.items.forEach((item: any) => {
+    for (const item of order.items) {
       const itemKey = item.itemId || item.id;
       const invItem = staticCache.inventory.get(itemKey);
+
+      const name = resolveItemNameAdmin(item, invItem);
+      // Skip items orfani (no nome risolvibile)
+      if (!name) continue;
+
+      const group = classifyItemAdmin(item, invItem);
+
       const basePrice = item.unitPrice || item.price || invItem?.sellPrice || 0;
       const unitPrice = item.priceOverride ?? basePrice;
       const quantity = item.quantity || 1;
       const itemTotal = item.totalPrice || (unitPrice * quantity);
 
-      // 🔒 cleaning_product: visibile in dettaglio per l'admin, ma NON sommato al totale
-      // (coerenza con computeMonthDebt → questi articoli non vengono fatturati al proprietario)
-      const isCleaningProduct = isCleaningProductItem(item as any);
-      if (!isCleaningProduct) {
-        calculatedTotal += itemTotal;
-      }
+      const categoryName =
+        item.categoryName ||
+        invItem?.categoryName ||
+        SYSTEM_ITEMS_BY_KEY[itemKey]?.categoryId ||
+        "Altro";
 
-      const categoryName = item.categoryName || invItem?.categoryName || "Altro";
-      // Esclude cleaning_product anche dal calcolo della categoria dominante
-      // così l'ordine non viene mai categorizzato come "prodotti pulizia"
-      if (!isCleaningProduct) {
-        categoryTotals[categoryName] = (categoryTotals[categoryName] || 0) + itemTotal;
-        if (categoryTotals[categoryName] > maxCategoryTotal) {
-          maxCategoryTotal = categoryTotals[categoryName];
-          mainCategory = categoryName;
-        }
-      }
-
-      itemDetails.push({
+      const detail: OrderItemDetail = {
         itemId: itemKey,
-        name: item.name || invItem?.name || "Articolo",
-        quantity, unitPrice, totalPrice: itemTotal, categoryName,
-      });
-    });
+        name,
+        quantity,
+        unitPrice,
+        totalPrice: itemTotal,
+        categoryName,
+        categoryGroup: group,
+      };
+
+      // cleaning_product: salvati a parte (visibili in admin per trasparenza)
+      // ma NON sommati al totale fatturato
+      if (group === "cleaning_product") {
+        cleaningProductItems.push(detail);
+        continue;
+      }
+
+      // Dedup per nome normalizzato
+      const dedupKey = normNameAdmin(name);
+      const existing = dedupMap.get(dedupKey);
+      if (existing) {
+        existing.quantity += quantity;
+        existing.totalPrice += itemTotal;
+      } else {
+        dedupMap.set(dedupKey, detail);
+      }
+
+      calculatedTotal += itemTotal;
+      if (group === "linen") linenSubtotal += itemTotal;
+      else if (group === "kit_cortesia") kitSubtotal += itemTotal;
+    }
+  }
+
+  const itemDetails = Array.from(dedupMap.values());
+  const linenItems = itemDetails.filter(i => i.categoryGroup === "linen");
+  const kitItems = itemDetails.filter(i => i.categoryGroup === "kit_cortesia");
+
+  // Determina mainCategory in base al gruppo dominante
+  if (kitSubtotal > linenSubtotal) {
+    mainCategory = "Kit Cortesia";
+  } else {
+    const extraSubtotal = itemDetails
+      .filter(i => i.categoryGroup === "servizi_extra")
+      .reduce((s, i) => s + i.totalPrice, 0);
+    if (extraSubtotal > linenSubtotal && extraSubtotal > kitSubtotal) {
+      mainCategory = "Servizi Extra";
+    }
   }
 
   // 💰 Aggiungi costo consegna se presente e abilitato
@@ -268,6 +434,7 @@ function processOrder(order: any): any {
       unitPrice: deliveryFee,
       totalPrice: deliveryFee,
       categoryName: "Consegna",
+      categoryGroup: "altro",
     });
   }
 
@@ -280,10 +447,28 @@ function processOrder(order: any): any {
       unitPrice: bedMakingFee,
       totalPrice: bedMakingFee,
       categoryName: "Preparazione Letti",
+      categoryGroup: "altro",
     });
   }
 
-  return { ...order, calculatedTotal, itemDetails, mainCategory, deliveryFee, bedMakingFee };
+  // Aggiungi cleaning_product items in coda (visibili admin, ma NON nel totale)
+  // Sono mantenuti separati così l'UI può decidere se mostrarli o no.
+  // Per ora li includiamo in itemDetails con categoryGroup="cleaning_product"
+  // così l'admin può vederli se serve.
+  itemDetails.push(...cleaningProductItems);
+
+  return {
+    ...order,
+    calculatedTotal,
+    itemDetails,
+    linenItems,
+    kitItems,
+    linenSubtotal,
+    kitSubtotal,
+    mainCategory,
+    deliveryFee,
+    bedMakingFee,
+  };
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -678,7 +863,12 @@ export function useRealtimePayments(month: number, year: number) {
             originalPrice: order.calculatedTotal, effectivePrice,
             hasOverride: order.totalPriceOverride !== undefined && order.totalPriceOverride !== null,
             overrideReason: order.priceOverrideReason,
-            items: order.itemDetails, cleaningId: order.cleaningId,
+            items: order.itemDetails,
+            linenItems: order.linenItems,
+            kitItems: order.kitItems,
+            linenSubtotal: order.linenSubtotal,
+            kitSubtotal: order.kitSubtotal,
+            cleaningId: order.cleaningId,
             // ⚠️ Propaga flag esclusione per UI
             excludedFromBilling: isExcluded,
             excludedFromBillingReason: (order as any).excludedFromBillingReason,

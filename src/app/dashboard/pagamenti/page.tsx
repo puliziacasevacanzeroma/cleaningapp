@@ -155,6 +155,8 @@ interface Payment {
   isCreditTransfer?: boolean;
 }
 
+type ItemCategoryGroup = "linen" | "kit_cortesia" | "servizi_extra" | "cleaning_product" | "altro";
+
 interface OrderItemDetail {
   itemId: string;
   name: string;
@@ -162,6 +164,7 @@ interface OrderItemDetail {
   unitPrice: number;
   totalPrice: number;
   categoryName: string;
+  categoryGroup?: ItemCategoryGroup;
 }
 
 interface ServiceDetail {
@@ -178,6 +181,12 @@ interface ServiceDetail {
   hasOverride: boolean;
   overrideReason?: string;
   items?: OrderItemDetail[];
+  /** Solo articoli biancheria. */
+  linenItems?: OrderItemDetail[];
+  /** Solo articoli kit cortesia. */
+  kitItems?: OrderItemDetail[];
+  linenSubtotal?: number;
+  kitSubtotal?: number;
   cleaningId?: string;      // Per ordini: ID della pulizia collegata
   laundryOrderId?: string;  // Per pulizie: ID dell'ordine biancheria collegato
   // Flag esclusione dal billing (gestito da admin per contestazioni/sconti)
@@ -2540,61 +2549,126 @@ export default function PagamentiPage() {
                                             </div>
                                           </button>
                                           
-                                          {/* Dettaglio biancheria ESPANDIBILE */}
-                                          {isBiancheriaExpanded(group.biancheriaCollegata.id) && group.biancheriaCollegata.items && group.biancheriaCollegata.items.length > 0 && (
-                                            <div className="mt-2 bg-gradient-to-r from-violet-50 to-purple-50 rounded-xl p-2 sm:p-3 border border-violet-200 animate-in slide-in-from-top-2">
-                                              <div className="flex items-center justify-between mb-2 gap-1.5 flex-wrap">
-                                                <p className="text-[10px] uppercase font-bold text-violet-600">🛏️ Dettaglio biancheria</p>
-                                                <div className="flex items-center gap-1">
-                                                  <button
-                                                    onClick={(e) => { e.stopPropagation(); openBiancheriaEditor(group.biancheriaCollegata!); }}
-                                                    className="flex items-center gap-1 px-2.5 py-1 bg-violet-100 hover:bg-violet-200 text-violet-700 rounded-lg text-[10px] font-semibold transition-colors"
-                                                    title="Modifica articoli"
-                                                  >
-                                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                                                    </svg>
-                                                    Modifica
-                                                  </button>
-                                                  {/* 🚫 Escludi dai pagamenti */}
-                                                  <button
-                                                    onClick={(e) => { e.stopPropagation(); setEditingService(group.biancheriaCollegata!); setServiceEditForm({ newPrice: String(group.biancheriaCollegata!.effectivePrice), reason: "" }); setServiceActionMode("exclude"); setExcludeForm({ reason: "" }); }}
-                                                    className="px-2 py-1 bg-orange-100 hover:bg-orange-200 text-orange-700 rounded-lg text-[10px] font-semibold transition-colors"
-                                                    title="Escludi dai pagamenti"
-                                                  >
-                                                    🚫
-                                                  </button>
-                                                  {/* 🗑️ Elimina dal sistema */}
-                                                  <button
-                                                    onClick={(e) => { e.stopPropagation(); setEditingService(group.biancheriaCollegata!); setServiceEditForm({ newPrice: String(group.biancheriaCollegata!.effectivePrice), reason: "" }); setServiceActionMode("delete"); setExcludeForm({ reason: "" }); }}
-                                                    className="px-2 py-1 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg text-[10px] font-semibold transition-colors"
-                                                    title="Elimina dal sistema"
-                                                  >
-                                                    🗑️
-                                                  </button>
-                                                </div>
-                                              </div>
-                                              <div className="grid gap-1.5">
-                                                {group.biancheriaCollegata.items.map((item, itemIdx) => (
-                                                  <div key={itemIdx} className="flex items-center justify-between bg-white rounded-lg px-2.5 py-1.5 border border-violet-100 shadow-sm">
-                                                    <div className="flex items-center gap-2 min-w-0">
-                                                      <span className="w-6 h-6 rounded-md bg-gradient-to-br from-violet-500 to-purple-600 text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0">
-                                                        {item.quantity}×
-                                                      </span>
-                                                      <div className="min-w-0">
-                                                        <span className="text-xs text-slate-800 font-medium block truncate">{item.name}</span>
-                                                        <span className="text-[9px] text-slate-400">€{item.unitPrice.toFixed(2)}/pz</span>
+                                          {/* Dettaglio biancheria + kit cortesia ESPANDIBILI */}
+                                          {isBiancheriaExpanded(group.biancheriaCollegata.id) && (group.biancheriaCollegata.items?.length || 0) > 0 && (
+                                            <div className="mt-2 space-y-2 animate-in slide-in-from-top-2">
+                                              {/* SEZIONE BIANCHERIA */}
+                                              {(() => {
+                                                const linen = group.biancheriaCollegata!.linenItems
+                                                  ?? group.biancheriaCollegata!.items?.filter(i => i.itemId !== "_delivery_fee" && i.itemId !== "_bed_making_fee" && i.categoryGroup !== "cleaning_product" && i.categoryGroup !== "kit_cortesia")
+                                                  ?? [];
+                                                if (linen.length === 0) return null;
+                                                const linenSub = group.biancheriaCollegata!.linenSubtotal ?? linen.reduce((s, i) => s + i.totalPrice, 0);
+                                                return (
+                                                  <div className="bg-gradient-to-r from-violet-50 to-purple-50 rounded-xl p-2 sm:p-3 border border-violet-200">
+                                                    <div className="flex items-center justify-between mb-2 gap-1.5 flex-wrap">
+                                                      <p className="text-[10px] uppercase font-bold text-violet-600">🛏️ Dettaglio biancheria</p>
+                                                      <div className="flex items-center gap-1">
+                                                        <button
+                                                          onClick={(e) => { e.stopPropagation(); openBiancheriaEditor(group.biancheriaCollegata!); }}
+                                                          className="flex items-center gap-1 px-2.5 py-1 bg-violet-100 hover:bg-violet-200 text-violet-700 rounded-lg text-[10px] font-semibold transition-colors"
+                                                          title="Modifica articoli"
+                                                        >
+                                                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                                          </svg>
+                                                          Modifica
+                                                        </button>
+                                                        <button
+                                                          onClick={(e) => { e.stopPropagation(); setEditingService(group.biancheriaCollegata!); setServiceEditForm({ newPrice: String(group.biancheriaCollegata!.effectivePrice), reason: "" }); setServiceActionMode("exclude"); setExcludeForm({ reason: "" }); }}
+                                                          className="px-2 py-1 bg-orange-100 hover:bg-orange-200 text-orange-700 rounded-lg text-[10px] font-semibold transition-colors"
+                                                          title="Escludi dai pagamenti"
+                                                        >
+                                                          🚫
+                                                        </button>
+                                                        <button
+                                                          onClick={(e) => { e.stopPropagation(); setEditingService(group.biancheriaCollegata!); setServiceEditForm({ newPrice: String(group.biancheriaCollegata!.effectivePrice), reason: "" }); setServiceActionMode("delete"); setExcludeForm({ reason: "" }); }}
+                                                          className="px-2 py-1 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg text-[10px] font-semibold transition-colors"
+                                                          title="Elimina dal sistema"
+                                                        >
+                                                          🗑️
+                                                        </button>
                                                       </div>
                                                     </div>
-                                                    <span className="text-xs font-bold text-violet-700 ml-2 flex-shrink-0">
-                                                      {formatCurrency(item.totalPrice)}
-                                                    </span>
+                                                    <div className="grid gap-1.5">
+                                                      {linen.map((item, itemIdx) => (
+                                                        <div key={itemIdx} className="flex items-center justify-between bg-white rounded-lg px-2.5 py-1.5 border border-violet-100 shadow-sm">
+                                                          <div className="flex items-center gap-2 min-w-0">
+                                                            <span className="w-6 h-6 rounded-md bg-gradient-to-br from-violet-500 to-purple-600 text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0">
+                                                              {item.quantity}×
+                                                            </span>
+                                                            <div className="min-w-0">
+                                                              <span className="text-xs text-slate-800 font-medium block truncate">{item.name}</span>
+                                                              <span className="text-[9px] text-slate-400">€{item.unitPrice.toFixed(2)}/pz</span>
+                                                            </div>
+                                                          </div>
+                                                          <span className="text-xs font-bold text-violet-700 ml-2 flex-shrink-0">
+                                                            {formatCurrency(item.totalPrice)}
+                                                          </span>
+                                                        </div>
+                                                      ))}
+                                                    </div>
+                                                    <div className="mt-2 pt-2 border-t border-violet-200 flex justify-between items-center">
+                                                      <span className="text-[10px] font-medium text-violet-600">Subtotale biancheria</span>
+                                                      <span className="text-sm font-bold text-violet-700">{formatCurrency(linenSub)}</span>
+                                                    </div>
                                                   </div>
-                                                ))}
-                                              </div>
-                                              <div className="mt-2 pt-2 border-t border-violet-200 flex justify-between items-center">
-                                                <span className="text-[10px] font-medium text-violet-600">Subtotale</span>
-                                                <span className="text-sm font-bold text-violet-700">{formatCurrency(group.biancheriaCollegata.effectivePrice)}</span>
+                                                );
+                                              })()}
+
+                                              {/* SEZIONE KIT CORTESIA */}
+                                              {(group.biancheriaCollegata.kitItems?.length || 0) > 0 && (
+                                                <div className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl p-2 sm:p-3 border border-amber-200">
+                                                  <p className="text-[10px] uppercase font-bold text-amber-600 mb-2">🎁 Kit cortesia</p>
+                                                  <div className="grid gap-1.5">
+                                                    {group.biancheriaCollegata.kitItems!.map((item, itemIdx) => (
+                                                      <div key={itemIdx} className="flex items-center justify-between bg-white rounded-lg px-2.5 py-1.5 border border-amber-100 shadow-sm">
+                                                        <div className="flex items-center gap-2 min-w-0">
+                                                          <span className="w-6 h-6 rounded-md bg-gradient-to-br from-amber-500 to-orange-600 text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0">
+                                                            {item.quantity}×
+                                                          </span>
+                                                          <div className="min-w-0">
+                                                            <span className="text-xs text-slate-800 font-medium block truncate">{item.name}</span>
+                                                            <span className="text-[9px] text-slate-400">€{item.unitPrice.toFixed(2)}/pz</span>
+                                                          </div>
+                                                        </div>
+                                                        <span className="text-xs font-bold text-amber-700 ml-2 flex-shrink-0">{formatCurrency(item.totalPrice)}</span>
+                                                      </div>
+                                                    ))}
+                                                  </div>
+                                                  <div className="mt-2 pt-2 border-t border-amber-200 flex justify-between items-center">
+                                                    <span className="text-[10px] font-medium text-amber-600">Subtotale kit</span>
+                                                    <span className="text-sm font-bold text-amber-700">{formatCurrency(group.biancheriaCollegata.kitSubtotal ?? 0)}</span>
+                                                  </div>
+                                                </div>
+                                              )}
+
+                                              {/* SEZIONE PRODOTTI PULIZIA OPERATORE (solo admin, info interna) */}
+                                              {(() => {
+                                                const cp = group.biancheriaCollegata!.items?.filter(i => i.categoryGroup === "cleaning_product") ?? [];
+                                                if (cp.length === 0) return null;
+                                                return (
+                                                  <div className="bg-slate-50 rounded-xl p-2 sm:p-3 border border-slate-200 border-dashed">
+                                                    <p className="text-[10px] uppercase font-bold text-slate-500 mb-2">🧴 Prodotti pulizia operatore (NON fatturati)</p>
+                                                    <div className="grid gap-1.5">
+                                                      {cp.map((item, itemIdx) => (
+                                                        <div key={itemIdx} className="flex items-center justify-between bg-white rounded-lg px-2.5 py-1.5 border border-slate-100">
+                                                          <div className="flex items-center gap-2 min-w-0">
+                                                            <span className="w-6 h-6 rounded-md bg-slate-400 text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0">{item.quantity}×</span>
+                                                            <span className="text-xs text-slate-600 truncate">{item.name}</span>
+                                                          </div>
+                                                          <span className="text-[10px] text-slate-400 italic ml-2 flex-shrink-0">non fatturato</span>
+                                                        </div>
+                                                      ))}
+                                                    </div>
+                                                  </div>
+                                                );
+                                              })()}
+
+                                              {/* TOTALE COMPLESSIVO */}
+                                              <div className="px-3 py-2 bg-slate-100 rounded-xl flex justify-between items-center">
+                                                <span className="text-[11px] font-semibold text-slate-700">Totale ordine</span>
+                                                <span className="text-sm font-bold text-slate-800">{formatCurrency(group.biancheriaCollegata.effectivePrice)}</span>
                                               </div>
                                             </div>
                                           )}
@@ -2658,61 +2732,124 @@ export default function PagamentiPage() {
                                           </div>
                                         )}
                                         
-                                        {/* Dettaglio biancheria ESPANDIBILE */}
+                                        {/* Dettaglio biancheria + kit cortesia ESPANDIBILI */}
                                         {isBiancheria && isBiancheriaExpanded(service.id) && hasItems && (
-                                          <div className="mx-2 sm:mx-3 mb-3 bg-gradient-to-r from-violet-50 to-purple-50 rounded-xl p-2 sm:p-3 border border-violet-200 animate-in slide-in-from-top-2">
-                                            <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
-                                              <p className="text-[10px] uppercase font-bold text-violet-600">🛏️ Dettaglio biancheria</p>
-                                              <div className="flex items-center gap-1.5">
-                                                <button
-                                                  onClick={(e) => { e.stopPropagation(); openBiancheriaEditor(service); }}
-                                                  className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-violet-500 to-purple-600 hover:from-violet-600 hover:to-purple-700 text-white rounded-lg text-xs font-semibold transition-all shadow-md hover:shadow-lg"
-                                                  title="Modifica articoli"
-                                                >
-                                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                                                  </svg>
-                                                  Modifica
-                                                </button>
-                                                {/* 🚫 Escludi dai pagamenti */}
-                                                <button
-                                                  onClick={(e) => { e.stopPropagation(); setEditingService(service); setServiceEditForm({ newPrice: String(service.effectivePrice), reason: "" }); setServiceActionMode("exclude"); setExcludeForm({ reason: "" }); }}
-                                                  className="px-2.5 py-1.5 bg-orange-100 hover:bg-orange-200 text-orange-700 rounded-lg text-xs font-semibold transition-all"
-                                                  title="Escludi dai pagamenti"
-                                                >
-                                                  🚫
-                                                </button>
-                                                {/* 🗑️ Elimina dal sistema */}
-                                                <button
-                                                  onClick={(e) => { e.stopPropagation(); setEditingService(service); setServiceEditForm({ newPrice: String(service.effectivePrice), reason: "" }); setServiceActionMode("delete"); setExcludeForm({ reason: "" }); }}
-                                                  className="px-2.5 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg text-xs font-semibold transition-all"
-                                                  title="Elimina dal sistema"
-                                                >
-                                                  🗑️
-                                                </button>
-                                              </div>
-                                            </div>
-                                            <div className="grid gap-1.5">
-                                              {service.items!.map((item, itemIdx) => (
-                                                <div key={itemIdx} className="flex items-center justify-between bg-white rounded-lg px-3 py-2 border border-violet-100 shadow-sm">
-                                                  <div className="flex items-center gap-2 min-w-0">
-                                                    <span className="w-7 h-7 rounded-md bg-gradient-to-br from-violet-500 to-purple-600 text-white text-xs font-bold flex items-center justify-center flex-shrink-0">
-                                                      {item.quantity}×
-                                                    </span>
-                                                    <div className="min-w-0">
-                                                      <span className="text-sm text-slate-800 font-medium block truncate">{item.name}</span>
-                                                      <span className="text-[10px] text-slate-400">€{item.unitPrice.toFixed(2)}/pz</span>
+                                          <div className="mx-2 sm:mx-3 mb-3 space-y-2 animate-in slide-in-from-top-2">
+                                            {/* SEZIONE BIANCHERIA */}
+                                            {(() => {
+                                              const linen = service.linenItems
+                                                ?? service.items?.filter(i => i.itemId !== "_delivery_fee" && i.itemId !== "_bed_making_fee" && i.categoryGroup !== "cleaning_product" && i.categoryGroup !== "kit_cortesia")
+                                                ?? [];
+                                              if (linen.length === 0) return null;
+                                              const linenSub = service.linenSubtotal ?? linen.reduce((s, i) => s + i.totalPrice, 0);
+                                              return (
+                                                <div className="bg-gradient-to-r from-violet-50 to-purple-50 rounded-xl p-2 sm:p-3 border border-violet-200">
+                                                  <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
+                                                    <p className="text-[10px] uppercase font-bold text-violet-600">🛏️ Dettaglio biancheria</p>
+                                                    <div className="flex items-center gap-1.5">
+                                                      <button
+                                                        onClick={(e) => { e.stopPropagation(); openBiancheriaEditor(service); }}
+                                                        className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-violet-500 to-purple-600 hover:from-violet-600 hover:to-purple-700 text-white rounded-lg text-xs font-semibold transition-all shadow-md hover:shadow-lg"
+                                                        title="Modifica articoli"
+                                                      >
+                                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                                        </svg>
+                                                        Modifica
+                                                      </button>
+                                                      <button
+                                                        onClick={(e) => { e.stopPropagation(); setEditingService(service); setServiceEditForm({ newPrice: String(service.effectivePrice), reason: "" }); setServiceActionMode("exclude"); setExcludeForm({ reason: "" }); }}
+                                                        className="px-2.5 py-1.5 bg-orange-100 hover:bg-orange-200 text-orange-700 rounded-lg text-xs font-semibold transition-all"
+                                                        title="Escludi dai pagamenti"
+                                                      >
+                                                        🚫
+                                                      </button>
+                                                      <button
+                                                        onClick={(e) => { e.stopPropagation(); setEditingService(service); setServiceEditForm({ newPrice: String(service.effectivePrice), reason: "" }); setServiceActionMode("delete"); setExcludeForm({ reason: "" }); }}
+                                                        className="px-2.5 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg text-xs font-semibold transition-all"
+                                                        title="Elimina dal sistema"
+                                                      >
+                                                        🗑️
+                                                      </button>
                                                     </div>
                                                   </div>
-                                                  <span className="text-sm font-bold text-violet-700 ml-2 flex-shrink-0">
-                                                    {formatCurrency(item.totalPrice)}
-                                                  </span>
+                                                  <div className="grid gap-1.5">
+                                                    {linen.map((item, itemIdx) => (
+                                                      <div key={itemIdx} className="flex items-center justify-between bg-white rounded-lg px-3 py-2 border border-violet-100 shadow-sm">
+                                                        <div className="flex items-center gap-2 min-w-0">
+                                                          <span className="w-7 h-7 rounded-md bg-gradient-to-br from-violet-500 to-purple-600 text-white text-xs font-bold flex items-center justify-center flex-shrink-0">
+                                                            {item.quantity}×
+                                                          </span>
+                                                          <div className="min-w-0">
+                                                            <span className="text-sm text-slate-800 font-medium block truncate">{item.name}</span>
+                                                            <span className="text-[10px] text-slate-400">€{item.unitPrice.toFixed(2)}/pz</span>
+                                                          </div>
+                                                        </div>
+                                                        <span className="text-sm font-bold text-violet-700 ml-2 flex-shrink-0">
+                                                          {formatCurrency(item.totalPrice)}
+                                                        </span>
+                                                      </div>
+                                                    ))}
+                                                  </div>
+                                                  <div className="mt-2 pt-2 border-t border-violet-200 flex justify-between items-center">
+                                                    <span className="text-xs font-medium text-violet-600">Subtotale biancheria</span>
+                                                    <span className="font-bold text-violet-700">{formatCurrency(linenSub)}</span>
+                                                  </div>
                                                 </div>
-                                              ))}
-                                            </div>
-                                            <div className="mt-2 pt-2 border-t border-violet-200 flex justify-between items-center">
-                                              <span className="text-xs font-medium text-violet-600">Subtotale biancheria</span>
-                                              <span className="font-bold text-violet-700">{formatCurrency(service.effectivePrice)}</span>
+                                              );
+                                            })()}
+
+                                            {/* SEZIONE KIT CORTESIA */}
+                                            {(service.kitItems?.length || 0) > 0 && (
+                                              <div className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl p-2 sm:p-3 border border-amber-200">
+                                                <p className="text-[10px] uppercase font-bold text-amber-600 mb-2">🎁 Kit cortesia</p>
+                                                <div className="grid gap-1.5">
+                                                  {service.kitItems!.map((item, itemIdx) => (
+                                                    <div key={itemIdx} className="flex items-center justify-between bg-white rounded-lg px-3 py-2 border border-amber-100 shadow-sm">
+                                                      <div className="flex items-center gap-2 min-w-0">
+                                                        <span className="w-7 h-7 rounded-md bg-gradient-to-br from-amber-500 to-orange-600 text-white text-xs font-bold flex items-center justify-center flex-shrink-0">{item.quantity}×</span>
+                                                        <div className="min-w-0">
+                                                          <span className="text-sm text-slate-800 font-medium block truncate">{item.name}</span>
+                                                          <span className="text-[10px] text-slate-400">€{item.unitPrice.toFixed(2)}/pz</span>
+                                                        </div>
+                                                      </div>
+                                                      <span className="text-sm font-bold text-amber-700 ml-2 flex-shrink-0">{formatCurrency(item.totalPrice)}</span>
+                                                    </div>
+                                                  ))}
+                                                </div>
+                                                <div className="mt-2 pt-2 border-t border-amber-200 flex justify-between items-center">
+                                                  <span className="text-xs font-medium text-amber-600">Subtotale kit</span>
+                                                  <span className="font-bold text-amber-700">{formatCurrency(service.kitSubtotal ?? 0)}</span>
+                                                </div>
+                                              </div>
+                                            )}
+
+                                            {/* SEZIONE PRODOTTI PULIZIA OPERATORE (info admin, NON fatturati) */}
+                                            {(() => {
+                                              const cp = service.items?.filter(i => i.categoryGroup === "cleaning_product") ?? [];
+                                              if (cp.length === 0) return null;
+                                              return (
+                                                <div className="bg-slate-50 rounded-xl p-2 sm:p-3 border border-slate-200 border-dashed">
+                                                  <p className="text-[10px] uppercase font-bold text-slate-500 mb-2">🧴 Prodotti pulizia operatore (NON fatturati)</p>
+                                                  <div className="grid gap-1.5">
+                                                    {cp.map((item, itemIdx) => (
+                                                      <div key={itemIdx} className="flex items-center justify-between bg-white rounded-lg px-3 py-2 border border-slate-100">
+                                                        <div className="flex items-center gap-2 min-w-0">
+                                                          <span className="w-7 h-7 rounded-md bg-slate-400 text-white text-xs font-bold flex items-center justify-center flex-shrink-0">{item.quantity}×</span>
+                                                          <span className="text-sm text-slate-600 truncate">{item.name}</span>
+                                                        </div>
+                                                        <span className="text-xs text-slate-400 italic ml-2 flex-shrink-0">non fatturato</span>
+                                                      </div>
+                                                    ))}
+                                                  </div>
+                                                </div>
+                                              );
+                                            })()}
+
+                                            {/* TOTALE COMPLESSIVO */}
+                                            <div className="px-3 py-2 bg-slate-100 rounded-xl flex justify-between items-center">
+                                              <span className="text-xs font-semibold text-slate-700">Totale ordine</span>
+                                              <span className="text-sm font-bold text-slate-800">{formatCurrency(service.effectivePrice)}</span>
                                             </div>
                                           </div>
                                         )}
