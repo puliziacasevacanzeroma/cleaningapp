@@ -476,6 +476,192 @@ function processOrder(order: any): any {
 }
 
 // ════════════════════════════════════════════════════════════════
+// 🎯 COMPUTE OWNER MONTH STATS — funzione PURA condivisa
+//
+// Calcola tutti i numeri rilevanti per un singolo (proprietario, mese).
+// È la FONTE DI VERITÀ unica usata sia dalla vista LISTA che dalla
+// vista TABELLA (timeline) — così gli importi e gli status non possono
+// più divergere tra le due viste.
+//
+// Input: monthOrders DEVE essere già stato processato con processOrder()
+// (cioè ogni order deve avere calculatedTotal, mainCategory, *Subtotal).
+// ════════════════════════════════════════════════════════════════
+interface OwnerMonthStats {
+  // Aggregati
+  cleaningsCount: number;
+  cleaningsTotal: number;
+  ordersCount: number;
+  ordersTotal: number;
+  kitCortesiaCount: number;
+  kitCortesiaTotal: number;
+  serviziExtraCount: number;
+  serviziExtraTotal: number;
+  totaleCalcolato: number;
+  // Pagamenti
+  ownerPayments: any[];
+  totalePagato: number;
+  saldo: number;
+  // Status calcolato (con eventuale carryover applicato)
+  creditoPrecedente: number;
+  saldoConCredito: number;
+  stato: "SALDATO" | "PARZIALE" | "DA_PAGARE";
+  // Servizi del mese (lista dettagliata, ordinata per data)
+  services: ServiceDetail[];
+  // Nomi proprietà coinvolte (per la timeline)
+  propertyNames: string[];
+}
+
+function computeOwnerMonthStats(args: {
+  ownerId: string;
+  ownerProperties: any[];
+  /** Cleanings COMPLETED del mese (già filtrate per status e mese) */
+  monthCleanings: any[];
+  /** Orders del mese (DELIVERED o linked-COMPLETED) GIÀ PROCESSATI con processOrder() */
+  monthOrders: any[];
+  /** Tutti i pagamenti del mese (verranno filtrati per ownerId all'interno) */
+  monthPayments: any[];
+  /** Credito da mesi precedenti (carryover). Default 0 = non applicato. */
+  creditoPrecedente?: number;
+}): OwnerMonthStats {
+  const { ownerId, ownerProperties, monthCleanings, monthOrders, monthPayments } = args;
+  const creditoPrecedente = args.creditoPrecedente ?? 0;
+  const propertyIds = ownerProperties.map((p: any) => p.id);
+
+  let cleaningsCount = 0, cleaningsTotal = 0;
+  let ordersCount = 0, ordersTotal = 0;
+  let kitCortesiaCount = 0, kitCortesiaTotal = 0;
+  let serviziExtraCount = 0, serviziExtraTotal = 0;
+  const services: ServiceDetail[] = [];
+  const propertyNamesSet = new Set<string>();
+
+  // ───── CLEANINGS ─────
+  monthCleanings.forEach(cleaning => {
+    if (!propertyIds.includes(cleaning.propertyId)) return;
+    const prop = staticCache.properties.get(cleaning.propertyId);
+    const basePrice = cleaning.price || prop?.cleaningPrice || 0;
+    const rtHFee = cleaning.holidayFee ?? 0;
+    const effectivePrice = (cleaning.priceOverride ?? basePrice) + rtHFee;
+    const isExcluded = (cleaning as any).excludedFromBilling === true;
+    if (!isExcluded) {
+      cleaningsCount++;
+      cleaningsTotal += effectivePrice;
+    }
+    propertyNamesSet.add(cleaning.propertyName || prop?.name || "Proprietà");
+    services.push({
+      id: cleaning.id, type: "PULIZIA",
+      date: cleaning.scheduledDate?.toDate?.() || new Date(),
+      propertyId: cleaning.propertyId,
+      propertyName: cleaning.propertyName || prop?.name || "Proprietà",
+      propertyImage: prop?.images?.door || prop?.imageUrl,
+      propertyAddress: prop?.address || undefined,
+      description: cleaning.type === "deep" ? "Pulizia Approfondita" : "Pulizia Standard",
+      originalPrice: basePrice, effectivePrice,
+      hasOverride: cleaning.priceOverride !== undefined && cleaning.priceOverride !== null,
+      overrideReason: cleaning.priceOverrideReason,
+      laundryOrderId: cleaning.laundryOrderId,
+      holidayFee: rtHFee,
+      holidayName: cleaning.holidayName || null,
+      excludedFromBilling: isExcluded,
+      excludedFromBillingReason: (cleaning as any).excludedFromBillingReason,
+    } as any);
+  });
+
+  // ───── ORDERS (con SPLIT PER CATEGORIA) ─────
+  monthOrders.forEach(order => {
+    if (!propertyIds.includes(order.propertyId)) return;
+    const prop = staticCache.properties.get(order.propertyId);
+    const effectivePrice = order.totalPriceOverride ?? order.calculatedTotal;
+    const serviceType = mapCategoryToServiceType(order.mainCategory);
+    const isExcluded = (order as any).excludedFromBilling === true;
+
+    if (!isExcluded) {
+      // 🔄 SPLIT PER CATEGORIA: un singolo ordine può contenere
+      // biancheria + kit + servizi extra + delivery/bedmaking.
+      // Lo scorporo per categoria così il riepilogo mostra correttamente
+      // ogni voce, anche quando l'ordine ha mainCategory=BIANCHERIA ma
+      // contiene anche kit cortesia (caso più frequente).
+      const linenSub  = order.linenSubtotal  ?? 0;
+      const kitSub    = order.kitSubtotal    ?? 0;
+      const extraSub  = order.extraSubtotal  ?? 0;
+      const othersSub = order.othersSubtotal ?? 0;
+      // Le voci "altro" (delivery + bedmaking) seguono la mainCategory dell'ordine
+      const linenPart = linenSub + (serviceType === "BIANCHERIA"     ? othersSub : 0);
+      const kitPart   = kitSub   + (serviceType === "KIT_CORTESIA"   ? othersSub : 0);
+      const extraPart = extraSub + (serviceType === "SERVIZI_EXTRA"  ? othersSub : 0);
+      const partsRaw  = linenPart + kitPart + extraPart;
+      // Scaling proporzionale per riflettere eventuale totalPriceOverride
+      const ratio = partsRaw > 0 ? effectivePrice / partsRaw : 1;
+      const linenScaled = linenPart * ratio;
+      const kitScaled   = kitPart   * ratio;
+      const extraScaled = extraPart * ratio;
+
+      if (linenScaled > 0.001) { ordersCount++;       ordersTotal       += linenScaled; }
+      if (kitScaled   > 0.001) { kitCortesiaCount++;  kitCortesiaTotal  += kitScaled; }
+      if (extraScaled > 0.001) { serviziExtraCount++; serviziExtraTotal += extraScaled; }
+
+      // Edge case: ordine con partsRaw=0 ma effectivePrice>0 (override su ordine vuoto):
+      // ricado sulla categoria nominale per non perdere il valore
+      if (partsRaw <= 0.001 && effectivePrice > 0.001) {
+        if (serviceType === "KIT_CORTESIA")      { kitCortesiaCount++;  kitCortesiaTotal  += effectivePrice; }
+        else if (serviceType === "SERVIZI_EXTRA"){ serviziExtraCount++; serviziExtraTotal += effectivePrice; }
+        else                                     { ordersCount++;       ordersTotal       += effectivePrice; }
+      }
+    }
+
+    propertyNamesSet.add(order.propertyName || prop?.name || "Proprietà");
+    services.push({
+      id: order.id, type: serviceType,
+      date: order.deliveredAt?.toDate?.() || order.scheduledDate?.toDate?.() || new Date(),
+      propertyId: order.propertyId,
+      propertyName: order.propertyName || prop?.name || "Proprietà",
+      propertyImage: prop?.images?.door || prop?.imageUrl,
+      propertyAddress: prop?.address || undefined,
+      description: `${order.itemDetails.length} articoli`,
+      originalPrice: order.calculatedTotal, effectivePrice,
+      hasOverride: order.totalPriceOverride !== undefined && order.totalPriceOverride !== null,
+      overrideReason: order.priceOverrideReason,
+      items: order.itemDetails,
+      linenItems: order.linenItems,
+      kitItems: order.kitItems,
+      linenSubtotal: order.linenSubtotal,
+      kitSubtotal: order.kitSubtotal,
+      cleaningId: order.cleaningId,
+      excludedFromBilling: isExcluded,
+      excludedFromBillingReason: (order as any).excludedFromBillingReason,
+    } as any);
+  });
+
+  services.sort((a, b) => a.date.getTime() - b.date.getTime());
+
+  const totaleCalcolato = cleaningsTotal + ordersTotal + kitCortesiaTotal + serviziExtraTotal;
+  const ownerPayments = monthPayments.filter(p => p.proprietarioId === ownerId);
+  // ⚠️ Escludo isCreditTransfer per evitare doppio conteggio col carryover
+  const totalePagato = ownerPayments
+    .filter(p => (p as any).isCreditTransfer !== true)
+    .reduce((sum, p) => sum + (p.amount || 0), 0);
+  const saldo = totaleCalcolato - totalePagato;
+
+  // Carryover (se passato dal chiamante): saldoConCredito = max(0, saldo - credito)
+  const saldoConCredito = Math.max(0, saldo - creditoPrecedente);
+
+  let stato: "SALDATO" | "PARZIALE" | "DA_PAGARE" = "DA_PAGARE";
+  if (saldoConCredito <= 0.01) stato = "SALDATO";
+  else if (totalePagato > 0 || creditoPrecedente > 0) stato = "PARZIALE";
+
+  return {
+    cleaningsCount, cleaningsTotal,
+    ordersCount, ordersTotal,
+    kitCortesiaCount, kitCortesiaTotal,
+    serviziExtraCount, serviziExtraTotal,
+    totaleCalcolato,
+    ownerPayments, totalePagato, saldo,
+    creditoPrecedente, saldoConCredito, stato,
+    services,
+    propertyNames: Array.from(propertyNamesSet),
+  };
+}
+
+// ════════════════════════════════════════════════════════════════
 // HOOK PRINCIPALE
 //
 // Carica 18 MESI di dati (anno corrente + 6 mesi prima) con onSnapshot
@@ -797,143 +983,33 @@ export function useRealtimePayments(month: number, year: number) {
 
     for (const [ownerId, ownerProperties] of propertiesByOwner) {
       const ownerName = ownerNames.get(ownerId) || "Sconosciuto";
-      const propertyIds = ownerProperties.map((p: any) => p.id);
 
-      let cleaningsCount = 0, cleaningsTotal = 0;
-      let ordersCount = 0, ordersTotal = 0;
-      let kitCortesiaCount = 0, kitCortesiaTotal = 0;
-      let serviziExtraCount = 0, serviziExtraTotal = 0;
-      const services: ServiceDetail[] = [];
-
-      // Cleanings del mese per questo proprietario
-      monthCleanings.forEach(cleaning => {
-        if (propertyIds.includes(cleaning.propertyId)) {
-          const prop = staticCache.properties.get(cleaning.propertyId);
-          const basePrice = cleaning.price || prop?.cleaningPrice || 0;
-          const rtHFee = cleaning.holidayFee ?? 0;
-          const effectivePrice = (cleaning.priceOverride ?? basePrice) + rtHFee;
-          // Se è escluso dal billing, non lo conto nel totale ma lo mostro
-          // comunque nella lista servizi (per consentire riinclusione/rimozione)
-          const isExcluded = (cleaning as any).excludedFromBilling === true;
-          if (!isExcluded) {
-            cleaningsCount++;
-            cleaningsTotal += effectivePrice;
-          }
-
-          services.push({
-            id: cleaning.id, type: "PULIZIA",
-            date: cleaning.scheduledDate?.toDate?.() || new Date(),
-            propertyId: cleaning.propertyId,
-            propertyName: cleaning.propertyName || prop?.name || "Proprietà",
-            propertyImage: prop?.images?.door || prop?.imageUrl,
-            propertyAddress: prop?.address || undefined,
-            description: cleaning.type === "deep" ? "Pulizia Approfondita" : "Pulizia Standard",
-            originalPrice: basePrice, effectivePrice,
-            hasOverride: cleaning.priceOverride !== undefined && cleaning.priceOverride !== null,
-            overrideReason: cleaning.priceOverrideReason,
-            laundryOrderId: cleaning.laundryOrderId,
-            holidayFee: rtHFee,
-            holidayName: cleaning.holidayName || null,
-            // ⚠️ Propaga flag esclusione per UI (badge, gestione re-inclusione)
-            excludedFromBilling: isExcluded,
-            excludedFromBillingReason: (cleaning as any).excludedFromBillingReason,
-          } as any);
-        }
-      });
-
-      // Orders del mese per questo proprietario
-      monthOrders.forEach(order => {
-        if (propertyIds.includes(order.propertyId)) {
-          const prop = staticCache.properties.get(order.propertyId);
-          const effectivePrice = order.totalPriceOverride ?? order.calculatedTotal;
-          const serviceType = mapCategoryToServiceType(order.mainCategory);
-
-          // Se è escluso dal billing, non lo conto nel totale ma lo mostro
-          const isExcluded = (order as any).excludedFromBilling === true;
-          if (!isExcluded) {
-            // 🔄 SPLIT PER CATEGORIA: un singolo ordine può contenere
-            // biancheria + kit + servizi extra + delivery/bedmaking.
-            // Lo scorporo per categoria così il riepilogo mostra correttamente
-            // ogni voce, anche quando l'ordine ha mainCategory=BIANCHERIA ma
-            // contiene anche kit cortesia (caso più frequente).
-            const linenSub  = order.linenSubtotal  ?? 0;
-            const kitSub    = order.kitSubtotal    ?? 0;
-            const extraSub  = order.extraSubtotal  ?? 0;
-            const othersSub = order.othersSubtotal ?? 0;
-            // Le voci "altro" (delivery + bedmaking) seguono la mainCategory dell'ordine
-            const linenPart = linenSub + (serviceType === "BIANCHERIA"     ? othersSub : 0);
-            const kitPart   = kitSub   + (serviceType === "KIT_CORTESIA"   ? othersSub : 0);
-            const extraPart = extraSub + (serviceType === "SERVIZI_EXTRA"  ? othersSub : 0);
-            const rawTotal  = linenPart + kitPart + extraPart;
-            // Scaling proporzionale per riflettere eventuale totalPriceOverride
-            const ratio = rawTotal > 0 ? effectivePrice / rawTotal : 1;
-            const linenScaled = linenPart * ratio;
-            const kitScaled   = kitPart   * ratio;
-            const extraScaled = extraPart * ratio;
-
-            if (linenScaled > 0.001) { ordersCount++;       ordersTotal       += linenScaled; }
-            if (kitScaled   > 0.001) { kitCortesiaCount++;  kitCortesiaTotal  += kitScaled; }
-            if (extraScaled > 0.001) { serviziExtraCount++; serviziExtraTotal += extraScaled; }
-
-            // Edge case: ordine con rawTotal=0 ma effectivePrice>0 (override su ordine vuoto):
-            // ricado sulla categoria nominale per non perdere il valore
-            if (rawTotal <= 0.001 && effectivePrice > 0.001) {
-              if (serviceType === "KIT_CORTESIA")      { kitCortesiaCount++;  kitCortesiaTotal  += effectivePrice; }
-              else if (serviceType === "SERVIZI_EXTRA"){ serviziExtraCount++; serviziExtraTotal += effectivePrice; }
-              else                                     { ordersCount++;       ordersTotal       += effectivePrice; }
-            }
-          }
-
-          services.push({
-            id: order.id, type: serviceType,
-            date: order.deliveredAt?.toDate?.() || order.scheduledDate?.toDate?.() || new Date(),
-            propertyId: order.propertyId,
-            propertyName: order.propertyName || prop?.name || "Proprietà",
-            propertyImage: prop?.images?.door || prop?.imageUrl,
-            propertyAddress: prop?.address || undefined,
-            description: `${order.itemDetails.length} articoli`,
-            originalPrice: order.calculatedTotal, effectivePrice,
-            hasOverride: order.totalPriceOverride !== undefined && order.totalPriceOverride !== null,
-            overrideReason: order.priceOverrideReason,
-            items: order.itemDetails,
-            linenItems: order.linenItems,
-            kitItems: order.kitItems,
-            linenSubtotal: order.linenSubtotal,
-            kitSubtotal: order.kitSubtotal,
-            cleaningId: order.cleaningId,
-            // ⚠️ Propaga flag esclusione per UI
-            excludedFromBilling: isExcluded,
-            excludedFromBillingReason: (order as any).excludedFromBillingReason,
-          } as any);
-        }
-      });
-
-      services.sort((a, b) => a.date.getTime() - b.date.getTime());
-
-      const totaleCalcolato = cleaningsTotal + ordersTotal + kitCortesiaTotal + serviziExtraTotal;
-      const ownerPayments = monthPayments.filter(p => p.proprietarioId === ownerId);
-      // ⚠️ Escludo isCreditTransfer per evitare doppio conteggio col carryover
-      const totalePagato = ownerPayments
-        .filter(p => (p as any).isCreditTransfer !== true)
-        .reduce((sum, p) => sum + (p.amount || 0), 0);
-      const saldo = totaleCalcolato - totalePagato;
-
-      // ═══ CARRYOVER: applica credito da mesi precedenti se disponibile ═══
+      // 🎯 Fonte di verità unica: stessa funzione usata anche dalla timeline
       const creditoPrecedente = creditByOwner.get(ownerId) || 0;
-      const saldoConCredito = Math.max(0, saldo - creditoPrecedente);
+      const r = computeOwnerMonthStats({
+        ownerId,
+        ownerProperties,
+        monthCleanings,
+        monthOrders,
+        monthPayments,
+        creditoPrecedente,
+      });
 
-      let stato: "SALDATO" | "PARZIALE" | "DA_PAGARE" = "DA_PAGARE";
-      if (saldoConCredito <= 0.01) stato = "SALDATO";
-      else if (totalePagato > 0 || creditoPrecedente > 0) stato = "PARZIALE";
-
-      if (totaleCalcolato > 0 || totalePagato > 0 || creditoPrecedente > 0) {
+      if (r.totaleCalcolato > 0 || r.totalePagato > 0 || r.creditoPrecedente > 0) {
         stats.push({
           proprietarioId: ownerId, proprietarioName: ownerName,
           propertyCount: ownerProperties.length,
-          cleaningsCount, cleaningsTotal, ordersCount, ordersTotal,
-          kitCortesiaCount, kitCortesiaTotal, serviziExtraCount, serviziExtraTotal,
-          totaleCalcolato, totaleEffettivo: totaleCalcolato, hasOverride: false,
-          payments: ownerPayments, totalePagato, saldo, creditoPrecedente, saldoConCredito, stato, services,
+          cleaningsCount: r.cleaningsCount, cleaningsTotal: r.cleaningsTotal,
+          ordersCount: r.ordersCount, ordersTotal: r.ordersTotal,
+          kitCortesiaCount: r.kitCortesiaCount, kitCortesiaTotal: r.kitCortesiaTotal,
+          serviziExtraCount: r.serviziExtraCount, serviziExtraTotal: r.serviziExtraTotal,
+          totaleCalcolato: r.totaleCalcolato, totaleEffettivo: r.totaleCalcolato, hasOverride: false,
+          payments: r.ownerPayments, totalePagato: r.totalePagato,
+          saldo: r.saldo,
+          creditoPrecedente: r.creditoPrecedente,
+          saldoConCredito: r.saldoConCredito,
+          stato: r.stato,
+          services: r.services,
         });
       }
     }
@@ -1072,78 +1148,40 @@ export function useRealtimePaymentsTimeline(timelineMonths: { month: number; yea
               if (o.cleaningId && completedCleaningIds.has(o.cleaningId)) return true;
               return false;
             })
-            // ⚡ Allinea calcolo a quello della lista (esclude cleaning_product,
-            //    items orfani, somma delivery+bedmaking dentro calculatedTotal,
-            //    rispetta priceOverride per item).
+            // ⚡ Pre-processa con processOrder così computeOwnerMonthStats può usare
+            //    calculatedTotal/mainCategory/*Subtotal coerenti con la lista
             .map(processOrder);
           const monthPayments = allPayments.filter((p: any) => Number(p.month) === Number(month) && Number(p.year) === Number(year));
 
           for (const [ownerId, ownerProperties] of propertiesByOwner) {
-            const propertyIds = ownerProperties.map((p: any) => p.id);
             const ownerName = ownerNames.get(ownerId) || "Sconosciuto";
-            const propertyNames = new Set<string>();
-            let totaleServizi = 0;
 
-            monthCleanings.forEach(cleaning => {
-              // @ts-expect-error TODO-FIX: TS2339 Property 'propertyId' does not exist on type '{ id: string; }'.
-              if (propertyIds.includes(cleaning.propertyId)) {
-                // ⚠️ FIX: salta se escluso dal billing
-                // @ts-expect-error TODO-FIX: excludedFromBilling on Cleaning
-                if (cleaning.excludedFromBilling === true) return;
-                // @ts-expect-error TODO-FIX: TS2339 Property 'propertyId' does not exist on type '{ id: string; }'.
-                const prop = staticCache.properties.get(cleaning.propertyId);
-                // ⚡ Stesso identico calcolo della lista:
-                //    basePrice = cleaning.price || prop.cleaningPrice (|| così se 0 fa fallback)
-                //    effectivePrice = (priceOverride ?? basePrice) + holidayFee
-                // @ts-expect-error TODO-FIX: TS2339 Property 'price' does not exist on type '{ id: string; }'.
-                const basePrice = cleaning.price || prop?.cleaningPrice || 0;
-                // @ts-expect-error TODO-FIX: TS2339 Property 'priceOverride' does not exist on type '{ id: string; }'.
-                totaleServizi += (cleaning.priceOverride ?? basePrice) + (cleaning.holidayFee ?? 0);
-                // @ts-expect-error TODO-FIX: TS2339 Property 'propertyName' does not exist on type '{ id: string; }'.
-                propertyNames.add(cleaning.propertyName || prop?.name || "Proprietà");
-              }
+            // 🎯 Stessa identica funzione usata dalla LISTA → impossibile divergere.
+            //    Nota: non passo creditoPrecedente perché la timeline mostra il
+            //    saldo "puro" del mese (vedi codice originale, era così anche prima).
+            const r = computeOwnerMonthStats({
+              ownerId,
+              ownerProperties,
+              monthCleanings: monthCleanings as any[],
+              monthOrders: monthOrders as any[],
+              monthPayments,
             });
 
-            monthOrders.forEach(order => {
-              // @ts-expect-error TODO-FIX: TS2339 Property 'propertyId' does not exist on type '{ id: string; }'.
-              if (propertyIds.includes(order.propertyId)) {
-                // ⚠️ FIX: salta se escluso dal billing
-                // @ts-expect-error TODO-FIX: excludedFromBilling on Order
-                if (order.excludedFromBilling === true) return;
-                // @ts-expect-error TODO-FIX: TS2339 Property 'propertyId' does not exist on type '{ id: string; }'.
-                const prop = staticCache.properties.get(order.propertyId);
-                // ⚡ Stesso identico calcolo della lista: processOrder ha già
-                //    incluso delivery+bedmaking dentro calculatedTotal e
-                //    escluso cleaning_product/orfani. L'override sostituisce tutto.
-                // @ts-expect-error TODO-FIX: TS2339 Property 'totalPriceOverride' does not exist on type '{ id: string; }'.
-                const effectivePrice = order.totalPriceOverride ?? order.calculatedTotal ?? 0;
-                totaleServizi += effectivePrice;
-                // @ts-expect-error TODO-FIX: TS2339 Property 'propertyName' does not exist on type '{ id: string; }'.
-                propertyNames.add(order.propertyName || prop?.name || "Proprietà");
+            if (r.totaleCalcolato > 0 || r.ownerPayments.length > 0) {
+              // Mappa stato → status (nomi diversi per retrocompatibilità UI timeline)
+              let status: "NESSUNO" | "PAGATO" | "PARZIALE" | "DA_PAGARE" = "NESSUNO";
+              if (r.totaleCalcolato > 0) {
+                if (r.stato === "SALDATO") status = "PAGATO";
+                else if (r.stato === "PARZIALE") status = "PARZIALE";
+                else status = "DA_PAGARE";
               }
-            });
 
-            const ownerPayments = monthPayments.filter((p: any) => p.proprietarioId === ownerId);
-            // ⚠️ Escludo isCreditTransfer per coerenza col calcolo del saldo
-            const totalePagato = ownerPayments
-              .filter((p: any) => p.isCreditTransfer !== true)
-              .reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
-            const saldo = totaleServizi - totalePagato;
-
-            let status: "NESSUNO" | "PAGATO" | "PARZIALE" | "DA_PAGARE" = "NESSUNO";
-            if (totaleServizi > 0) {
-              if (saldo <= 0) status = "PAGATO";
-              else if (totalePagato > 0) status = "PARZIALE";
-              else status = "DA_PAGARE";
-            }
-
-            if (totaleServizi > 0 || ownerPayments.length > 0) {
               if (!clientsMap.has(ownerId)) {
                 clientsMap.set(ownerId, { proprietarioId: ownerId, proprietarioName: ownerName, properties: [], months: [] });
               }
               const client = clientsMap.get(ownerId)!;
-              propertyNames.forEach(name => { if (!client.properties.includes(name)) client.properties.push(name); });
-              client.months.push({ month, year, status, saldo, totale: totaleServizi });
+              r.propertyNames.forEach(name => { if (!client.properties.includes(name)) client.properties.push(name); });
+              client.months.push({ month, year, status, saldo: r.saldo, totale: r.totaleCalcolato });
             }
           }
         }
