@@ -34,10 +34,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "~/lib/firebase/admin";
 import { Timestamp } from "firebase-admin/firestore";
-import { isCleaningProductItem } from "~/lib/payments/debtCalculator";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
+
+/**
+ * Inline copy della funzione isCleaningProductItem da debtCalculator.ts.
+ * Inlined così l'API debug è deployabile DA SOLA, senza dipendere
+ * dal fix completo (utile per check pre-deploy).
+ */
+function isCleaningProductItem(item: any): boolean {
+  if (item.type === "cleaning_product") return true;
+  const cat = item.categoryId || item.category || "";
+  if (cat === "prodotti_pulizia" || cat === "cleaning_products") return true;
+  return false;
+}
 
 // Pattern di nomi che SUGGERISCONO un cleaning_product anche se mancano i flag
 const SUSPICIOUS_NAMES = [
@@ -98,11 +109,15 @@ export async function GET(request: NextRequest) {
     });
 
     // ─── 2. CARICA ORDINI RECENTI ─────────────────────────────
-    const ordersSnap = await adminDb.collection("linenOrders")
-      .where("createdAt", ">=", cutoffTs)
-      .get();
+    // Nota: collection "orders" + filtro lato client su data perché
+    // gli ordini hanno date in vari campi (createdAt, scheduledDate,
+    // deliveredAt) e non tutti sono indicizzati.
+    const ordersSnap = await adminDb.collection("orders").get();
 
     // ─── 3. ANALISI ───────────────────────────────────────────
+    let totalOrdersInCollection = ordersSnap.docs.length;
+    let ordersWithItems = 0;
+    let ordersInDateRange = 0;
     let totalOrders = 0;
     let totalItems = 0;
     let itemsWithType = 0;
@@ -126,6 +141,17 @@ export async function GET(request: NextRequest) {
     ordersSnap.docs.forEach(doc => {
       const order = doc.data() as any;
       if (!Array.isArray(order.items) || order.items.length === 0) return;
+      ordersWithItems++;
+
+      // Filtro data lato client: usa createdAt → scheduledDate → deliveredAt
+      const orderDate =
+        order.createdAt?.toDate?.() ||
+        order.scheduledDate?.toDate?.() ||
+        order.deliveredAt?.toDate?.() ||
+        null;
+      if (!orderDate || orderDate < cutoff) return;
+      ordersInDateRange++;
+
       totalOrders++;
 
       const orderId = doc.id;
@@ -239,9 +265,14 @@ export async function GET(request: NextRequest) {
 
     const missingFixCoverage = ordersWithMissedAnticalcare.length;
 
-    const verdict = missingFixCoverage === 0
-      ? "✅ FIX COMPLETO: tutti gli ordini scansionati hanno cleaning_product correttamente flaggati"
-      : `⚠️ FIX PARZIALE: ${missingFixCoverage} ordini hanno items sospetti come prodotti pulizia ma SENZA flag type/categoryId. Servirà migrazione dati.`;
+    let verdict: string;
+    if (totalOrders === 0) {
+      verdict = `❓ NESSUN ORDINE ANALIZZATO. Trovati ${totalOrdersInCollection} doc in 'orders', ${ordersWithItems} con items, ${ordersInDateRange} nel range temporale. Verifica nome collection e formato date.`;
+    } else if (missingFixCoverage === 0) {
+      verdict = "✅ FIX COMPLETO: tutti gli ordini scansionati hanno cleaning_product correttamente flaggati";
+    } else {
+      verdict = `⚠️ FIX PARZIALE: ${missingFixCoverage} ordini hanno items sospetti come prodotti pulizia ma SENZA flag type/categoryId. Servirà migrazione dati.`;
+    }
 
     const result: any = {
       verdict,
@@ -251,7 +282,10 @@ export async function GET(request: NextRequest) {
         monthsBack,
       },
       stats: {
-        totalOrders,
+        totalOrdersInCollection,
+        ordersWithItems,
+        ordersInDateRange,
+        totalOrdersAnalyzed: totalOrders,
         totalItems,
         itemsWithType,
         itemsWithCategoryId,
