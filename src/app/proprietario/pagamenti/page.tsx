@@ -400,7 +400,15 @@ export default function ProprietarioPagamentiPage() {
                   )}
                   <div className="text-left">
                     <p className="font-semibold text-slate-800">{prop.propertyName}</p>
-                    <p className="text-xs text-slate-500">{prop.servicesCount} servizi</p>
+                    <p className="text-xs text-slate-500">
+                      {(() => {
+                        // 🆕 Distinguo servizi (pulizie) da ordini (biancheria + altri)
+                        const parts: string[] = [];
+                        if (prop.cleaningsCount > 0) parts.push(`${prop.cleaningsCount} ${prop.cleaningsCount === 1 ? "servizio" : "servizi"}`);
+                        if (prop.ordersCount > 0) parts.push(`${prop.ordersCount} ${prop.ordersCount === 1 ? "ordine" : "ordini"}`);
+                        return parts.length > 0 ? parts.join(" · ") : `${prop.servicesCount} servizi`;
+                      })()}
+                    </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
@@ -823,9 +831,19 @@ export default function ProprietarioPagamentiPage() {
                     <span className="px-2 py-0.5 rounded-full bg-white/10 text-white/80 text-xs font-medium">
                       {stats.statsByProperty.length} proprietà
                     </span>
-                    <span className="px-2 py-0.5 rounded-full bg-white/10 text-white/80 text-xs font-medium">
-                      {stats.services.length} servizi
-                    </span>
+                    {stats.cleaningsCount > 0 && (
+                      <span className="px-2 py-0.5 rounded-full bg-white/10 text-white/80 text-xs font-medium">
+                        {stats.cleaningsCount} {stats.cleaningsCount === 1 ? "servizio" : "servizi"}
+                      </span>
+                    )}
+                    {(() => {
+                      const ordiniCount = stats.ordersCount + stats.kitCortesiaCount + stats.serviziExtraCount;
+                      return ordiniCount > 0 ? (
+                        <span className="px-2 py-0.5 rounded-full bg-white/10 text-white/80 text-xs font-medium">
+                          {ordiniCount} {ordiniCount === 1 ? "ordine" : "ordini"}
+                        </span>
+                      ) : null;
+                    })()}
                   </div>
                 </div>
               </div>

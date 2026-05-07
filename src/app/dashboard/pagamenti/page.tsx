@@ -2170,7 +2170,15 @@ export default function PagamentiPage() {
             <div className="flex-1 min-w-0">
               <h3 className="font-bold text-slate-900 text-[17px] truncate">{client.proprietarioName}</h3>
               <p className="text-[11px] text-slate-500 font-medium mt-0.5">
-                {propertyNames.length} proprietà · {client.services.length} servizi
+                {(() => {
+                  // 🆕 Distinguo "servizi" (pulizie) da "ordini" (biancheria + kit + extra)
+                  // come fa già il riepilogo per categoria sotto
+                  const ordiniCount = client.ordersCount + client.kitCortesiaCount + client.serviziExtraCount;
+                  const parts: string[] = [`${propertyNames.length} proprietà`];
+                  if (client.cleaningsCount > 0) parts.push(`${client.cleaningsCount} ${client.cleaningsCount === 1 ? "servizio" : "servizi"}`);
+                  if (ordiniCount > 0) parts.push(`${ordiniCount} ${ordiniCount === 1 ? "ordine" : "ordini"}`);
+                  return parts.join(" · ");
+                })()}
               </p>
             </div>
             {client.saldoConCredito > 0.01 ? (
@@ -2413,7 +2421,17 @@ export default function PagamentiPage() {
                             <span className="truncate">{propAddress}</span>
                           </p>
                         )}
-                        <p className="text-xs text-slate-500 mt-0.5">{propServices.length} servizi</p>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          {(() => {
+                            // 🆕 Distinguo servizi (pulizie) e ordini (biancheria/kit/extra)
+                            const servCount = propServices.filter(s => s.type === "PULIZIA").length;
+                            const ordCount = propServices.length - servCount;
+                            const parts: string[] = [];
+                            if (servCount > 0) parts.push(`${servCount} ${servCount === 1 ? "servizio" : "servizi"}`);
+                            if (ordCount > 0) parts.push(`${ordCount} ${ordCount === 1 ? "ordine" : "ordini"}`);
+                            return parts.length > 0 ? parts.join(" · ") : `${propServices.length} servizi`;
+                          })()}
+                        </p>
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
