@@ -1071,7 +1071,11 @@ export function useRealtimePaymentsTimeline(timelineMonths: { month: number; yea
               // @ts-expect-error TODO-FIX: TS2339 Property 'cleaningId' does not exist on type '{ id: string; }'.
               if (o.cleaningId && completedCleaningIds.has(o.cleaningId)) return true;
               return false;
-            });
+            })
+            // ⚡ Allinea calcolo a quello della lista (esclude cleaning_product,
+            //    items orfani, somma delivery+bedmaking dentro calculatedTotal,
+            //    rispetta priceOverride per item).
+            .map(processOrder);
           const monthPayments = allPayments.filter((p: any) => Number(p.month) === Number(month) && Number(p.year) === Number(year));
 
           for (const [ownerId, ownerProperties] of propertiesByOwner) {
@@ -1088,8 +1092,13 @@ export function useRealtimePaymentsTimeline(timelineMonths: { month: number; yea
                 if (cleaning.excludedFromBilling === true) return;
                 // @ts-expect-error TODO-FIX: TS2339 Property 'propertyId' does not exist on type '{ id: string; }'.
                 const prop = staticCache.properties.get(cleaning.propertyId);
+                // ⚡ Stesso identico calcolo della lista:
+                //    basePrice = cleaning.price || prop.cleaningPrice (|| così se 0 fa fallback)
+                //    effectivePrice = (priceOverride ?? basePrice) + holidayFee
+                // @ts-expect-error TODO-FIX: TS2339 Property 'price' does not exist on type '{ id: string; }'.
+                const basePrice = cleaning.price || prop?.cleaningPrice || 0;
                 // @ts-expect-error TODO-FIX: TS2339 Property 'priceOverride' does not exist on type '{ id: string; }'.
-                totaleServizi += (cleaning.priceOverride ?? cleaning.price ?? prop?.cleaningPrice ?? 0) + (cleaning.holidayFee ?? 0);
+                totaleServizi += (cleaning.priceOverride ?? basePrice) + (cleaning.holidayFee ?? 0);
                 // @ts-expect-error TODO-FIX: TS2339 Property 'propertyName' does not exist on type '{ id: string; }'.
                 propertyNames.add(cleaning.propertyName || prop?.name || "Proprietà");
               }
@@ -1103,30 +1112,12 @@ export function useRealtimePaymentsTimeline(timelineMonths: { month: number; yea
                 if (order.excludedFromBilling === true) return;
                 // @ts-expect-error TODO-FIX: TS2339 Property 'propertyId' does not exist on type '{ id: string; }'.
                 const prop = staticCache.properties.get(order.propertyId);
+                // ⚡ Stesso identico calcolo della lista: processOrder ha già
+                //    incluso delivery+bedmaking dentro calculatedTotal e
+                //    escluso cleaning_product/orfani. L'override sostituisce tutto.
                 // @ts-expect-error TODO-FIX: TS2339 Property 'totalPriceOverride' does not exist on type '{ id: string; }'.
-                let orderTotal = order.totalPriceOverride ?? 0;
-                // @ts-expect-error TODO-FIX: TS2339 Property 'items' does not exist on type '{ id: string; }'.
-                if (!orderTotal && order.items) {
-                  // @ts-expect-error TODO-FIX: TS2339 Property 'items' does not exist on type '{ id: string; }'.
-                  order.items.forEach((item: any) => {
-                    const invItem = staticCache.inventory.get(item.itemId || item.id);
-                    const price = item.unitPrice ?? item.price ?? invItem?.sellPrice ?? 0;
-                    orderTotal += item.totalPrice ?? (price * (item.quantity || 1));
-                  });
-                }
-                // 💰 Aggiungi costo consegna se presente e abilitato
-                // @ts-expect-error TODO-FIX: TS2339 Property 'deliveryFee' does not exist on type '{ id: string; }'.
-                if (order.deliveryFee && order.deliveryFeeEnabled !== false) {
-                  // @ts-expect-error TODO-FIX: TS2339 Property 'deliveryFee' does not exist on type '{ id: string; }'.
-                  orderTotal += order.deliveryFee;
-                }
-                // 🛏️ Aggiungi costo preparazione letti se presente
-                // @ts-expect-error TODO-FIX: TS2339
-                if (order.bedMaking && order.bedMakingFee) {
-                  // @ts-expect-error TODO-FIX: TS2339
-                  orderTotal += order.bedMakingFee;
-                }
-                totaleServizi += orderTotal;
+                const effectivePrice = order.totalPriceOverride ?? order.calculatedTotal ?? 0;
+                totaleServizi += effectivePrice;
                 // @ts-expect-error TODO-FIX: TS2339 Property 'propertyName' does not exist on type '{ id: string; }'.
                 propertyNames.add(order.propertyName || prop?.name || "Proprietà");
               }
