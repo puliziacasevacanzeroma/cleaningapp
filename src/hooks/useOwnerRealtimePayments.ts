@@ -428,6 +428,8 @@ function buildOrderItemDetails(order: any): {
   rawTotal: number;
   linenSubtotal: number;
   kitSubtotal: number;
+  extraSubtotal: number;
+  othersSubtotal: number;
   deliveryFee: number;
   bedMakingFee: number;
 } {
@@ -492,18 +494,18 @@ function buildOrderItemDetails(order: any): {
   const linenItems = itemDetails.filter(i => i.categoryGroup === "linen");
   const kitItems = itemDetails.filter(i => i.categoryGroup === "kit_cortesia");
 
+  // 🔢 Subtotale "servizi extra" (sempre calcolato, serve per lo split categoria)
+  const extraSubtotal = itemDetails
+    .filter(i => i.categoryGroup === "servizi_extra")
+    .reduce((s, i) => s + i.totalPrice, 0);
+
   // Determina mainCategory per il tipo dell'ordine (BIANCHERIA / KIT_CORTESIA / SERVIZI_EXTRA)
   // basato sul gruppo con totale più alto
   let mainCategory = "Biancheria";
-  if (kitSubtotal > linenSubtotal) {
+  if (kitSubtotal > linenSubtotal && kitSubtotal > extraSubtotal) {
     mainCategory = "Kit Cortesia";
-  } else {
-    const extraSubtotal = itemDetails
-      .filter(i => i.categoryGroup === "servizi_extra")
-      .reduce((s, i) => s + i.totalPrice, 0);
-    if (extraSubtotal > linenSubtotal && extraSubtotal > kitSubtotal) {
-      mainCategory = "Servizi Extra";
-    }
+  } else if (extraSubtotal > linenSubtotal && extraSubtotal > kitSubtotal) {
+    mainCategory = "Servizi Extra";
   }
 
   // Delivery fee — incluso solo se abilitato
@@ -548,6 +550,10 @@ function buildOrderItemDetails(order: any): {
     rawTotal: calculatedTotal,
     linenSubtotal,
     kitSubtotal,
+    // 🆕 Subtotale "servizi extra" (per split corretto nel riepilogo categoria)
+    extraSubtotal,
+    // 🆕 Subtotale "altro" (delivery + preparazione letti) — segue la mainCategory
+    othersSubtotal: deliveryFee + bedMakingFee,
     deliveryFee,
     bedMakingFee,
   };
@@ -837,6 +843,8 @@ export function useOwnerRealtimePayments(ownerId: string | undefined, month: num
         rawTotal,
         linenSubtotal,
         kitSubtotal,
+        extraSubtotal,
+        othersSubtotal,
       } = buildOrderItemDetails(order);
       const effectivePrice = order.totalPriceOverride ?? rawTotal;
       const serviceType = mapCategoryToServiceType(mainCategory);
@@ -846,9 +854,32 @@ export function useOwnerRealtimePayments(ownerId: string | undefined, month: num
       // (nascosti) o items orfani. Non lo mostriamo.
       if (effectivePrice === 0 && itemDetails.length === 0) return;
 
-      if (serviceType === "KIT_CORTESIA") { kitCortesiaCount++; kitCortesiaTotal += effectivePrice; }
-      else if (serviceType === "SERVIZI_EXTRA") { serviziExtraCount++; serviziExtraTotal += effectivePrice; }
-      else { ordersCount++; ordersTotal += effectivePrice; }
+      // 🔄 SPLIT PER CATEGORIA: un singolo ordine può contenere
+      // biancheria + kit + servizi extra + delivery/bedmaking.
+      // Lo scorporo per categoria così il riepilogo mostra correttamente
+      // ogni voce, anche quando l'ordine ha mainCategory=BIANCHERIA ma
+      // contiene anche kit cortesia (caso più frequente).
+      const linenPart = linenSubtotal + (serviceType === "BIANCHERIA"     ? othersSubtotal : 0);
+      const kitPart   = kitSubtotal   + (serviceType === "KIT_CORTESIA"   ? othersSubtotal : 0);
+      const extraPart = extraSubtotal + (serviceType === "SERVIZI_EXTRA"  ? othersSubtotal : 0);
+      const partsRaw  = linenPart + kitPart + extraPart;
+      // Scaling proporzionale per riflettere eventuale totalPriceOverride
+      const ratio = partsRaw > 0 ? effectivePrice / partsRaw : 1;
+      const linenScaled = linenPart * ratio;
+      const kitScaled   = kitPart   * ratio;
+      const extraScaled = extraPart * ratio;
+
+      if (linenScaled > 0.001) { ordersCount++;       ordersTotal       += linenScaled; }
+      if (kitScaled   > 0.001) { kitCortesiaCount++;  kitCortesiaTotal  += kitScaled; }
+      if (extraScaled > 0.001) { serviziExtraCount++; serviziExtraTotal += extraScaled; }
+
+      // Edge case: ordine con partsRaw=0 ma effectivePrice>0 (override su ordine vuoto):
+      // ricado sulla categoria nominale per non perdere il valore
+      if (partsRaw <= 0.001 && effectivePrice > 0.001) {
+        if (serviceType === "KIT_CORTESIA")      { kitCortesiaCount++;  kitCortesiaTotal  += effectivePrice; }
+        else if (serviceType === "SERVIZI_EXTRA"){ serviziExtraCount++; serviziExtraTotal += effectivePrice; }
+        else                                     { ordersCount++;       ordersTotal       += effectivePrice; }
+      }
 
       // Descrizione: conta solo articoli "veri" (no fee delivery/bedmaking)
       const realItemsCount = itemDetails.filter(i => i.itemId !== "_delivery_fee" && i.itemId !== "_bed_making_fee").length;

@@ -405,16 +405,16 @@ function processOrder(order: any): any {
   const linenItems = itemDetails.filter(i => i.categoryGroup === "linen");
   const kitItems = itemDetails.filter(i => i.categoryGroup === "kit_cortesia");
 
+  // 🔢 Subtotale "servizi extra" (sempre calcolato, serve per lo split categoria)
+  const extraSubtotal = itemDetails
+    .filter(i => i.categoryGroup === "servizi_extra")
+    .reduce((s, i) => s + i.totalPrice, 0);
+
   // Determina mainCategory in base al gruppo dominante
-  if (kitSubtotal > linenSubtotal) {
+  if (kitSubtotal > linenSubtotal && kitSubtotal > extraSubtotal) {
     mainCategory = "Kit Cortesia";
-  } else {
-    const extraSubtotal = itemDetails
-      .filter(i => i.categoryGroup === "servizi_extra")
-      .reduce((s, i) => s + i.totalPrice, 0);
-    if (extraSubtotal > linenSubtotal && extraSubtotal > kitSubtotal) {
-      mainCategory = "Servizi Extra";
-    }
+  } else if (extraSubtotal > linenSubtotal && extraSubtotal > kitSubtotal) {
+    mainCategory = "Servizi Extra";
   }
 
   // 💰 Aggiungi costo consegna se presente e abilitato
@@ -465,6 +465,10 @@ function processOrder(order: any): any {
     kitItems,
     linenSubtotal,
     kitSubtotal,
+    // 🆕 Subtotale "servizi extra" (per split corretto nel riepilogo categoria)
+    extraSubtotal,
+    // 🆕 Subtotale "altro" (delivery + preparazione letti) — segue la mainCategory
+    othersSubtotal: deliveryFee + bedMakingFee,
     mainCategory,
     deliveryFee,
     bedMakingFee,
@@ -847,9 +851,37 @@ export function useRealtimePayments(month: number, year: number) {
           // Se è escluso dal billing, non lo conto nel totale ma lo mostro
           const isExcluded = (order as any).excludedFromBilling === true;
           if (!isExcluded) {
-            if (serviceType === "KIT_CORTESIA") { kitCortesiaCount++; kitCortesiaTotal += effectivePrice; }
-            else if (serviceType === "SERVIZI_EXTRA") { serviziExtraCount++; serviziExtraTotal += effectivePrice; }
-            else { ordersCount++; ordersTotal += effectivePrice; }
+            // 🔄 SPLIT PER CATEGORIA: un singolo ordine può contenere
+            // biancheria + kit + servizi extra + delivery/bedmaking.
+            // Lo scorporo per categoria così il riepilogo mostra correttamente
+            // ogni voce, anche quando l'ordine ha mainCategory=BIANCHERIA ma
+            // contiene anche kit cortesia (caso più frequente).
+            const linenSub  = order.linenSubtotal  ?? 0;
+            const kitSub    = order.kitSubtotal    ?? 0;
+            const extraSub  = order.extraSubtotal  ?? 0;
+            const othersSub = order.othersSubtotal ?? 0;
+            // Le voci "altro" (delivery + bedmaking) seguono la mainCategory dell'ordine
+            const linenPart = linenSub + (serviceType === "BIANCHERIA"     ? othersSub : 0);
+            const kitPart   = kitSub   + (serviceType === "KIT_CORTESIA"   ? othersSub : 0);
+            const extraPart = extraSub + (serviceType === "SERVIZI_EXTRA"  ? othersSub : 0);
+            const rawTotal  = linenPart + kitPart + extraPart;
+            // Scaling proporzionale per riflettere eventuale totalPriceOverride
+            const ratio = rawTotal > 0 ? effectivePrice / rawTotal : 1;
+            const linenScaled = linenPart * ratio;
+            const kitScaled   = kitPart   * ratio;
+            const extraScaled = extraPart * ratio;
+
+            if (linenScaled > 0.001) { ordersCount++;       ordersTotal       += linenScaled; }
+            if (kitScaled   > 0.001) { kitCortesiaCount++;  kitCortesiaTotal  += kitScaled; }
+            if (extraScaled > 0.001) { serviziExtraCount++; serviziExtraTotal += extraScaled; }
+
+            // Edge case: ordine con rawTotal=0 ma effectivePrice>0 (override su ordine vuoto):
+            // ricado sulla categoria nominale per non perdere il valore
+            if (rawTotal <= 0.001 && effectivePrice > 0.001) {
+              if (serviceType === "KIT_CORTESIA")      { kitCortesiaCount++;  kitCortesiaTotal  += effectivePrice; }
+              else if (serviceType === "SERVIZI_EXTRA"){ serviziExtraCount++; serviziExtraTotal += effectivePrice; }
+              else                                     { ordersCount++;       ordersTotal       += effectivePrice; }
+            }
           }
 
           services.push({
