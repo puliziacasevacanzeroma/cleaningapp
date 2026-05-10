@@ -74,6 +74,23 @@ export async function GET(req: NextRequest) {
 
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || `https://${req.headers.get("host")}`;
 
+  // 🛡️ FAILSAFE: prima di mandare email di sospensione, attiva i paymentBlock
+  //    chiamando check-payment-blocks internamente. Così i due cron sono
+  //    sempre allineati anche se su cron-job.org è configurato solo questo.
+  //    Idempotente: se check-payment-blocks è già girato oggi, non duplica nulla.
+  try {
+    const blockUrl = `${baseUrl}/api/cron/check-payment-blocks?secret=${encodeURIComponent(CRON_SECRET || "")}`;
+    const blockRes = await fetch(blockUrl, { method: "GET" });
+    if (blockRes.ok) {
+      const blockJson = await blockRes.json();
+      console.log(`🔒 [send-payment-suspension] check-payment-blocks ok:`, JSON.stringify(blockJson));
+    } else {
+      console.warn(`⚠️ [send-payment-suspension] check-payment-blocks HTTP ${blockRes.status} — proseguo comunque`);
+    }
+  } catch (e) {
+    console.warn(`⚠️ [send-payment-suspension] check-payment-blocks failed (non bloccante):`, e);
+  }
+
   if (sync) {
     const result = await processAllOwners(baseUrl, targetMonth, targetYear, dryRun);
     return NextResponse.json(result);
