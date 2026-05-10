@@ -2,7 +2,7 @@
 
 import { useState, useRef, forwardRef, useImperativeHandle, lazy, Suspense, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { doc, updateDoc } from "firebase/firestore";
+import { doc, updateDoc, deleteField } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 
 const GuestModal = lazy(() => import("~/components/proprietario/GuestModal").then(m => ({ default: m.GuestModal })));
@@ -308,7 +308,6 @@ export const PulizieModals = forwardRef<PulizieModalsHandle, PulizieModalsProps>
         adulti: pendingGuestChange.adulti,
         neonati: pendingGuestChange.neonati,
         linenConfigModified: false,
-        // @ts-expect-error TODO-FIX: TS2304 Cannot find name 'deleteField'.
         customLinenConfig: deleteField(),
         updatedAt: new Date()
       });
