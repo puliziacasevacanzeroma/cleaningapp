@@ -249,14 +249,17 @@ export async function GET(request: NextRequest) {
         let checkYear = currentYear;
         while (checkMonth <= 0) { checkMonth += 12; checkYear--; }
 
-        // La scadenza è il 10 del mese successivo
+        // La scadenza è il 10 del mese successivo all'INIZIO del giorno (00:00).
+        // ⚠️ Coerente con getScadenzaDate in debtManager.ts: alle 09:00 del 10
+        //    quando il cron send-payment-suspension manda le email, il debito
+        //    risulta già scaduto qui e viene attivato il paymentBlock.
         let scadMonth = checkMonth + 1;
         let scadYear = checkYear;
         if (scadMonth > 12) { scadMonth = 1; scadYear++; }
-        const scadenza = new Date(scadYear, scadMonth - 1, SCADENZA_GIORNO, 23, 59, 59);
+        const scadenza = new Date(scadYear, scadMonth - 1, SCADENZA_GIORNO, 0, 0, 0);
 
         // Se non ancora scaduto, skip
-        if (now <= scadenza) continue;
+        if (now < scadenza) continue;
 
         const saldoMese = calcSaldoMese(checkMonth, checkYear);
         if (saldoMese === null) continue; // nessun servizio in quel mese

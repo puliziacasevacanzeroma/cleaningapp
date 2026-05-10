@@ -61,7 +61,15 @@ export const SCADENZA_CRITICA_GIORNO = 10; // Scaduto dal 10 del mese
 
 /**
  * Calcola la data di scadenza per un mese di servizio
- * Es: servizi di Gennaio 2026 → scadenza 10 Febbraio 2026
+ * Es: servizi di Gennaio 2026 → scadenza 10 Febbraio 2026 alle 00:00
+ *
+ * ⚠️ IMPORTANTE: la scadenza è all'INIZIO del giorno 10, non alla fine.
+ * Questo garantisce che:
+ *   - send-payment-suspension (gira alle 09:00 del 10) trovi i debiti SCADUTI
+ *   - check-payment-blocks (gira la mattina del 10) blocchi gli account
+ *   - getDebtStatus restituisca "SCADUTO" coerentemente con email/blocco
+ * Se la scadenza fosse alle 23:59 del 10, le email partirebbero ma né il
+ * blocco né lo status sarebbero ancora attivi → UI incoerente per 14 ore.
  */
 export function getScadenzaDate(month: number, year: number): Date {
   let scadenzaMonth = month + 1;
@@ -72,7 +80,7 @@ export function getScadenzaDate(month: number, year: number): Date {
     scadenzaYear++;
   }
   
-  return new Date(scadenzaYear, scadenzaMonth - 1, SCADENZA_CRITICA_GIORNO, 23, 59, 59);
+  return new Date(scadenzaYear, scadenzaMonth - 1, SCADENZA_CRITICA_GIORNO, 0, 0, 0);
 }
 
 /**
