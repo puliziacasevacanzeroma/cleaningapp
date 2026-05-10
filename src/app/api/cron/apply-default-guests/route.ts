@@ -188,14 +188,25 @@ async function runApplyDefaults(): Promise<NextResponse> {
       if (!property.usesOwnLinen) {
         const existingOrder = ordersMap.get(c.id);
         if (existingOrder) {
+          // 🔒 PROTEZIONE PERSONALIZZAZIONE BIANCHERIA
+          // Se la pulizia ha config personalizzata (linenConfigModified=true
+          // oppure customLinenConfig presente), il cron NON deve sovrascrivere
+          // gli items dell'ordine: il proprietario/admin ha fatto una scelta
+          // consapevole e va rispettata. Stessa regola di cleanings/[id] PATCH.
+          const isCustom = c.linenConfigModified === true || !!c.customLinenConfig;
           try {
-            const newLinenItems = calculateLinenItemsForProperty(property, maxGuests);
-            await adminDb.collection('orders').doc(existingOrder.id).update({
-              items: newLinenItems,
+            const orderUpdate: Record<string, any> = {
               guestsCount: maxGuests,
               guestsAppliedBySystem: true,
               updatedAt: Timestamp.now(),
-            });
+            };
+            if (!isCustom) {
+              // Solo se NON personalizzata, ricalcola items dalla config standard
+              orderUpdate.items = calculateLinenItemsForProperty(property, maxGuests);
+            } else if (process.env.NODE_ENV !== "production") {
+              console.log(`⏭️ Pulizia ${c.id} ha config personalizzata — items ordine NON modificati`);
+            }
+            await adminDb.collection('orders').doc(existingOrder.id).update(orderUpdate);
             stats.ordersUpdated++;
           } catch (err) {
             console.error('Errore aggiornamento ordine:', err);
