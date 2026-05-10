@@ -87,23 +87,44 @@ async function recalculateLinenOrderForCleaning(cleaningId: string): Promise<num
     // 4. Calcola i nuovi items (stessa logica di update-linen-order/route.ts)
     const newItems: { id: string; name: string; quantity: number }[] = [];
 
-    // Biancheria Letto (bl) - usa 'all' come fonte di verità, altrimenti somma sottogruppi
-    // ⚠️ Allineato a calculateDotazioni (linenService.ts) per coerenza con la card admin.
-    // Check `Object.keys(...).length > 0` per gestire correttamente bl['all']={} (truthy ma vuoto).
+    // Biancheria Letto (bl) - logica MERGE: usa bl['all'] come base + integra mancanti dai gruppi letto
+    // ⚠️ Logica IDENTICA a:
+    //   - /api/dashboard/cleanings/[id] PATCH (admin mobile)
+    //   - EditCleaningModal.tsx save handler
+    //   - /api/admin/update-all-pending-orders POST
+    // Questa è la logica "principale" del sistema. Garantisce coerenza con l'admin.
     if (config.bl) {
       const hasAll = config.bl['all']
         && typeof config.bl['all'] === 'object'
         && Object.keys(config.bl['all']).length > 0;
 
       if (hasAll) {
-        // Usa direttamente 'all'
+        // MERGE: usa 'all' come base, integra articoli mancanti dai gruppi letto
+        const mergedBl: Record<string, number> = {};
+        // Prima: somma da gruppi letto (b1, b2, ...)
+        Object.entries(config.bl).forEach(([key, val]) => {
+          if (key !== 'all' && typeof val === 'object' && val !== null) {
+            Object.entries(val as Record<string, number>).forEach(([itemId, qty]) => {
+              if (typeof qty === 'number' && qty > 0) {
+                mergedBl[itemId] = (mergedBl[itemId] || 0) + qty;
+              }
+            });
+          }
+        });
+        // Poi: sovrascrivi con bl['all'] (è la fonte di verità per quegli articoli)
         Object.entries(config.bl['all']).forEach(([itemId, qty]) => {
           if (typeof qty === 'number' && qty > 0) {
+            mergedBl[itemId] = qty as number;
+          }
+        });
+        // Costruisci items
+        Object.entries(mergedBl).forEach(([itemId, qty]) => {
+          if (qty > 0) {
             newItems.push({ id: itemId, name: getItemName(itemId), quantity: qty });
           }
         });
       } else {
-        // Somma da tutti i gruppi letto (escluso 'all' che è vuoto/assente)
+        // Solo gruppi letto: somma da tutti
         Object.entries(config.bl).forEach(([bedId, items]) => {
           if (bedId !== 'all' && typeof items === 'object' && items !== null) {
             Object.entries(items as Record<string, number>).forEach(([itemId, qty]) => {

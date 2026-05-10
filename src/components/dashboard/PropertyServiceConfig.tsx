@@ -6190,6 +6190,27 @@ export default function PropertyServiceConfig({ isAdmin = true, propertyId, init
                         guestsCount: guestChangeModal.newGuests,
                         updatedAt: Timestamp.now(),
                       });
+
+                      // 🔧 FIX CRITICO: ricalcola l'ordine biancheria collegato.
+                      // Senza questa chiamata, la card biancheria/consegna mostrava
+                      // ancora le quantità calcolate sul vecchio numero di ospiti
+                      // → l'operatore preparava la casa per il numero sbagliato di persone.
+                      //
+                      // Skip se la pulizia ha biancheria personalizzata (linenConfigModified=true):
+                      // in quel caso update-linen-order userebbe la customLinenConfig vecchia
+                      // (calibrata sul vecchio numero ospiti) → risultato sbagliato.
+                      // Per il caso custom serve una modal di conferma "tieni custom o standard"
+                      // come fanno DashboardContent e PulizieModals — qui per ora non c'è.
+                      try {
+                        const svc = services.find(s => s.id === guestChangeModal.serviceId);
+                        const isCustom = svc?.linenConfigModified === true;
+                        if (!isCustom) {
+                          fetch(`/api/cleanings/${guestChangeModal.serviceId}/update-linen-order`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' }
+                          }).catch(err => console.error("⚠️ Errore aggiornamento ordine biancheria:", err));
+                        }
+                      } catch (e) { /* non bloccante */ }
                     } catch (err) {
                       console.error("Errore salvataggio ospiti:", err);
                     }
