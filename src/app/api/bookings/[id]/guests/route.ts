@@ -3,6 +3,7 @@ import { adminDb } from "~/lib/firebase/admin";
 import { Timestamp } from "firebase-admin/firestore";
 import { getApiUser } from "~/lib/api-auth";
 import { validateBody, BookingGuestsSchema } from "~/lib/validation/schemas";
+import { getItemName } from "~/lib/itemNames";
 
 export const dynamic = 'force-dynamic';
 
@@ -25,6 +26,162 @@ function canModifyGuests(checkoutDate: Date): { allowed: boolean; reason?: strin
   }
   
   return { allowed: true };
+}
+
+/**
+ * 🔧 RICALCOLA gli items dell'ordine biancheria PENDING collegato a una cleaning
+ *
+ * Replica la stessa logica di /api/cleanings/[id]/update-linen-order ma server-side
+ * (senza fetch HTTP) per evitare problemi di auth interna.
+ *
+ * Skip rules (sicurezza):
+ *  - Se la cleaning ha linenConfigModified === true E ha customLinenConfig, usa la config
+ *    personalizzata (così non viene mai persa accidentalmente).
+ *  - Se l'ordine NON è PENDING (es. ASSIGNED/IN_TRANSIT/DELIVERED/COMPLETED), NON si tocca.
+ *  - Se non esiste serviceConfigs nella proprietà o config per quel numero ospiti, skip.
+ *  - Tutti gli errori sono catturati e NON propagati per non bloccare l'update guests.
+ *
+ * @returns conteggio ordini effettivamente aggiornati
+ */
+async function recalculateLinenOrderForCleaning(cleaningId: string): Promise<number> {
+  try {
+    // 1. Carica la pulizia
+    const cleaningDoc = await adminDb.collection("cleanings").doc(cleaningId).get();
+    if (!cleaningDoc.exists) return 0;
+
+    const cleaningData = cleaningDoc.data() as Record<string, any>;
+    const propertyId = cleaningData.propertyId;
+    const guestsCount = cleaningData.guestsCount || 2;
+    const hasCustomConfig = cleaningData.linenConfigModified === true && !!cleaningData.customLinenConfig;
+
+    // 2. Trova ordine PENDING di questa pulizia (solo PENDING per sicurezza:
+    //    se è già ASSIGNED al rider o consegnato, NON tocchiamo)
+    const ordersSnap = await adminDb.collection("orders")
+      .where("cleaningId", "==", cleaningId)
+      .where("status", "==", "PENDING")
+      .get();
+
+    if (ordersSnap.empty) return 0;
+
+    // 3. Determina la fonte degli items
+    let config: any = null;
+    let configSource = "";
+
+    if (hasCustomConfig) {
+      config = cleaningData.customLinenConfig;
+      configSource = "customLinenConfig";
+    } else {
+      const propertyDoc = await adminDb.collection("properties").doc(propertyId).get();
+      if (!propertyDoc.exists) return 0;
+
+      const propertyData = propertyDoc.data() as Record<string, any>;
+      const serviceConfigs = propertyData.serviceConfigs;
+      if (!serviceConfigs) return 0;
+
+      config = serviceConfigs[guestsCount] || serviceConfigs[String(guestsCount)];
+      configSource = `serviceConfigs[${guestsCount}]`;
+
+      if (!config) return 0;
+    }
+
+    // 4. Calcola i nuovi items (stessa logica di update-linen-order/route.ts)
+    const newItems: { id: string; name: string; quantity: number }[] = [];
+
+    // Biancheria Letto (bl) - usa 'all' come fonte di verità, altrimenti somma sottogruppi
+    // ⚠️ Allineato a calculateDotazioni (linenService.ts) per coerenza con la card admin.
+    // Check `Object.keys(...).length > 0` per gestire correttamente bl['all']={} (truthy ma vuoto).
+    if (config.bl) {
+      const hasAll = config.bl['all']
+        && typeof config.bl['all'] === 'object'
+        && Object.keys(config.bl['all']).length > 0;
+
+      if (hasAll) {
+        // Usa direttamente 'all'
+        Object.entries(config.bl['all']).forEach(([itemId, qty]) => {
+          if (typeof qty === 'number' && qty > 0) {
+            newItems.push({ id: itemId, name: getItemName(itemId), quantity: qty });
+          }
+        });
+      } else {
+        // Somma da tutti i gruppi letto (escluso 'all' che è vuoto/assente)
+        Object.entries(config.bl).forEach(([bedId, items]) => {
+          if (bedId !== 'all' && typeof items === 'object' && items !== null) {
+            Object.entries(items as Record<string, number>).forEach(([itemId, qty]) => {
+              if (typeof qty === 'number' && qty > 0) {
+                const existing = newItems.find(i => i.id === itemId);
+                if (existing) {
+                  existing.quantity += qty;
+                } else {
+                  newItems.push({ id: itemId, name: getItemName(itemId), quantity: qty });
+                }
+              }
+            });
+          }
+        });
+      }
+    }
+
+    // Biancheria Bagno (ba)
+    if (config.ba) {
+      Object.entries(config.ba).forEach(([itemId, qty]) => {
+        if (typeof qty === 'number' && qty > 0) {
+          newItems.push({ id: itemId, name: getItemName(itemId), quantity: qty });
+        }
+      });
+    }
+
+    // Kit Cortesia (ki)
+    if (config.ki) {
+      Object.entries(config.ki).forEach(([itemId, qty]) => {
+        if (typeof qty === 'number' && qty > 0) {
+          newItems.push({ id: itemId, name: getItemName(itemId), quantity: qty });
+        }
+      });
+    }
+
+    // 5. Aggiorna ordine. Confronta per evitare update inutili.
+    let updated = 0;
+    for (const orderDoc of ordersSnap.docs) {
+      const orderData = orderDoc.data() as Record<string, any>;
+
+      // Conserva eventuali items NON-biancheria (es. cleaning_product) presenti nell'ordine
+      // così se l'operatore aveva aggiunto prodotti pulizia, questi NON vengono persi
+      const existingItems = (orderData.items || []) as any[];
+      const preservedItems = existingItems.filter((it: any) =>
+        it && (it.type === 'cleaning_product' || it.categoryId === 'prodotti_pulizia')
+      );
+
+      const finalItems = [...newItems, ...preservedItems];
+
+      // Confronta items vecchi/nuovi
+      const oldSorted = JSON.stringify(existingItems
+        .map((i: any) => ({ id: i.id, q: i.quantity }))
+        .sort((a: any, b: any) => String(a.id).localeCompare(String(b.id))));
+      const newSorted = JSON.stringify(finalItems
+        .map((i: any) => ({ id: i.id, q: i.quantity }))
+        .sort((a: any, b: any) => String(a.id).localeCompare(String(b.id))));
+
+      // Aggiorna SEMPRE guestsCount sull'ordine (anche se items invariati, così resta coerente)
+      const updateData: Record<string, any> = {
+        guestsCount,
+        updatedAt: Timestamp.now(),
+      };
+      if (oldSorted !== newSorted) {
+        updateData.items = finalItems;
+        updateData.itemsUpdatedFromConfig = true;
+        updateData.configSource = configSource;
+        updateData.itemsRecalculatedAt = Timestamp.now();
+      }
+      await orderDoc.ref.update(updateData);
+      updated++;
+    }
+
+    return updated;
+  } catch (error) {
+    // Logghiamo ma NON propaghiamo: l'update guests non deve fallire per problemi sull'ordine
+    console.error(`[guests PATCH] Errore ricalcolo ordine biancheria per cleaning ${cleaningId}:`, error);
+    return 0;
+  }
 }
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -118,21 +275,45 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       updatedAt: new Date()
     });
     
-    // Aggiorna anche la pulizia associata se esiste
+    // Aggiorna anche le pulizie associate
     const cleaningsQuery = adminDb.collection("cleanings").where("bookingId", "==", id);
     const cleaningsSnap = await cleaningsQuery.get();
     
+    const updatedCleaningIds: string[] = [];
     for (const cleaningDoc of cleaningsSnap.docs) {
+      // 🔒 Skip pulizie già completate (consegna fatta, non si tocca)
+      const cleaningData = cleaningDoc.data() as Record<string, any>;
+      const cleaningStatus = String(cleaningData.status || '').toUpperCase();
+      if (cleaningStatus === 'COMPLETED' || cleaningStatus === 'CANCELLED') {
+        continue;
+      }
+
       await adminDb.collection("cleanings").doc(cleaningDoc.id).update({
         guestsCount: guestsCount,
         updatedAt: new Date()
       });
+      updatedCleaningIds.push(cleaningDoc.id);
+    }
+    
+    // 🔧 FIX CRITICO: dopo aver aggiornato le cleanings, ricalcola gli ordini biancheria
+    // PENDING associati. Senza questo step, la card biancheria mostrava sempre la quantità
+    // calcolata al momento della creazione dell'ordine, non quella aggiornata.
+    //
+    // Note:
+    // - Si aggiornano SOLO ordini PENDING (rispetta operatore/rider già al lavoro).
+    // - Se la cleaning ha linenConfigModified=true, viene rispettata la customLinenConfig
+    //   (non si perde la personalizzazione).
+    // - Errori sul ricalcolo NON bloccano la risposta: il guestsCount è già stato salvato.
+    let ordersUpdated = 0;
+    for (const cleaningId of updatedCleaningIds) {
+      ordersUpdated += await recalculateLinenOrderForCleaning(cleaningId);
     }
     
     return NextResponse.json({ 
       success: true, 
       guestsCount,
-      cleaningsUpdated: cleaningsSnap.size
+      cleaningsUpdated: updatedCleaningIds.length,
+      ordersUpdated,
     });
   } catch (error) {
     console.error("Errore aggiornamento ospiti:", error);

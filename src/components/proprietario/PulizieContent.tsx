@@ -1396,11 +1396,26 @@ export const PulizieContent = React.memo(function PulizieContent({
   const saveGuestsInline = async (cleaningId: string, newCount: number) => {
     setSavingInline(cleaningId);
     try {
+      // 🔍 Trova vecchio guestsCount per capire se è cambiato
+      const currentCleaning = cleanings.find(c => c.id === cleaningId);
+      const oldCount = currentCleaning?.guestsCount || 2;
+
       const cleaningRef = doc(db, "cleanings", cleaningId);
       await updateDoc(cleaningRef, {
         guestsCount: newCount,
         updatedAt: new Date()
       });
+
+      // 🔧 FIX CRITICO: ricalcola ordine biancheria se ospiti cambiati.
+      // Senza questo, la card consegna biancheria mostra ancora le quantità vecchie
+      // e l'operatore prepara la casa con il numero ospiti sbagliato.
+      // L'API rispetta linenConfigModified=true (non sovrascrive personalizzazioni).
+      if (newCount !== oldCount) {
+        fetch(`/api/cleanings/${cleaningId}/update-linen-order`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        }).catch(err => console.error("⚠️ Errore aggiornamento ordine biancheria:", err));
+      }
     } catch (error) {
       console.error("Errore salvataggio ospiti:", error);
     } finally {
