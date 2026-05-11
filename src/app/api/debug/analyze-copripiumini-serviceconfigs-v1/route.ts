@@ -205,11 +205,17 @@ export async function GET(req: NextRequest) {
 
       if (configsScan.length === 0) continue;
 
-      const propReport = {
+      const propReport: any = {
         propertyId: propId,
         propertyName: propName,
         bedrooms: data.bedrooms || null,
         maxGuests: data.maxGuests || null,
+        // Timestamp property
+        createdAt: serializeTimestamp(data.createdAt),
+        updatedAt: serializeTimestamp(data.updatedAt),
+        // ServiceConfigs metadata (può contenere date di creazione/modifica per config)
+        serviceConfigsCreatedAt: serializeTimestamp(data.serviceConfigsCreatedAt),
+        serviceConfigsUpdatedAt: serializeTimestamp(data.serviceConfigsUpdatedAt),
         configs: configsScan,
       };
 
@@ -224,6 +230,71 @@ export async function GET(req: NextRequest) {
       if (anySubstituted) propertiesSubstituted.push(propReport);
     }
 
+    // ── 3. Enrichment temporale per properties affette ──
+    // Per ogni property "substituted", carica audit log e inventario timestamps
+    const temporalAnalysis: any = {
+      inventoryItemTimestamps: {},
+      affectedPropertiesAudit: {},
+    };
+
+    // 3a. Timestamps degli items copripiumino nell'inventario
+    for (const doc of inventorySnap.docs) {
+      const data = doc.data() as any;
+      const collectItem = (it: any, fallbackId: string) => {
+        const id = it.key || it.id || fallbackId;
+        if (!id) return;
+        const idLower = String(id).toLowerCase();
+        if (idLower.includes("copripium") || idLower.includes("doublesheets") || idLower.includes("singlesheets") || idLower === "pillowcases") {
+          temporalAnalysis.inventoryItemTimestamps[id] = {
+            name: it.name || data.name || "(no name)",
+            createdAt: serializeTimestamp(it.createdAt || data.createdAt),
+            updatedAt: serializeTimestamp(it.updatedAt || data.updatedAt),
+          };
+        }
+      };
+      if (Array.isArray(data.items)) {
+        data.items.forEach((it: any) => collectItem(it, doc.id));
+      } else if (Array.isArray(data.categories)) {
+        for (const cat of data.categories) {
+          if (Array.isArray(cat.items)) cat.items.forEach((it: any) => collectItem(it, doc.id));
+        }
+      } else {
+        collectItem(data, doc.id);
+      }
+    }
+
+    // 3b. Audit log per ciascuna property affetta
+    for (const prop of propertiesSubstituted) {
+      const propId = prop.propertyId;
+      try {
+        const auditSnap = await adminDb
+          .collection("auditLog")
+          .where("entityId", "==", propId)
+          .limit(50)
+          .get();
+        const auditEntries = auditSnap.docs.map(d => {
+          const data = d.data() as any;
+          return {
+            action: data.action,
+            entityType: data.entityType,
+            source: data.source || null,
+            actorUid: data.actorUid || null,
+            timestamp: serializeTimestamp(data.timestamp),
+            details: data.details ? JSON.stringify(data.details).substring(0, 500) : null,
+          };
+        }).sort((a, b) => (b.timestamp || "").localeCompare(a.timestamp || ""));
+        temporalAnalysis.affectedPropertiesAudit[propId] = {
+          propertyName: prop.propertyName,
+          auditCount: auditEntries.length,
+          auditEntries,
+        };
+      } catch (e: any) {
+        temporalAnalysis.affectedPropertiesAudit[propId] = {
+          error: e?.message || String(e),
+        };
+      }
+    }
+
     return NextResponse.json({
       summary: {
         totalProperties: propertiesSnap.size,
@@ -233,6 +304,7 @@ export async function GET(req: NextRequest) {
         inventoryHasCopripiumino: inventoryBiancheriaLetto.some(i => isCopripiuminoId(i.id)),
         inventoryHasDoubleSheets: inventoryBiancheriaLetto.some(i => isLenzuoloMatrId(i.id)),
       },
+      temporalAnalysis,
       inventoryAnalysis,
       propertiesSubstituted,
       propertiesWithBoth,
@@ -244,4 +316,15 @@ export async function GET(req: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+function serializeTimestamp(v: any): string | null {
+  try {
+    if (!v) return null;
+    if (typeof v?.toDate === "function") return v.toDate().toISOString();
+    if (v instanceof Date) return v.toISOString();
+    if (typeof v === "string") return v;
+    if (typeof v === "number") return new Date(v).toISOString();
+    return null;
+  } catch { return null; }
 }
