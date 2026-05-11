@@ -48,19 +48,22 @@ const LENZUOLO_SING_IDS = [
   "lenzuolo_singolo",
 ];
 
-function isCopripiuminoId(id: string): boolean {
+function isCopripiuminoId(id: string | undefined | null): boolean {
+  if (!id || typeof id !== "string") return false;
   const idLower = id.toLowerCase();
   return COPRIPIUMINO_IDS.some(c => idLower === c.toLowerCase())
     || idLower.includes("copripium")
     || idLower.includes("duvet");
 }
 
-function isLenzuoloMatrId(id: string): boolean {
+function isLenzuoloMatrId(id: string | undefined | null): boolean {
+  if (!id || typeof id !== "string") return false;
   const idLower = id.toLowerCase();
   return LENZUOLO_MATR_IDS.some(c => idLower === c.toLowerCase());
 }
 
-function isLenzuoloSingId(id: string): boolean {
+function isLenzuoloSingId(id: string | undefined | null): boolean {
+  if (!id || typeof id !== "string") return false;
   const idLower = id.toLowerCase();
   return LENZUOLO_SING_IDS.some(c => idLower === c.toLowerCase());
 }
@@ -117,20 +120,25 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    const inventoryBiancheriaLetto = inventoryItems.filter(
-      i => (i.categoryId || "").toLowerCase().includes("biancheria_letto")
-        || (i.categoryId || "").toLowerCase().includes("biancheria-letto")
-        || (i.categoryId || "").toLowerCase() === "biancheria_letto"
-    );
+    const inventoryBiancheriaLetto = inventoryItems.filter(i => {
+      const cat = (i.categoryId || "").toString().toLowerCase();
+      return cat.includes("biancheria_letto") || cat.includes("biancheria-letto") || cat === "biancheria_letto";
+    });
 
     const inventoryAnalysis = {
       totalItems: inventoryItems.length,
       biancheriaLetto: inventoryBiancheriaLetto.map(i => ({
-        id: i.key,
-        name: i.name,
+        id: i.key || "(undefined)",
+        name: i.name || "(no name)",
         isCopripiumino: isCopripiuminoId(i.key),
         isLenzuoloMatr: isLenzuoloMatrId(i.key),
         isLenzuoloSing: isLenzuoloSingId(i.key),
+      })),
+      // Mostra anche TUTTI gli items dell'inventario per debug, qualunque categoria
+      allItemsRaw: inventoryItems.map(i => ({
+        id: i.key || "(undefined)",
+        name: i.name || "(no name)",
+        categoryId: i.categoryId || "(undefined)",
       })),
     };
 
