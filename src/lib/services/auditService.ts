@@ -312,4 +312,80 @@ export const auditLog = {
       details: { reason: params.reason },
     });
   },
+
+  // ═══════════════════════════════════════════════
+  // LINEN ORDER RECALCULATION (forensic trap)
+  // ═══════════════════════════════════════════════
+  // Traccia ogni chiamata a /api/cleanings/[id]/update-linen-order
+  // per identificare chi/quando/come ricalcola gli items di un ordine.
+  // Caso d'uso: bug "Villa Borghese serviceConfigs[1] invece di [3]".
+
+  async linenOrderRecalculated(params: {
+    cleaningId: string;
+    orderId: string;
+    propertyId: string;
+    propertyName: string;
+    // Snapshot della pulizia LETTA al momento del ricalcolo
+    cleaningGuestsCount: number;
+    cleaningAdulti: number | null;
+    cleaningNeonati: number | null;
+    cleaningGuestsConfirmed: boolean | null;
+    cleaningGuestsAppliedBySystem: boolean | null;
+    cleaningLinenConfigModified: boolean | null;
+    propertyMaxGuests: number | null;
+    // Risultato
+    configSource: string;
+    itemsCountBefore: number;
+    itemsCountAfter: number;
+    itemsBefore: Array<{ id: string; quantity: number }>;
+    itemsAfter: Array<{ id: string; quantity: number }>;
+    // Chi
+    callerUserId: string | null;
+    callerUserEmail: string | null;
+    callerUserRole: string | null;
+    callerUserAgent: string | null;
+    callerIp: string | null;
+    // Diagnosi
+    isSuspicious: boolean;
+    suspiciousReasons: string[];
+  }) {
+    await writeLog({
+      action: 'LINEN_ORDER_RECALCULATED',
+      entityType: 'order',
+      entityId: params.orderId,
+      propertyId: params.propertyId,
+      propertyName: params.propertyName,
+      source: 'api/cleanings/[id]/update-linen-order',
+      details: {
+        cleaningId: params.cleaningId,
+        snapshot: {
+          cleaningGuestsCount: params.cleaningGuestsCount,
+          cleaningAdulti: params.cleaningAdulti,
+          cleaningNeonati: params.cleaningNeonati,
+          cleaningGuestsConfirmed: params.cleaningGuestsConfirmed,
+          cleaningGuestsAppliedBySystem: params.cleaningGuestsAppliedBySystem,
+          cleaningLinenConfigModified: params.cleaningLinenConfigModified,
+          propertyMaxGuests: params.propertyMaxGuests,
+        },
+        result: {
+          configSource: params.configSource,
+          itemsCountBefore: params.itemsCountBefore,
+          itemsCountAfter: params.itemsCountAfter,
+          itemsBefore: params.itemsBefore,
+          itemsAfter: params.itemsAfter,
+        },
+        caller: {
+          userId: params.callerUserId,
+          userEmail: params.callerUserEmail,
+          userRole: params.callerUserRole,
+          userAgent: params.callerUserAgent,
+          ip: params.callerIp,
+        },
+        suspicious: {
+          isSuspicious: params.isSuspicious,
+          reasons: params.suspiciousReasons,
+        },
+      },
+    });
+  },
 };

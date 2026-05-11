@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "~/lib/firebase/admin";
-import { Timestamp, FieldValue } from "firebase-admin/firestore";
+import { Timestamp } from "firebase-admin/firestore";
 import { getItemName } from "~/lib/itemNames";
 import { getApiUser } from "~/lib/api-auth";
+import { auditLog } from "~/lib/services/auditService";
 
 
 export const dynamic = 'force-dynamic';
@@ -14,6 +15,11 @@ export const dynamic = 'force-dynamic';
  * Ricalcola gli items in base a:
  * - customLinenConfig della pulizia (se linenConfigModified === true)
  * - serviceConfigs della proprietà (altrimenti)
+ *
+ * 🔍 FORENSIC AUDIT: ogni chiamata viene tracciata in auditLog
+ * (action=LINEN_ORDER_RECALCULATED) con snapshot completo della pulizia
+ * al momento del ricalcolo, identità del chiamante, items before/after e
+ * marker "suspicious" se il guestsCount è anomalo rispetto a property.maxGuests.
  */
 export async function POST(
   request: NextRequest,
@@ -26,7 +32,14 @@ export async function POST(
   // ─────────────────────────────────────────────────────
 
     const { id: cleaningId } = await params;
-    
+
+    // 🔍 Caller info per audit trap
+    const callerUserAgent = request.headers.get("user-agent") || null;
+    const callerIp =
+      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+      request.headers.get("x-real-ip") ||
+      null;
+
     // 1. Carica la pulizia
     const cleaningDoc = await adminDb.collection("cleanings").doc(cleaningId).get();
     if (!cleaningDoc.exists) {
@@ -53,7 +66,16 @@ export async function POST(
         message: "Nessun ordine PENDING trovato" 
       });
     }
-    
+
+    // 🔍 Carico la proprietà SEMPRE (anche se uso customLinenConfig) per audit
+    // Serve a confrontare guestsCount con property.maxGuests
+    const propertyDocForAudit = await adminDb.collection("properties").doc(propertyId).get();
+    const propertyDataForAudit = propertyDocForAudit.exists
+      ? (propertyDocForAudit.data() as Record<string, any>)
+      : null;
+    const propertyName = propertyDataForAudit?.name || "(unknown)";
+    const propertyMaxGuests = (propertyDataForAudit?.maxGuests as number) ?? null;
+
     // 3. Determina la fonte degli items
     let config: any = null;
     let configSource = "";
@@ -64,14 +86,12 @@ export async function POST(
       configSource = "customLinenConfig";
       if (process.env.NODE_ENV !== "production") console.log(`   📦 Usando customLinenConfig della pulizia`);
     } else {
-      // Usa serviceConfigs della proprietà
-      const propertyDoc = await adminDb.collection("properties").doc(propertyId).get();
-      if (!propertyDoc.exists) {
+      // Usa serviceConfigs della proprietà (già caricata sopra per audit)
+      if (!propertyDataForAudit) {
         return NextResponse.json({ error: "Proprietà non trovata" }, { status: 404 });
       }
-      
-      const propertyData = propertyDoc.data() as Record<string, any>;
-      const serviceConfigs = propertyData.serviceConfigs;
+
+      const serviceConfigs = propertyDataForAudit.serviceConfigs;
       
       if (!serviceConfigs) {
         if (process.env.NODE_ENV !== "production") console.log(`   ⚠️ Nessuna serviceConfigs nella proprietà`);
@@ -152,6 +172,12 @@ export async function POST(
     // 5. Aggiorna tutti gli ordini trovati (dovrebbe essere 1)
     let updated = 0;
     for (const orderDoc of ordersSnapshot.docs) {
+      // 🔍 Snapshot items PRIMA dell'update (per diff in audit)
+      const orderDataBefore = orderDoc.data() as Record<string, any>;
+      const itemsBefore: Array<{ id: string; quantity: number }> = Array.isArray(orderDataBefore.items)
+        ? orderDataBefore.items.map((it: any) => ({ id: String(it.id), quantity: Number(it.quantity) || 0 }))
+        : [];
+
       await adminDb.collection("orders").doc(orderDoc.id).update({
         items: newItems,
         updatedAt: Timestamp.now(),
@@ -160,6 +186,68 @@ export async function POST(
       });
       if (process.env.NODE_ENV !== "production") console.log(`   ✅ Ordine ${orderDoc.id} aggiornato`);
       updated++;
+
+      // 🔍 FORENSIC AUDIT — fire-and-forget, mai blocca la response
+      try {
+        const suspiciousReasons: string[] = [];
+        // Heuristics: il bug Villa Borghese ha guestsCount=1 (anomalo) e
+        // poco prima/dopo la pulizia ha avuto guestsCount=4 (maxGuests).
+        if (typeof propertyMaxGuests === "number" && guestsCount < propertyMaxGuests) {
+          suspiciousReasons.push(
+            `guestsCount=${guestsCount} < property.maxGuests=${propertyMaxGuests}`
+          );
+        }
+        if (guestsCount === 1) {
+          suspiciousReasons.push("guestsCount=1 (estremamente basso, valore tipico del bug)");
+        }
+        if (cleaningData.guestsAppliedBySystem === true && guestsCount === 1) {
+          suspiciousReasons.push("guestsAppliedBySystem=true ma guestsCount=1 (incoerente: il cron applica maxGuests)");
+        }
+        // Differenza forte di "lenzuola_matrimoniale" prima/dopo è un altro sintomo
+        const beforeMat = itemsBefore.find((i) => i.id === "lenzuola_matrimoniale")?.quantity ?? 0;
+        const afterMat = newItems.find((i) => i.id === "lenzuola_matrimoniale")?.quantity ?? 0;
+        if (beforeMat > 0 && afterMat > 0 && beforeMat - afterMat >= 2) {
+          suspiciousReasons.push(
+            `downsize lenzuola_matrimoniale: ${beforeMat} → ${afterMat}`
+          );
+        }
+
+        await auditLog.linenOrderRecalculated({
+          cleaningId,
+          orderId: orderDoc.id,
+          propertyId,
+          propertyName,
+          cleaningGuestsCount: guestsCount,
+          cleaningAdulti: typeof cleaningData.adulti === "number" ? cleaningData.adulti : null,
+          cleaningNeonati: typeof cleaningData.neonati === "number" ? cleaningData.neonati : null,
+          cleaningGuestsConfirmed:
+            typeof cleaningData.guestsConfirmed === "boolean" ? cleaningData.guestsConfirmed : null,
+          cleaningGuestsAppliedBySystem:
+            typeof cleaningData.guestsAppliedBySystem === "boolean"
+              ? cleaningData.guestsAppliedBySystem
+              : null,
+          cleaningLinenConfigModified:
+            typeof cleaningData.linenConfigModified === "boolean"
+              ? cleaningData.linenConfigModified
+              : null,
+          propertyMaxGuests,
+          configSource,
+          itemsCountBefore: itemsBefore.length,
+          itemsCountAfter: newItems.length,
+          itemsBefore,
+          itemsAfter: newItems.map((it) => ({ id: it.id, quantity: it.quantity })),
+          callerUserId: _user.id || null,
+          callerUserEmail: _user.email || null,
+          callerUserRole: _user.role || null,
+          callerUserAgent,
+          callerIp,
+          isSuspicious: suspiciousReasons.length > 0,
+          suspiciousReasons,
+        });
+      } catch (auditErr) {
+        // L'audit non deve mai rompere il flow principale
+        console.error("[UpdateLinenOrder] Audit write failed:", auditErr);
+      }
     }
     
     return NextResponse.json({
