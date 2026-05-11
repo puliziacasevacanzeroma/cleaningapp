@@ -1,39 +1,22 @@
 /**
  * ════════════════════════════════════════════════════════════════════
- * DEBUG: All Properties Linen Coherence v1 — ANALISI FORENSE COMPLETA
+ * DEBUG: All Properties Linen Coherence v2 — ANALISI FORENSE COMPLETA
  * ════════════════════════════════════════════════════════════════════
  *
- * Per OGNI proprietà attiva, per OGNI pulizia nella finestra temporale,
- * calcola 3 viste della biancheria e le confronta:
- *
- *   [A] EXPECTED   = ricalcolo deterministico da serviceConfigs/customLinenConfig
- *                    (la "verità" della configurazione)
- *   [B] CARD       = items mostrati nelle card pulizia (calculateDotazioni)
- *   [C] ORDER      = items reali salvati su orders.items (card consegna)
- *
- * Per ogni pulizia genera 3 diff:
- *   - expected_vs_card     → bug renderizzazione card pulizia
- *   - expected_vs_order    → bug ordine non sincronizzato (caso Villa Borghese)
- *   - card_vs_order        → divergenza fra cosa vede l'admin e cosa vede il rider/lavanderia
- *
- * Inoltre rileva:
- *   - Pulizie senza ordine (e che dovrebbero averlo)
- *   - Ordini orfani (senza cleaning collegato)
- *   - Pulizie con customLinenConfig orphan (linenConfigModified=false ma config presente)
- *   - guestsCount anomali (< 1, > maxGuests, == 1 con maxGuests > 1, ecc.)
- *   - configSource su ordine incoerente con cleaning.guestsCount attuale
- *
- * AUTH:
- *   - header Authorization: Bearer <CRON_SECRET>
- *   - query  ?cronSecret=<CRON_SECRET>
+ * v2 vs v1:
+ *  - Default finestra: 2 giorni (ieri + oggi) invece di 30
+ *  - Filtro temporale applicato a CLEANINGS scheduledDate E a ORDERS scheduledDate
+ *  - Normalizzazione nomi items FIXATA: prima passa per getItemName() (mappa
+ *    completa), così i 3 calcolatori (calculateOrderItemsFromConfig,
+ *    calculateDotazioni, order.items) producono chiavi confrontabili
+ *  - Filtra fuori orfani CANCELLED (rumore noto del cron iCal)
  *
  * QUERY PARAMS (tutti opzionali):
- *   - propertyId=XXX        analizza una sola proprietà
- *   - days=30               finestra storica (default 30, max 365)
- *   - includeFuture=1       include pulizie future (default 1)
- *   - onlyMismatches=1      output solo pulizie con almeno 1 incoerenza (default 0)
- *
- * READ-ONLY assoluto. Non scrive nulla su Firestore.
+ *   - propertyId=XXX
+ *   - days=2                (default 2, max 365)
+ *   - includeFuture=1       (default 1)
+ *   - onlyMismatches=1      (default 0)
+ *   - includeCancelledOrphans=1  (default 0: nasconde ordini orfani CANCELLED)
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -43,10 +26,10 @@ import {
   calculateDotazioni,
   calculateOrderItemsFromConfig,
 } from "~/lib/linen/linenService";
-import { getItemName } from "~/lib/itemNames";
+import { getItemName, ITEM_NAMES } from "~/lib/itemNames";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 300; // 5 minuti per analisi pesanti
+export const maxDuration = 300;
 
 // ─────────────────────────────────────────────────────────
 // Helpers
@@ -81,11 +64,38 @@ function tsToDate(ts: any): Date | null {
 }
 
 /**
- * Normalizza una lista di items in una mappa { itemId | name : quantity }
- * Per il confronto, usiamo `name` come chiave (perché le card usano name,
- * gli ordini usano id+name, expected usa id). Convertiamo tutto a name lowercased.
+ * 🔧 Risolve il "nome canonico" di un item.
+ * Strategia (provata in ordine, restituisce il primo match):
+ *   1. ITEM_NAMES[id]    → mappa completa per ID grezzo
+ *   2. ITEM_NAMES[name]  → caso "name è un id che la mappa conosce"
+ *   3. Confronto fuzzy sui valori di ITEM_NAMES (case-insensitive)
+ *   4. name (se è un nome leggibile)
+ *   5. id (ultima spiaggia)
+ *
+ * Tutti normalizzati in lowercase trim.
  */
-type NormalizedItems = Record<string, { quantity: number; sourceKey: string }>;
+function resolveCanonicalName(it: { id?: string; name?: string; n?: string }): string {
+  const id = (it.id || "").trim();
+  const name = ((it.name || it.n || "") as string).trim();
+
+  // 1. ID nella mappa
+  if (id && ITEM_NAMES[id]) return ITEM_NAMES[id].toLowerCase();
+  // 2. Name nella mappa (capita quando name === id grezzo)
+  if (name && ITEM_NAMES[name]) return ITEM_NAMES[name].toLowerCase();
+  // 3. Caso "il name è il valore italiano stesso"
+  if (name) {
+    const nameLower = name.toLowerCase();
+    for (const v of Object.values(ITEM_NAMES)) {
+      if (v.toLowerCase() === nameLower) return nameLower;
+    }
+  }
+  // 4. Fallback: name leggibile (non Firestore ID)
+  if (name && !/^[a-zA-Z0-9]{15,}$/.test(name)) return name.toLowerCase();
+  // 5. Fallback assoluto: id
+  return (id || name || "(unknown)").toLowerCase();
+}
+
+type NormalizedItems = Record<string, { quantity: number; rawIds: string[]; rawNames: string[] }>;
 
 function normalizeByName(items: Array<{ id?: string; name?: string; n?: string; quantity?: number }>): NormalizedItems {
   const out: NormalizedItems = {};
@@ -93,29 +103,17 @@ function normalizeByName(items: Array<{ id?: string; name?: string; n?: string; 
     if (!it) continue;
     const qty = Number(it.quantity || 0);
     if (qty <= 0) continue;
-    // Determina il nome canonico: name → n → tradotto da id → id
-    let canonical: string =
-      (it.name as string) ||
-      (it as any).n ||
-      (it.id ? getItemName(it.id) : "") ||
-      String(it.id || "(unknown)");
-    canonical = canonical.toString().trim().toLowerCase();
+    const canonical = resolveCanonicalName(it);
     if (!canonical) continue;
-    out[canonical] = {
-      quantity: (out[canonical]?.quantity || 0) + qty,
-      sourceKey: (it.id as string) || canonical,
-    };
+    if (!out[canonical]) out[canonical] = { quantity: 0, rawIds: [], rawNames: [] };
+    out[canonical].quantity += qty;
+    if (it.id && !out[canonical].rawIds.includes(it.id)) out[canonical].rawIds.push(it.id);
+    const n = (it.name || it.n) as string | undefined;
+    if (n && !out[canonical].rawNames.includes(n)) out[canonical].rawNames.push(n);
   }
   return out;
 }
 
-/**
- * Confronta due NormalizedItems e ritorna le differenze.
- * Ritorna null se identiche, altrimenti un oggetto con:
- *   - missingInB: items presenti in A ma non in B
- *   - extraInB: items presenti in B ma non in A
- *   - quantityMismatch: items presenti in entrambe ma con qty diversa
- */
 function diffItems(a: NormalizedItems, b: NormalizedItems): null | {
   missingInB: Array<{ name: string; quantity: number }>;
   extraInB: Array<{ name: string; quantity: number }>;
@@ -139,7 +137,6 @@ function diffItems(a: NormalizedItems, b: NormalizedItems): null | {
 
   if (missingInB.length === 0 && extraInB.length === 0 && quantityMismatch.length === 0) return null;
 
-  // Total delta = somma differenze
   let totalDelta = 0;
   for (const m of missingInB) totalDelta += m.quantity;
   for (const m of extraInB) totalDelta += m.quantity;
@@ -148,9 +145,14 @@ function diffItems(a: NormalizedItems, b: NormalizedItems): null | {
   return { missingInB, extraInB, quantityMismatch, totalDelta };
 }
 
-function itemsToList(items: NormalizedItems): Array<{ name: string; quantity: number }> {
+function itemsToList(items: NormalizedItems): Array<{ name: string; quantity: number; rawIds?: string[]; rawNames?: string[] }> {
   return Object.entries(items)
-    .map(([name, v]) => ({ name, quantity: v.quantity }))
+    .map(([name, v]) => ({
+      name,
+      quantity: v.quantity,
+      rawIds: v.rawIds.length > 0 ? v.rawIds : undefined,
+      rawNames: v.rawNames.length > 0 ? v.rawNames : undefined,
+    }))
     .sort((x, y) => x.name.localeCompare(y.name));
 }
 
@@ -159,7 +161,6 @@ function itemsToList(items: NormalizedItems): Array<{ name: string; quantity: nu
 // ─────────────────────────────────────────────────────────
 
 export async function GET(req: NextRequest) {
-  // ── Auth ────────────────────────────────────────────
   const CRON_SECRET = process.env.CRON_SECRET || "";
   if (!CRON_SECRET) {
     return NextResponse.json({ error: "CRON_SECRET non configurato" }, { status: 500 });
@@ -170,97 +171,86 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // ── Filtri ──────────────────────────────────────────
   const sp = req.nextUrl.searchParams;
   const propertyIdFilter = sp.get("propertyId");
-  let days = Number(sp.get("days") || 30);
-  if (!Number.isFinite(days) || days < 1) days = 30;
+  let days = Number(sp.get("days") || 2);
+  if (!Number.isFinite(days) || days < 1) days = 2;
   if (days > 365) days = 365;
   const includeFuture = sp.get("includeFuture") !== "0";
   const onlyMismatches = sp.get("onlyMismatches") === "1" || sp.get("onlyMismatches") === "true";
+  const includeCancelledOrphans =
+    sp.get("includeCancelledOrphans") === "1" || sp.get("includeCancelledOrphans") === "true";
 
   const startedAt = Date.now();
 
   try {
-    // ── 1. CARICA INVENTORY (serve a calculateDotazioni) ─
     const inventorySnap = await adminDb.collection("inventory").get();
     const inventory = inventorySnap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
 
-    // ── 2. CARICA PROPERTIES ────────────────────────────
     let propsQuery: FirebaseFirestore.Query = adminDb.collection("properties");
     if (propertyIdFilter) propsQuery = propsQuery.where("__name__", "==", propertyIdFilter);
     const propsSnap = await propsQuery.get();
     const properties = propsSnap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
 
-    // ── 3. CARICA CLEANINGS nella finestra ──────────────
+    // Finestra temporale: ultimi N giorni (default 2 = ieri + oggi)
     const now = new Date();
     const since = new Date(now);
     since.setDate(since.getDate() - days);
     since.setHours(0, 0, 0, 0);
     const sinceTs = Timestamp.fromDate(since);
 
-    // Far past sentinel per il filtro "includeFuture"
-    const farFuture = new Date(now);
-    farFuture.setFullYear(farFuture.getFullYear() + 2);
-    const farFutureTs = Timestamp.fromDate(farFuture);
+    // Upper bound: oggi 23:59 oppure +2 anni se includeFuture
+    const upperBound = new Date(now);
+    if (includeFuture) {
+      upperBound.setDate(upperBound.getDate() + 2); // 2 giorni nel futuro
+      upperBound.setHours(23, 59, 59, 999);
+    } else {
+      upperBound.setHours(23, 59, 59, 999);
+    }
+    const upperBoundTs = Timestamp.fromDate(upperBound);
 
     const cleaningsSnap = await adminDb.collection("cleanings")
       .where("scheduledDate", ">=", sinceTs)
-      .where("scheduledDate", "<=", farFutureTs)
+      .where("scheduledDate", "<=", upperBoundTs)
       .get();
 
     let cleanings = cleaningsSnap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
     if (propertyIdFilter) cleanings = cleanings.filter((c) => c.propertyId === propertyIdFilter);
-    if (!includeFuture) {
-      const todayEnd = new Date(now);
-      todayEnd.setHours(23, 59, 59, 999);
-      cleanings = cleanings.filter((c) => {
-        const d = tsToDate(c.scheduledDate);
-        return d ? d <= todayEnd : false;
-      });
-    }
 
-    // ── 4. CARICA ORDERS collegati a queste cleanings ───
-    // Strategia: scarico tutti gli ordini (sono pochi) e poi indicizzo per cleaningId
-    let ordersQuery: FirebaseFirestore.Query = adminDb.collection("orders");
-    if (propertyIdFilter) ordersQuery = ordersQuery.where("propertyId", "==", propertyIdFilter);
+    // ORDERS: filtro sullo stesso range scheduledDate
+    let ordersQuery: FirebaseFirestore.Query = adminDb.collection("orders")
+      .where("scheduledDate", ">=", sinceTs)
+      .where("scheduledDate", "<=", upperBoundTs);
     const ordersSnap = await ordersQuery.get();
-    const allOrders = ordersSnap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
+    let allOrders = ordersSnap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
+    if (propertyIdFilter) allOrders = allOrders.filter((o) => o.propertyId === propertyIdFilter);
 
-    // Filtra ordini nel range temporale
-    const ordersInRange = allOrders.filter((o) => {
-      const d = tsToDate(o.scheduledDate);
-      if (!d) return true; // keep undated to detect orphans
-      if (d < since) return false;
-      if (!includeFuture && d > now) return false;
-      return true;
-    });
+    const ordersInRange = allOrders;
 
-    // Indice cleaningId → order(s)
     const ordersByCleaningId: Record<string, any[]> = {};
     for (const o of ordersInRange) {
       if (!o.cleaningId) continue;
       (ordersByCleaningId[o.cleaningId] = ordersByCleaningId[o.cleaningId] || []).push(o);
     }
 
-    // ── 5. ORDINI ORFANI ────────────────────────────────
     const cleaningIdSet = new Set(cleanings.map((c) => c.id));
-    const orphanOrders = ordersInRange.filter((o) => {
-      if (!o.cleaningId) return true; // ordine senza cleaningId → orfano
+    let orphanOrders = ordersInRange.filter((o) => {
+      if (!o.cleaningId) return true;
       return !cleaningIdSet.has(o.cleaningId);
     });
+    // Filtra orfani CANCELLED (rumore noto)
+    if (!includeCancelledOrphans) {
+      orphanOrders = orphanOrders.filter((o) => o.status !== "CANCELLED");
+    }
 
-    // ── 6. INDICIZZA PROPRIETÀ ──────────────────────────
     const propertyById: Record<string, any> = {};
     for (const p of properties) propertyById[p.id] = p;
 
-    // ── 7. ANALISI PER PROPRIETÀ ────────────────────────
     type PulitziaAnalysis = {
       cleaningId: string;
       scheduledDate: string | null;
       scheduledTime: string | null;
       status: string | null;
-      // Snapshot pulizia
       guestsCount: number;
       adulti: number | null;
       neonati: number | null;
@@ -271,27 +261,22 @@ export async function GET(req: NextRequest) {
       hasCustomLinenConfig: boolean;
       hasLinenOrder: boolean | null;
       usesOwnLinen: boolean | null;
-      // Ordine collegato
       orderId: string | null;
       orderStatus: string | null;
       orderConfigSource: string | null;
       orderItemsUpdatedFromConfig: boolean | null;
       orderGuestsCount: number | null;
       orderUpdatedAt: string | null;
-      // Items (3 viste)
-      expectedItems: Array<{ name: string; quantity: number }>;
-      cardItems: Array<{ name: string; quantity: number }>;
-      orderItems: Array<{ name: string; quantity: number }>;
+      expectedItems: ReturnType<typeof itemsToList>;
+      cardItems: ReturnType<typeof itemsToList>;
+      orderItems: ReturnType<typeof itemsToList>;
       expectedSource: string;
-      // Diff
       diffs: {
         expected_vs_card: ReturnType<typeof diffItems>;
         expected_vs_order: ReturnType<typeof diffItems>;
         card_vs_order: ReturnType<typeof diffItems>;
       };
-      // Issues
       issues: string[];
-      // Severity
       hasAnyMismatch: boolean;
     };
 
@@ -327,6 +312,8 @@ export async function GET(req: NextRequest) {
           return da - db;
         });
 
+      if (propertyCleanings.length === 0 && !propertyIdFilter) continue; // skip proprietà senza pulizie nel range
+
       const analysis: PropertyAnalysis = {
         propertyId: property.id,
         propertyName: property.name || "(senza nome)",
@@ -353,13 +340,10 @@ export async function GET(req: NextRequest) {
         const guestsCount = c.guestsCount || 2;
         const maxGuests = property.maxGuests ?? null;
 
-        // ── Issues sulla pulizia ──
         if (typeof maxGuests === "number" && guestsCount > maxGuests) {
           issues.push(`GUESTS_OVER_MAX: guestsCount=${guestsCount} > maxGuests=${maxGuests}`);
         }
-        if (guestsCount < 1) {
-          issues.push(`GUESTS_INVALID: guestsCount=${guestsCount}`);
-        }
+        if (guestsCount < 1) issues.push(`GUESTS_INVALID: guestsCount=${guestsCount}`);
         if (guestsCount === 1 && typeof maxGuests === "number" && maxGuests >= 3) {
           issues.push(`GUESTS_SUSPICIOUS_LOW: guestsCount=1 ma maxGuests=${maxGuests}`);
         }
@@ -374,7 +358,6 @@ export async function GET(req: NextRequest) {
         }
 
         // ── [A] EXPECTED items ──
-        // Replico la stessa logica di update-linen-order/route.ts
         let expectedItemsRaw: Array<{ id: string; name: string; quantity: number }> = [];
         let expectedSource = "none";
         const usesLinen =
@@ -383,7 +366,6 @@ export async function GET(req: NextRequest) {
 
         if (usesLinen) {
           if (c.linenConfigModified === true && c.customLinenConfig) {
-            // Custom config
             try {
               const customSC: any = { [guestsCount]: c.customLinenConfig };
               expectedItemsRaw = calculateOrderItemsFromConfig(customSC, guestsCount);
@@ -408,7 +390,7 @@ export async function GET(req: NextRequest) {
         }
         const expectedItems = normalizeByName(expectedItemsRaw);
 
-        // ── [B] CARD items (calculateDotazioni) ──
+        // ── [B] CARD items ──
         let cardItemsRaw: Array<{ name: string; quantity: number }> = [];
         try {
           const dotaz = calculateDotazioni(
@@ -450,7 +432,6 @@ export async function GET(req: NextRequest) {
 
         // ── [C] ORDER items ──
         const orders = ordersByCleaningId[c.id] || [];
-        // Se più di un ordine collegato, è già un'anomalia
         if (orders.length > 1) {
           issues.push(`DUPLICATE_ORDERS: ${orders.length} ordini collegati alla stessa pulizia`);
         }
@@ -458,7 +439,6 @@ export async function GET(req: NextRequest) {
         const orderItemsRaw: Array<{ id: string; name: string; quantity: number }> = order?.items || [];
         const orderItems = normalizeByName(orderItemsRaw);
 
-        // ── Issues sull'ordine ──
         if (usesLinen && !order) {
           issues.push("MISSING_ORDER: pulizia senza ordine biancheria collegato");
         }
@@ -476,12 +456,7 @@ export async function GET(req: NextRequest) {
             }
           }
         }
-        if (order && order.itemsUpdatedFromConfig === undefined && (order.items?.length || 0) > 0) {
-          // Ordine vecchio creato prima del flag - non un bug ma utile saperlo
-          issues.push("ORDER_LEGACY: ordine senza itemsUpdatedFromConfig (pre-fix)");
-        }
 
-        // ── DIFF ──
         const diff_ec = diffItems(expectedItems, cardItems);
         const diff_eo = diffItems(expectedItems, orderItems);
         const diff_co = diffItems(cardItems, orderItems);
@@ -550,7 +525,6 @@ export async function GET(req: NextRequest) {
       propertyAnalyses.push(analysis);
     }
 
-    // ── 8. AGGREGAZIONI GLOBALI ──────────────────────────
     const totals = {
       propertiesAnalyzed: propertyAnalyses.length,
       cleaningsAnalyzed: propertyAnalyses.reduce((s, p) => s + p.cleaningsAnalyzed, 0),
@@ -572,7 +546,6 @@ export async function GET(req: NextRequest) {
       criticalIssuesCount: propertyAnalyses.reduce((s, p) => s + p.summary.criticalIssuesCount, 0),
     };
 
-    // Top problematic properties (sort by % di pulizie con mismatch)
     const topProblematic = propertyAnalyses
       .filter((p) => p.cleaningsAnalyzed > 0)
       .map((p) => ({
@@ -596,9 +569,11 @@ export async function GET(req: NextRequest) {
         days,
         includeFuture,
         onlyMismatches,
+        includeCancelledOrphans,
       },
       window: {
         sinceIso: since.toISOString(),
+        upperBoundIso: upperBound.toISOString(),
         nowIso: now.toISOString(),
       },
       totals,
@@ -620,6 +595,8 @@ export async function GET(req: NextRequest) {
         elapsedMs,
         inventoryItemsCount: inventory.length,
         ordersInRangeCount: ordersInRange.length,
+        cleaningsInRangeCount: cleanings.length,
+        propertiesTotalCount: properties.length,
       },
     });
   } catch (error: any) {
