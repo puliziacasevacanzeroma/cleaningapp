@@ -3,6 +3,14 @@
  * 
  * UNICA FONTE DI VERITÀ per i nomi degli articoli.
  * Usato quando si salvano ordini nel database.
+ *
+ * ⚠️ NOTA STORICA: alcuni ID sono "legacy" — il nome originale dell'articolo
+ * è stato cambiato nell'inventario senza cambiare l'ID. Esempi:
+ *   - 'bagnoschiuma' (id legacy) → oggi è "Doccia-Shampoo" in inventory
+ *   - 'shampoo'      (id legacy) → oggi è "Set di Cortesia" in inventory
+ *   - 'cremaCorpo'   (id legacy) → oggi è "Cuffia Doccia" in inventory
+ * I clienti hanno sempre configurato i prodotti con i nomi attuali del frontend,
+ * il backend deve adeguarsi a quei nomi (non viceversa).
  */
 
 export const ITEM_NAMES: Record<string, string> = {
@@ -54,10 +62,23 @@ export const ITEM_NAMES: Record<string, string> = {
   // ═══════════════════════════════════════
   // KIT CORTESIA
   // ═══════════════════════════════════════
-  'shampoo': 'Shampoo',
-  'bagnoschiuma': 'Bagnoschiuma',
-  'sapone': 'Sapone',
-  'crema': 'Crema Corpo',
+  'shampoo': 'Set di Cortesia',           // 🔧 Allineato a inventory (ID legacy)
+  'bagnoschiuma': 'Doccia-Shampoo',       // 🔧 Allineato a inventory (ID legacy)
+  'sapone': 'Sapone',                     // (retrocompatibile, fallback storico)
+  'crema': 'Crema Corpo',                 // (coerente con inventory)
+  'cremaCorpo': 'Cuffia Doccia',          // ✨ Nuovo: ID legacy, ora "Cuffia Doccia"
+  'canavaccio_cucina': 'Canavaccio Cucina', // ✨ Nuovo: presente in inventory
+  'saponetta': 'Saponetta',               // ✨ Nuovo: id legacy mappato a item_saponetta
+  'prosecco_dry': 'Prosecco dry',         // ✨ Nuovo: presente in inventory
+
+  // Con prefisso item_ per coerenza
+  'item_shampoo': 'Set di Cortesia',
+  'item_bagnoschiuma': 'Doccia-Shampoo',
+  'item_crema': 'Crema Corpo',
+  'item_cremaCorpo': 'Cuffia Doccia',
+  'item_saponetta': 'Saponetta',
+  'item_canavaccio_cucina': 'Canavaccio Cucina',
+  'item_prosecco_dry': 'Prosecco dry',
 };
 
 /**
