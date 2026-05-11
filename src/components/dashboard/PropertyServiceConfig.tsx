@@ -644,12 +644,37 @@ const formatPrice = (price: number): string => {
   return price.toFixed(2);
 };
 
+// 🛡️ Helper: i copripiumini sono item OPZIONALI in inventario.
+// NON devono MAI essere precompilati nelle dotazioni standard di una property.
+// Se l'utente li vuole, li aggiunge a mano col pulsante + (e diventano parte della config).
+// Vedi: regola di business confermata da Ariele il 11/05/2026.
+const isCopripiuminoOrDuvet = (item: { id?: string; n?: string }): boolean => {
+  const idLow = (item.id || '').toLowerCase();
+  const nameLow = (item.n || '').toLowerCase();
+  return idLow.includes('copripium')
+    || idLow.includes('duvet')
+    || idLow.includes('piumino')
+    || idLow.includes('piumone')
+    || nameLow.includes('copripium')
+    || nameLow.includes('duvet')
+    || nameLow.includes('piumino')
+    || nameLow.includes('piumone');
+};
+
 // Funzione dinamica che usa i letti correnti
 const genCfgDynamic = (g: number, currentBeds: Bed[]): GuestConfig => {
   const sel: string[] = []; let rem = g;
   currentBeds.forEach(bed => { if (rem > 0) { sel.push(bed.id); rem -= bed.cap; } });
   const bl: Record<string, Record<string, number>> = {};
-  sel.forEach(id => { const b = currentBeds.find(x => x.id === id); bl[id] = {}; (linen[b?.type || ''] || []).forEach(i => { bl[id][i.id] = i.d; }); });
+  sel.forEach(id => {
+    const b = currentBeds.find(x => x.id === id);
+    bl[id] = {};
+    // 🛡️ FIX: escludi copripiumini/duvet dalla precompilazione automatica.
+    // Restano disponibili nell'UI per essere aggiunti manualmente con il +.
+    (linen[b?.type || ''] || [])
+      .filter(i => !isCopripiuminoOrDuvet(i))
+      .forEach(i => { bl[id][i.id] = i.d; });
+  });
   const ba: Record<string, number> = {}, ki: Record<string, number> = {}, ex: Record<string, boolean> = {};
   bathItems.forEach(i => { ba[i.id] = i.d * g; }); kitItems.forEach(i => { ki[i.id] = i.d * g; }); extras.forEach(i => { ex[i.id] = false; });
   return { beds: sel, bl, ba, ki, ex };
