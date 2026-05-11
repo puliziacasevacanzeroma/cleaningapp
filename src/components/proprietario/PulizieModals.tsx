@@ -255,7 +255,7 @@ export const PulizieModals = forwardRef<PulizieModalsHandle, PulizieModalsProps>
 
   // 🎉 Success modal dopo inserimento ospiti
 
-  const saveGuests = (adulti: number, neonati: number) => {
+  const saveGuests = async (adulti: number, neonati: number) => {
     if (!selectedCleaning) return;
     
     const newGuestsCount = adulti + neonati;
@@ -269,29 +269,78 @@ export const PulizieModals = forwardRef<PulizieModalsHandle, PulizieModalsProps>
       return;
     }
     
-    // ⚡ TUTTO SINCRONO: chiudi + successo nello stesso frame
     const cleaningId = selectedCleaning.id;
     const propertyName = properties.find(p => p.id === selectedCleaning.propertyId)?.name || "";
-    setShowGuestModal(false);
-    setGuestSuccessCount(newGuestsCount);
-    setGuestSuccessProperty(propertyName);
-    setShowGuestSuccess(true);
-    setTimeout(() => setShowGuestSuccess(false), 1800);
-    
-    // 🔄 Fire-and-forget
-    const cleaningRef = doc(db, "cleanings", cleaningId);
-    updateDoc(cleaningRef, {
-      guestsCount: newGuestsCount,
-      guestsConfirmed: true,
-      adulti, neonati,
-      updatedAt: new Date()
-    }).catch(err => console.error("Errore salvataggio ospiti:", err));
-    
-    if (newGuestsCount !== oldGuestsCount) {
-      fetch(`/api/cleanings/${cleaningId}/update-linen-order`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-      }).catch(err => console.error("⚠️ Errore aggiornamento ordine:", err));
+
+    // 🛡️ FIX SICUREZZA (root cause CASALE 2.0 ordine biancheria stale):
+    // Le scritture devono essere AWAITED in sequenza, NON fire-and-forget.
+    // Sequenza:
+    //   1. updateDoc su cleaning (await) — se fallisce, NON chiudere il modal, mostra errore
+    //   2. fetch update-linen-order (await + retry 1x) — solo se guests cambiati
+    //   3. Solo se entrambi OK → animazione successo + chiusura
+    // Se step 2 fallisce dopo retry, l'utente vede un alert: i guests sono salvati ma
+    // l'ordine non si è ricalcolato → contattare admin (l'admin può ricalcolare manualmente).
+    setSavingGuests(true);
+    try {
+      const cleaningRef = doc(db, "cleanings", cleaningId);
+      await updateDoc(cleaningRef, {
+        guestsCount: newGuestsCount,
+        guestsConfirmed: true,
+        adulti, neonati,
+        updatedAt: new Date()
+      });
+
+      let orderRecalcOk = true;
+      if (newGuestsCount !== oldGuestsCount) {
+        const callUpdateOrder = async (): Promise<boolean> => {
+          try {
+            const res = await fetch(`/api/cleanings/${cleaningId}/update-linen-order`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              cache: 'no-store',
+            });
+            return res.ok;
+          } catch (e) {
+            console.error("⚠️ Errore aggiornamento ordine:", e);
+            return false;
+          }
+        };
+        orderRecalcOk = await callUpdateOrder();
+        if (!orderRecalcOk) {
+          // Retry singolo dopo 800ms (mitiga race Firestore eventual consistency
+          // tra il updateDoc del client SDK e il read dell'Admin SDK lato server)
+          await new Promise(r => setTimeout(r, 800));
+          orderRecalcOk = await callUpdateOrder();
+        }
+      }
+
+      // Chiusura modal + animazione successo
+      setShowGuestModal(false);
+
+      if (orderRecalcOk) {
+        setGuestSuccessCount(newGuestsCount);
+        setGuestSuccessProperty(propertyName);
+        setShowGuestSuccess(true);
+        setTimeout(() => setShowGuestSuccess(false), 1800);
+      } else {
+        // Ospiti salvati MA ordine NON ricalcolato → l'admin deve intervenire.
+        // Messaggio chiaro all'utente: il numero ospiti è memorizzato (e cambierà
+        // gli importi/fatturazione) ma l'ordine biancheria potrebbe arrivare con
+        // le quantità precedenti.
+        alert(
+          `Numero ospiti aggiornato a ${newGuestsCount} per "${propertyName}".\n\n` +
+          `⚠️ Attenzione: la richiesta di ricalcolo della biancheria non è andata a buon fine. ` +
+          `Riapri la pulizia tra qualche secondo per riprovare, oppure contatta l'amministratore.`
+        );
+      }
+    } catch (err) {
+      console.error("Errore salvataggio ospiti:", err);
+      alert(
+        "Errore nel salvataggio del numero ospiti. " +
+        "Verifica la connessione e riprova. Se il problema persiste contatta l'amministratore."
+      );
+    } finally {
+      setSavingGuests(false);
     }
   };
 

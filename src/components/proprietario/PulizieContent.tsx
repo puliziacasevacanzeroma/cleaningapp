@@ -1406,18 +1406,44 @@ export const PulizieContent = React.memo(function PulizieContent({
         updatedAt: new Date()
       });
 
-      // 🔧 FIX CRITICO: ricalcola ordine biancheria se ospiti cambiati.
-      // Senza questo, la card consegna biancheria mostra ancora le quantità vecchie
-      // e l'operatore prepara la casa con il numero ospiti sbagliato.
+      // 🛡️ FIX SICUREZZA (root cause CASALE 2.0 / Nina's House ordine biancheria stale):
+      // Awaited + 1 retry per mitigare race condition Firestore eventual consistency
+      // tra updateDoc client SDK e read dell'Admin SDK server-side.
+      // Se il ricalcolo fallisce dopo retry, mostriamo errore all'utente (non più silente).
       // L'API rispetta linenConfigModified=true (non sovrascrive personalizzazioni).
       if (newCount !== oldCount) {
-        fetch(`/api/cleanings/${cleaningId}/update-linen-order`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' }
-        }).catch(err => console.error("⚠️ Errore aggiornamento ordine biancheria:", err));
+        const callUpdateOrder = async (): Promise<boolean> => {
+          try {
+            const res = await fetch(`/api/cleanings/${cleaningId}/update-linen-order`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              cache: 'no-store',
+            });
+            return res.ok;
+          } catch (e) {
+            console.error("⚠️ Errore aggiornamento ordine biancheria:", e);
+            return false;
+          }
+        };
+        let orderRecalcOk = await callUpdateOrder();
+        if (!orderRecalcOk) {
+          await new Promise(r => setTimeout(r, 800));
+          orderRecalcOk = await callUpdateOrder();
+        }
+        if (!orderRecalcOk) {
+          alert(
+            `Numero ospiti aggiornato a ${newCount}.\n\n` +
+            `⚠️ Attenzione: la richiesta di ricalcolo della biancheria non è andata a buon fine. ` +
+            `Riprova tra qualche secondo, oppure contatta l'amministratore.`
+          );
+        }
       }
     } catch (error) {
       console.error("Errore salvataggio ospiti:", error);
+      alert(
+        "Errore nel salvataggio del numero ospiti. " +
+        "Verifica la connessione e riprova. Se il problema persiste contatta l'amministratore."
+      );
     } finally {
       setSavingInline(null);
     }
