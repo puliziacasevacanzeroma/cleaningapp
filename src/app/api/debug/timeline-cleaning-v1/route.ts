@@ -130,7 +130,6 @@ export async function GET(req: NextRequest) {
     const auditEntriesByCleaningId = await adminDb
       .collection("auditLog")
       .where("entityId", "==", cleaningId)
-      .orderBy("timestamp", "asc")
       .limit(50)
       .get();
 
@@ -138,23 +137,34 @@ export async function GET(req: NextRequest) {
       ? await adminDb
           .collection("auditLog")
           .where("entityId", "==", orders[0].id)
-          .orderBy("timestamp", "asc")
           .limit(50)
           .get()
       : null;
 
-    const auditCleaning = auditEntriesByCleaningId.docs.map((d) => {
-      const data = serializeFirestoreData(d.data() as any);
-      data.id = d.id;
-      return data;
-    });
+    const auditCleaning = auditEntriesByCleaningId.docs
+      .map((d) => {
+        const data = serializeFirestoreData(d.data() as any);
+        data.id = d.id;
+        return data;
+      })
+      .sort((a: any, b: any) => {
+        const ta = a.timestamp || "";
+        const tb = b.timestamp || "";
+        return ta.localeCompare(tb);
+      });
 
     const auditOrder = auditEntriesByOrderId
-      ? auditEntriesByOrderId.docs.map((d) => {
-          const data = serializeFirestoreData(d.data() as any);
-          data.id = d.id;
-          return data;
-        })
+      ? auditEntriesByOrderId.docs
+          .map((d) => {
+            const data = serializeFirestoreData(d.data() as any);
+            data.id = d.id;
+            return data;
+          })
+          .sort((a: any, b: any) => {
+            const ta = a.timestamp || "";
+            const tb = b.timestamp || "";
+            return ta.localeCompare(tb);
+          })
       : [];
 
     // ── 8. DIAGNOSIS ────────────────────────────────────
