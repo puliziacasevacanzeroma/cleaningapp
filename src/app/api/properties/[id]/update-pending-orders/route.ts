@@ -174,6 +174,7 @@ export async function POST(
           items: newItems,
           updatedAt: Timestamp.now(),
           itemsUpdatedFromConfig: true,
+          guestsCount: guestsCount, // 🔧 Bug #4 fix: sync order.guestsCount con cleaning.guestsCount
         });
         
         if (process.env.NODE_ENV !== "production") console.log(`   ✅ Ordine ${orderDoc.id} aggiornato: ${newItems.length} items per ${guestsCount} ospiti`);
