@@ -109,25 +109,43 @@ const countLinenFromSelectedItems = (items: SelectedItem[]): { matrimoniali: num
     const nameLower = (item.name || '').toLowerCase();
     const idLower = (item.id || '').toLowerCase();
 
+    // 🛡️ ESCLUDI copripiumini/duvet/piumini dal conteggio lenzuola.
+    // I copripiumini sono item opzionali e NON valgono come lenzuola
+    // ai fini della validazione del minimo richiesto per letto.
+    const isCopripiumino = nameLower.includes('copripium')
+      || idLower.includes('copripium')
+      || idLower.includes('duvet')
+      || nameLower.includes('duvet')
+      || idLower.includes('piumino')
+      || nameLower.includes('piumino')
+      || idLower.includes('piumone')
+      || nameLower.includes('piumone')
+      || nameLower.includes('cover');
+
     // Identifica FEDERE
     if (nameLower.includes('feder') || idLower.includes('pillow')) {
       federe += item.quantity;
     }
-    // Identifica lenzuola matrimoniali
+    // Identifica lenzuola matrimoniali (ESCLUDI copripiumini)
     else if (
-      nameLower.includes('matrimonial') || 
-      idLower.includes('double') || 
-      idLower.includes('matr')
+      !isCopripiumino && (
+        nameLower.includes('matrimonial') ||
+        idLower.includes('double') ||
+        idLower.includes('matr')
+      )
     ) {
+      // Conferma che sia effettivamente lenzuolo (non altri item con "matr" nel nome)
       if (nameLower.includes('lenzuol') || idLower.includes('sheet') || idLower.includes('lenz') || 
-          nameLower.includes('letto') || idLower.includes('bed') || 
-          !nameLower.includes('copri') && !nameLower.includes('cover')) {
+          nameLower.includes('letto') || idLower.includes('bed') ||
+          idLower === 'doublesheets' || idLower === 'item_doublesheets') {
         matrimoniali += item.quantity;
       }
     }
-    // Identifica lenzuola singole
+    // Identifica lenzuola singole (ESCLUDI copripiumini)
     else if (
-      (nameLower.includes('singol') || idLower.includes('single') || idLower.includes('sing'))
+      !isCopripiumino && (
+        (nameLower.includes('singol') || idLower.includes('single') || idLower.includes('sing'))
+      )
     ) {
       if (nameLower.includes('lenzuol') || idLower.includes('sheet') || idLower.includes('lenz') || 
           nameLower.includes('letto') || idLower.includes('bed')) {

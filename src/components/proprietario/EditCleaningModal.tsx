@@ -347,21 +347,37 @@ const countCurrentLinenFromBl = (
     const nameLower = (item.n || '').toLowerCase();
     const idLower = (item.id || '').toLowerCase();
 
+    // 🛡️ ESCLUDI copripiumini/duvet/piumini dal conteggio lenzuola.
+    // I copripiumini sono item opzionali e NON valgono come lenzuola
+    // ai fini della validazione del minimo richiesto per letto.
+    const isCopripiumino = nameLower.includes('copripium')
+      || idLower.includes('copripium')
+      || idLower.includes('duvet')
+      || nameLower.includes('duvet')
+      || idLower.includes('piumino')
+      || nameLower.includes('piumino')
+      || idLower.includes('piumone')
+      || nameLower.includes('piumone');
+
     // Identifica FEDERE
     if (nameLower.includes('feder') || idLower.includes('pillow')) {
       federe += qty;
     }
-    // Identifica lenzuola matrimoniali
+    // Identifica lenzuola matrimoniali (ESCLUDI copripiumini)
     else if (
-      nameLower.includes('matrimonial') || 
-      idLower.includes('double') || 
-      idLower.includes('matr')
+      !isCopripiumino && (
+        nameLower.includes('matrimonial') ||
+        idLower.includes('double') ||
+        idLower.includes('matr')
+      )
     ) {
       matrimoniali += qty;
     }
-    // Identifica lenzuola singole (deve contenere sia "singol/sing" che "lenzuol/sheet")
+    // Identifica lenzuola singole (ESCLUDI copripiumini)
     else if (
-      (nameLower.includes('singol') || idLower.includes('single') || idLower.includes('sing'))
+      !isCopripiumino && (
+        (nameLower.includes('singol') || idLower.includes('single') || idLower.includes('sing'))
+      )
     ) {
       // Verifica che sia effettivamente lenzuola e non altro (es. asciugamano singolo)
       if (nameLower.includes('lenzuol') || idLower.includes('sheet') || idLower.includes('lenz') || 
