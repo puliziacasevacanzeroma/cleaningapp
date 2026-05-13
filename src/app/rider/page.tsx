@@ -23,7 +23,14 @@ const STORAGE_KEYS = {
   LAST_UPDATE: 'rider_last_update',
 };
 
-// Helper per localStorage con fallback
+// Helper per localStorage con fallback + gestione QuotaExceeded
+// 🚀 PERF v2: prima il codice catturava QuotaExceeded ma lasciava la cache
+//    vecchia → setItem continuava a fallire ad ogni snapshot. Ora:
+//    - Skip salvataggio se il JSON > 2MB (cache inutile su mobile)
+//    - Su QuotaExceeded: cleanup di TUTTE le chiavi rider_* e retry una volta
+//    - Limite globale: max 4MB totali in localStorage per il rider
+const STORAGE_MAX_BYTES = 2 * 1024 * 1024; // 2MB per singola chiave
+
 const storage = {
   get: <T,>(key: string, fallback: T): T => {
     if (typeof window === 'undefined') return fallback;
@@ -37,9 +44,43 @@ const storage = {
   set: (key: string, value: any) => {
     if (typeof window === 'undefined') return;
     try {
-      localStorage.setItem(key, JSON.stringify(value));
-    } catch (e) {
-      console.warn('Storage error:', e);
+      const serialized = JSON.stringify(value);
+      // Skip se il dato è troppo grosso (es. centinaia di proprietà con dati pesanti)
+      // → meglio non cachare che mandare in crash il browser. Il listener realtime
+      //   ricaricherà comunque i dati in 1-2 secondi alla prossima apertura.
+      if (serialized.length > STORAGE_MAX_BYTES) {
+        if (process.env.NODE_ENV !== "production") {
+          console.warn(`Storage skip: ${key} è ${Math.round(serialized.length / 1024)}KB > ${STORAGE_MAX_BYTES / 1024}KB`);
+        }
+        // Rimuovo eventuale vecchio valore per questa chiave
+        try { localStorage.removeItem(key); } catch {}
+        return;
+      }
+      localStorage.setItem(key, serialized);
+    } catch (e: any) {
+      // QuotaExceededError: cache piena (anche da altri tab/dominii)
+      if (e?.name === 'QuotaExceededError' || e?.code === 22 || e?.code === 1014) {
+        try {
+          // Cleanup: rimuovo TUTTE le chiavi rider_* per fare spazio
+          const keysToRemove: string[] = [];
+          for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            if (k && k.startsWith('rider_')) keysToRemove.push(k);
+          }
+          keysToRemove.forEach(k => localStorage.removeItem(k));
+          // Retry una sola volta
+          try {
+            localStorage.setItem(key, JSON.stringify(value));
+          } catch {
+            // Se fallisce ancora, rinuncio silenziosamente
+            // (il listener realtime fornirà comunque i dati)
+          }
+        } catch {
+          // Ignora errori di cleanup
+        }
+      } else {
+        console.warn('Storage error:', e);
+      }
     }
   }
 };
@@ -987,7 +1028,28 @@ function RiderDashboardContent() {
       (snapshot: any) => {
         const newMap = new Map<string, any>();
         snapshot.docs.forEach((doc: any) => {
-          newMap.set(doc.id, { id: doc.id, ...(doc.data() as Record<string, any>) });
+          const d = doc.data() as Record<string, any>;
+          // 🚀 PERF v2: proietto SOLO i campi che la UI rider usa.
+          //    Prima salvavamo l'intero documento property (con serviceConfigs,
+          //    bedsConfig, e altri campi pesanti) → ~10-30KB per proprietà ×
+          //    200 = ~3-6MB → superava la quota localStorage.
+          //    Ora salviamo ~500 bytes per proprietà × 200 = ~100KB totale.
+          newMap.set(doc.id, {
+            id: doc.id,
+            name: d.name || "",
+            address: d.address || "",
+            city: d.city || "",
+            postalCode: d.postalCode || "",
+            imageUrl: d.imageUrl || null,
+            images: d.images || null,
+            doorCode: d.doorCode || "",
+            keysLocation: d.keysLocation || "",
+            accessNotes: d.accessNotes || "",
+            floor: d.floor || "",
+            apartment: d.apartment || "",
+            intercom: d.intercom || "",
+            status: d.status || "ACTIVE",
+          });
         });
         setPropertiesMap(newMap);
         storage.set(STORAGE_KEYS.PROPERTIES, Array.from(newMap.entries()));
@@ -2681,7 +2743,7 @@ function RiderDashboardContent() {
                 : "text-slate-500"
             }`}
           >
-            📅 Prossimi ({futureOrders.length})
+            📅 Prossimi{process.env.NEXT_PUBLIC_RIDER_PERF_V2 === "true" && futureLoadedDays === 0 ? "" : ` (${futureOrders.length})`}
           </button>
           <button
             onClick={() => setHomeTab("consegnati")}

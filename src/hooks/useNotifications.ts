@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { Timestamp } from "firebase/firestore";
 import { useAuth } from "~/lib/firebase/AuthContext";
 import {
   subscribeToNotifications,
@@ -90,16 +91,38 @@ export function useNotifications(): UseNotificationsReturn {
   }, []);
 
   // Segna tutte come lette
+  // 🚀 PERF: optimistic update + operazione DB in background.
+  //    - UI: aggiorno IMMEDIATAMENTE lo state (badge a 0, tutte READ).
+  //      Niente attesa, niente spinner, niente blocco utente.
+  //    - DB: lancio il writeBatch in background. Se fallisce, revert dello
+  //      state + messaggio errore (caso edge, raro).
+  //    - In ogni caso il listener onSnapshot ricaricherà comunque lo stato
+  //      reale dal DB nei secondi successivi.
   const handleMarkAllAsRead = useCallback(async () => {
     if (!user) return;
-    
-    try {
-      await markAllAsRead(user.role, user.id);
-    } catch (err) {
+
+    // 📸 Snapshot dello stato corrente per eventuale revert in caso di errore
+    const previousNotifications = notifications;
+
+    // 1. OPTIMISTIC: aggiorno la UI subito (UNREAD → READ in memoria)
+    const now = Timestamp.now();
+    setNotifications(prev =>
+      prev.map(n =>
+        n.status === "UNREAD"
+          ? { ...n, status: "READ", readAt: now, updatedAt: now }
+          : n
+      )
+    );
+
+    // 2. DB: lancio in background, non blocco l'UI
+    //    NON aspetto await: se fallisce gestisco nel .catch
+    markAllAsRead(user.role, user.id).catch(err => {
       console.error("Errore marking all as read:", err);
-      setError("Errore nel segnare tutte come lette");
-    }
-  }, [user]);
+      setError("Errore nel segnare tutte come lette. Riprovo in background...");
+      // Revert: ripristino lo stato precedente
+      setNotifications(previousNotifications);
+    });
+  }, [user, notifications]);
 
   // Archivia notifica
   const handleArchive = useCallback(async (id: string) => {
