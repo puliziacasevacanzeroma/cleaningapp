@@ -888,6 +888,13 @@ function RiderDashboardContent() {
   // Screen state
   const [screen, setScreen] = useState<Screen>("home");
   const [homeTab, setHomeTab] = useState<HomeTab>("attivi");
+
+  // ─── LAZY LOAD TAB "PROSSIMI" (perf v2) ───
+  // Caricati on-demand quando l'utente clicca la tab. NON realtime: getDocs
+  // one-shot per i prossimi N giorni. Bottone "Carica altri" estende il range.
+  const [futureOrdersV2, setFutureOrdersV2] = useState<Order[]>([]);
+  const [futureLoadedDays, setFutureLoadedDays] = useState<number>(0); // 0 = mai caricato
+  const [futureLoading, setFutureLoading] = useState<boolean>(false);
   const [preparingOrder, setPreparingOrder] = useState<Order | null>(null);
   const [checkedItems, setCheckedItems] = useState<Record<string, boolean>>({});
   
@@ -947,16 +954,48 @@ function RiderDashboardContent() {
   };
 
   // 🔥 REALTIME - Listener per proprietà (salva in cache)
+  //
+  // 🚀 PERF v2: con feature flag NEXT_PUBLIC_RIDER_PERF_V2 = "true" filtra
+  //    proprietà non sospese/cancellate. Comportamento:
+  //    - INCLUSE: status ∈ ["ACTIVE", "PENDING"]
+  //      • ACTIVE = operative normalmente
+  //      • PENDING = nuove proprietà non ancora approvate (margine sicurezza)
+  //    - ESCLUSE: status ∈ ["SUSPENDED", "INACTIVE", "DELETED", "PENDING_CONTRACT"]
+  //      • SUSPENDED = sospensione manuale dell'admin (es. ristrutturazione,
+  //        problemi specifici della proprietà). Servizio fermo → rider non deve vedere.
+  //      • INACTIVE/DELETED = proprietà chiuse, pulizie/ordini futuri già
+  //        cancellati dall'API properties PATCH.
+  //
+  //    ⚠️ IMPORTANTE: la sospensione per morosità del pagamento NON tocca
+  //    property.status (resta ACTIVE). Setta solo user.paymentBlock.active.
+  //    Quindi questo filtro NON nasconde le consegne dei proprietari morosi:
+  //    il rider continua a vederle correttamente. Solo se l'admin sospende
+  //    manualmente la singola proprietà, il rider smette di vederla.
+  //
+  //    Sicurezza: il codice usa già `data.propertyName || property?.name || "Proprietà"`
+  //    come fallback, quindi se per qualche motivo un ordine è collegato a una
+  //    proprietà fuori filtro, la UI mostra comunque i dati salvati sull'ordine.
   useEffect(() => {
-    const unsubProperties = onSnapshot(collection(db, "properties"), (snapshot) => {
-      const newMap = new Map<string, any>();
-      snapshot.docs.forEach(doc => {
-        newMap.set(doc.id, { id: doc.id, ...(doc.data() as Record<string, any>) });
-      });
-      setPropertiesMap(newMap);
-      // Salva in cache
-      storage.set(STORAGE_KEYS.PROPERTIES, Array.from(newMap.entries()));
-    });
+    const useFastQueries = process.env.NEXT_PUBLIC_RIDER_PERF_V2 === "true";
+
+    const propsQuery = useFastQueries
+      ? query(collection(db, "properties"), where("status", "in", ["ACTIVE", "PENDING"]))
+      : (collection(db, "properties") as any);
+
+    const unsubProperties = onSnapshot(
+      propsQuery,
+      (snapshot: any) => {
+        const newMap = new Map<string, any>();
+        snapshot.docs.forEach((doc: any) => {
+          newMap.set(doc.id, { id: doc.id, ...(doc.data() as Record<string, any>) });
+        });
+        setPropertiesMap(newMap);
+        storage.set(STORAGE_KEYS.PROPERTIES, Array.from(newMap.entries()));
+      },
+      (err) => {
+        console.error("[rider perf v2] properties listener failed:", err);
+      }
+    );
 
     return () => unsubProperties();
   }, []);
@@ -988,24 +1027,59 @@ function RiderDashboardContent() {
   }, [user?.id]);
 
   // 🔥 REALTIME - Listener per pulizie (salva in cache)
+  //
+  // 🚀 PERF v2: con feature flag NEXT_PUBLIC_RIDER_PERF_V2 = "true" filtra
+  //    SOLO cleanings dell'ultimo periodo (oggi-7gg → oggi+30gg) invece di
+  //    scaricare TUTTE le pulizie ever (con 200 proprietà = ~80.000+ docs).
+  //    Range largo conservativo:
+  //      - -7gg: copre eventuali pickup pendenti di settimana scorsa
+  //      - +30gg: copre la tab "Prossimi" (max 3gg ma con margine)
+  //    Sicurezza: il codice fa `cleaning?.scheduledTime || data.scheduledTime`,
+  //    quindi anche se una pulizia esce dal range il `scheduledTime` viene
+  //    letto dall'ordine. Lookup di una pulizia fuori range → undefined nel
+  //    Map ma fallback funzionante.
   useEffect(() => {
-    const unsubCleanings = onSnapshot(collection(db, "cleanings"), (snapshot) => {
-      const newMap = new Map<string, CleaningData>();
-      snapshot.docs.forEach(doc => {
-        const data = doc.data() as Record<string, any>;
-        newMap.set(doc.id, {
-          id: doc.id,
-          scheduledTime: data.scheduledTime || "10:00",
-          status: data.status || "SCHEDULED",
-          operatorName: data.operatorName || data.operators?.[0]?.name || undefined,
-          operatorId: data.operatorId || data.operators?.[0]?.id || undefined,
-          operators: Array.isArray(data.operators) ? data.operators : [],
+    const useFastQueries = process.env.NEXT_PUBLIC_RIDER_PERF_V2 === "true";
+
+    let cleaningsQuery: any;
+    if (useFastQueries) {
+      const start = new Date();
+      start.setDate(start.getDate() - 7);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date();
+      end.setDate(end.getDate() + 30);
+      end.setHours(23, 59, 59, 999);
+      cleaningsQuery = query(
+        collection(db, "cleanings"),
+        where("scheduledDate", ">=", Timestamp.fromDate(start)),
+        where("scheduledDate", "<=", Timestamp.fromDate(end))
+      );
+    } else {
+      cleaningsQuery = collection(db, "cleanings");
+    }
+
+    const unsubCleanings = onSnapshot(
+      cleaningsQuery,
+      (snapshot: any) => {
+        const newMap = new Map<string, CleaningData>();
+        snapshot.docs.forEach((doc: any) => {
+          const data = doc.data() as Record<string, any>;
+          newMap.set(doc.id, {
+            id: doc.id,
+            scheduledTime: data.scheduledTime || "10:00",
+            status: data.status || "SCHEDULED",
+            operatorName: data.operatorName || data.operators?.[0]?.name || undefined,
+            operatorId: data.operatorId || data.operators?.[0]?.id || undefined,
+            operators: Array.isArray(data.operators) ? data.operators : [],
+          });
         });
-      });
-      setCleaningsMap(newMap);
-      // Salva in cache
-      storage.set(STORAGE_KEYS.CLEANINGS, Array.from(newMap.entries()));
-    });
+        setCleaningsMap(newMap);
+        storage.set(STORAGE_KEYS.CLEANINGS, Array.from(newMap.entries()));
+      },
+      (err) => {
+        console.error("[rider perf v2] cleanings listener failed:", err);
+      }
+    );
 
     return () => unsubCleanings();
   }, []);
@@ -1506,6 +1580,109 @@ function RiderDashboardContent() {
     return null;
   };
 
+  // ─── LAZY LOADER tab "Prossimi" (perf v2) ─────────────────────
+  // Carica gli ordini PENDING/ASSIGNED senza rider con scheduledDate da
+  // domani in poi, per `days` giorni. One-shot getDocs (non realtime).
+  // Arricchisce gli ordini con i dati di property/cleaning come fa il
+  // listener principale, così l'oggetto Order è 1:1 compatibile.
+  const loadFutureOrders = useCallback(async (days: number) => {
+    if (!user) return;
+    setFutureLoading(true);
+    try {
+      const start = new Date();
+      start.setDate(start.getDate() + 1);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date();
+      end.setDate(end.getDate() + days + 1);
+      end.setHours(0, 0, 0, 0);
+
+      // Solo ordini PENDING/ASSIGNED senza rider (= disponibili) — gli altri
+      // (assegnati ad altri rider o in stati avanzati) non interessano qui.
+      const q = query(
+        collection(db, "orders"),
+        where("scheduledDate", ">=", Timestamp.fromDate(start)),
+        where("scheduledDate", "<", Timestamp.fromDate(end))
+      );
+      const snap = await getDocs(q);
+
+      // Costruzione Order arricchito (stessa logica del listener principale,
+      // semplificata: niente pickupItems realtime perché qui sono solo PENDING
+      // futuri, i pickup li vede sul giorno della consegna)
+      const orders: Order[] = snap.docs.map(d => {
+        const data = d.data() as Record<string, any>;
+        // Filtro client-side per status (Firestore non permette where compound
+        // con range scheduledDate + in status, quindi filtro qui)
+        if (!((data.status === "PENDING" || data.status === "ASSIGNED") && (!data.riderId || data.riderId === ""))) {
+          return null as any;
+        }
+        const property = propertiesMap.get(data.propertyId);
+        const cleaning = data.cleaningId ? cleaningsMap.get(data.cleaningId) : undefined;
+        const sortTime = cleaning?.scheduledTime || data.scheduledTime || "23:59";
+        const translateName = (item: any): string => {
+          const candidates = [item.itemId, item.id, item.name].filter(Boolean);
+          for (const key of candidates) {
+            const translated = getItemName(key);
+            if (translated !== key) return translated;
+          }
+          return resolveItemDisplayName(item.id, item.name);
+        };
+        const translatedItems = (data.items || []).map((item: any) => ({
+          ...item,
+          name: translateName(item),
+        }));
+        return {
+          id: d.id,
+          ...data,
+          items: translatedItems,
+          propertyDoorCode: data.propertyDoorCode || property?.doorCode || "",
+          propertyKeysLocation: data.propertyKeysLocation || property?.keysLocation || "",
+          propertyAccessNotes: data.propertyAccessNotes || property?.accessNotes || "",
+          propertyFloor: data.propertyFloor || property?.floor || "",
+          propertyApartment: data.propertyApartment || property?.apartment || "",
+          propertyIntercom: data.propertyIntercom || property?.intercom || "",
+          propertyPostalCode: data.propertyPostalCode || property?.postalCode || "",
+          propertyCity: data.propertyCity || property?.city || "",
+          propertyAddress: data.propertyAddress || property?.address || "",
+          propertyName: data.propertyName || property?.name || "Proprietà",
+          propertyImages: data.propertyImages || property?.images || null,
+          propertyImageUrl: data.propertyImageUrl || property?.imageUrl || null,
+          urgency: data.urgency || "normal",
+          scheduledTime: data.scheduledTime,
+          cleaningId: data.cleaningId,
+          cleaning: cleaning,
+          sortTime: sortTime,
+          includePickup: data.includePickup !== false,
+          pickupItems: data.pickupItems || [],
+          pickupCompleted: data.pickupCompleted || false,
+          pickupFromOrders: data.pickupFromOrders || [],
+        } as Order;
+      }).filter(Boolean);
+
+      orders.sort((a, b) => {
+        const dateA = getOrderDate(a);
+        const dateB = getOrderDate(b);
+        if (!dateA || !dateB) return 0;
+        return dateA.getTime() - dateB.getTime();
+      });
+
+      setFutureOrdersV2(orders);
+      setFutureLoadedDays(days);
+    } catch (err) {
+      console.error("[rider perf v2] loadFutureOrders failed:", err);
+    } finally {
+      setFutureLoading(false);
+    }
+  }, [user, propertiesMap, cleaningsMap]);
+
+  // Auto-load alla prima apertura della tab "Prossimi" (se flag attivo)
+  useEffect(() => {
+    const useFastQueries = process.env.NEXT_PUBLIC_RIDER_PERF_V2 === "true";
+    if (!useFastQueries) return;
+    if (homeTab !== "prossimi") return;
+    if (futureLoadedDays > 0) return; // già caricato
+    loadFutureOrders(3);
+  }, [homeTab, futureLoadedDays, loadFutureOrders]);
+
   // Usa getDateString importato da dateUtils (rinominato come utilGetDateString)
   const todayString = utilGetDateString(today);
   
@@ -1532,18 +1709,24 @@ function RiderDashboardContent() {
   }
   
   // 🔵 Ordini FUTURI - solo visualizzazione, NON prendibili
-  const futureOrders = allAvailableOrders.filter(o => {
-    const orderDate = getOrderDate(o);
-    if (!orderDate) return false; // Se non ha data, non è futuro
-    const orderDateString = utilGetDateString(orderDate);
-    return orderDateString > todayString;
-  }).sort((a, b) => {
-    // Ordina per data
-    const dateA = getOrderDate(a);
-    const dateB = getOrderDate(b);
-    if (!dateA || !dateB) return 0;
-    return dateA.getTime() - dateB.getTime();
-  });
+  //
+  // 🚀 PERF v2: se flag ON usa futureOrdersV2 (caricato on-demand) invece
+  //    di filtrare allOrders (che con flag ON contiene solo ordini di oggi).
+  const _useFastQueriesForFuture = process.env.NEXT_PUBLIC_RIDER_PERF_V2 === "true";
+  const futureOrders = _useFastQueriesForFuture
+    ? futureOrdersV2
+    : allAvailableOrders.filter(o => {
+        const orderDate = getOrderDate(o);
+        if (!orderDate) return false; // Se non ha data, non è futuro
+        const orderDateString = utilGetDateString(orderDate);
+        return orderDateString > todayString;
+      }).sort((a, b) => {
+        // Ordina per data
+        const dateA = getOrderDate(a);
+        const dateB = getOrderDate(b);
+        if (!dateA || !dateB) return 0;
+        return dateA.getTime() - dateB.getTime();
+      });
   
   // Ordini nel mio carico (PICKING - li sto preparando)
   const myPickingOrders = allOrders.filter(o => 
@@ -2559,7 +2742,13 @@ function RiderDashboardContent() {
             </div>
           </div>
 
-          {futureOrders.length === 0 ? (
+          {/* 🚀 PERF v2: spinner mentre carica on-demand */}
+          {process.env.NEXT_PUBLIC_RIDER_PERF_V2 === "true" && futureLoading && futureLoadedDays === 0 ? (
+            <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center">
+              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mb-2"></div>
+              <p className="text-slate-500">Caricamento ordini futuri...</p>
+            </div>
+          ) : futureOrders.length === 0 ? (
             <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center">
               <span className="text-4xl mb-2 block">📭</span>
               <p className="text-slate-500">Nessun ordine programmato per i prossimi giorni</p>
@@ -2749,6 +2938,24 @@ function RiderDashboardContent() {
                 ));
               })()}
             </div>
+          )}
+
+          {/* 🚀 PERF v2: bottone "Carica altri 3 giorni" (lazy load on demand) */}
+          {process.env.NEXT_PUBLIC_RIDER_PERF_V2 === "true" && futureLoadedDays > 0 && (
+            <button
+              onClick={() => loadFutureOrders(futureLoadedDays + 3)}
+              disabled={futureLoading}
+              className="w-full py-3 bg-white border-2 border-blue-200 rounded-2xl text-blue-700 font-semibold hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+            >
+              {futureLoading ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
+                  Caricamento...
+                </>
+              ) : (
+                <>📥 Carica altri 3 giorni ({futureLoadedDays}gg → {futureLoadedDays + 3}gg)</>
+              )}
+            </button>
           )}
         </div>
       )}
