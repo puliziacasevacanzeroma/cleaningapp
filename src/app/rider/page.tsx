@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { useAuth } from "~/lib/firebase/AuthContext";
-import { collection, doc, updateDoc, Timestamp, onSnapshot, query, where, orderBy } from "firebase/firestore";
+import { collection, doc, updateDoc, Timestamp, onSnapshot, query, where, orderBy, getDocs, limit } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 import { NotificationBell } from "~/components/notifications";
 import { ToastProvider, useRiderRealtimeNotifications } from "~/components/ui/ToastNotifications";
@@ -1011,14 +1011,275 @@ function RiderDashboardContent() {
   }, []);
 
   // 🔥 REALTIME - Listener per ordini (dipende da properties e cleanings)
+  //
+  // 🚀 PERF v2: con feature flag NEXT_PUBLIC_RIDER_PERF_V2 = "true" usa
+  //    3 query filtrate parallele invece di 1 onSnapshot(collection) che
+  //    scarica TUTTI gli ordini ever (con 200 proprietà ~80.000+ docs).
+  //
+  //    Le 3 query coprono ESATTAMENTE gli stessi dati che la UI rider usa:
+  //      A) ordini con scheduledDate di oggi (qualsiasi status non-CANCELLED)
+  //      B) ordini DELIVERED con pickupCompleted=false (pickup pendenti per
+  //         calcolare ritiri biancheria sporca di consegne precedenti)
+  //      C) ordini riderId=me con status non terminale (es. PICKING vecchi)
+  //
+  //    Comportamento UI invariato. Se NEXT_PUBLIC_RIDER_PERF_V2 ≠ "true",
+  //    fallback al codice vecchio (sicurezza totale, rollback in 30s da Railway).
   useEffect(() => {
     if (!user) return;
 
+    const useFastQueries = process.env.NEXT_PUBLIC_RIDER_PERF_V2 === "true";
+
+    // ─── Calcolo range "oggi" (mezzanotte → mezzanotte) ───
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayEnd = new Date(todayStart);
+    todayEnd.setDate(todayEnd.getDate() + 1);
+
+    // ─── Stato consolidato: documenti raw provenienti dalle query ───
+    // Map docId → docData per deduplica (un ordine potrebbe matchare più query)
+    let docsToday = new Map<string, any>();
+    let docsPickup = new Map<string, any>();
+    let docsMine = new Map<string, any>();
+    let readyToday = false;
+    let readyPickup = false;
+    let readyMine = false;
+
+    // Funzione che ricomputa la lista combinata e aggiorna lo state
+    // (identica logica di prima, solo con docs già filtrati al posto di snapshot.docs)
+    const recompute = () => {
+      // Aspetta che tutte e 3 le query abbiano dato la prima risposta
+      // (altrimenti la lista sarebbe parziale al primo render)
+      if (!readyToday || !readyPickup || !readyMine) return;
+
+      // Unisci i 3 set (deduplicati per id)
+      const allOrdersRaw: any[] = [];
+      const seen = new Set<string>();
+      const pushAll = (m: Map<string, any>) => {
+        m.forEach((data, id) => {
+          if (seen.has(id)) return;
+          seen.add(id);
+          allOrdersRaw.push({ id, ...data });
+        });
+      };
+      pushAll(docsToday);
+      pushAll(docsPickup);
+      pushAll(docsMine);
+
+      // ↓ DA QUI IN POI è ESATTAMENTE la logica di prima, copiata 1:1 ↓
+      // 🔄 CALCOLO REAL-TIME DEI PICKUP ITEMS
+      const pickupByProperty = new Map<string, { items: Map<string, { id: string; name: string; quantity: number }>, orderIds: string[] }>();
+      for (const order of allOrdersRaw) {
+        if (order.status === "DELIVERED" && order.pickupCompleted !== true) {
+          const propId = order.propertyId;
+          if (!propId) continue;
+          if (!pickupByProperty.has(propId)) {
+            pickupByProperty.set(propId, { items: new Map(), orderIds: [] });
+          }
+          const propData = pickupByProperty.get(propId)!;
+          propData.orderIds.push(order.id);
+          if (order.items && Array.isArray(order.items)) {
+            for (const item of order.items) {
+              const itemName = (item.name || "").toLowerCase();
+              const categoryId = item.categoryId || "";
+              const isBiancheria =
+                categoryId === "biancheria_letto" ||
+                categoryId === "biancheria_bagno" ||
+                ["lenzuol", "feder", "telo", "asciugaman", "scendi", "copri", "tappet", "cuscin"].some(kw => itemName.includes(kw));
+              const isExcluded =
+                categoryId === "kit_cortesia" ||
+                categoryId === "prodotti_pulizia" ||
+                item.type === "cleaning_product" ||
+                item.type === "kit_cortesia" ||
+                ["sapone", "shampoo", "bagnoschiuma", "crema", "detersivo"].some(kw => itemName.includes(kw));
+              if (isBiancheria && !isExcluded) {
+                const itemKey = item.id || item.name;
+                const existing = propData.items.get(itemKey);
+                if (existing) {
+                  existing.quantity += item.quantity || 0;
+                } else {
+                  propData.items.set(itemKey, {
+                    id: item.id || itemKey,
+                    name: item.name || item.id,
+                    quantity: item.quantity || 0
+                  });
+                }
+              }
+            }
+          }
+        }
+      }
+
+      const orders = allOrdersRaw.map(data => {
+        const property = propertiesMap.get(data.propertyId);
+        const cleaning = data.cleaningId ? cleaningsMap.get(data.cleaningId) : undefined;
+        const sortTime = cleaning?.scheduledTime || data.scheduledTime || "23:59";
+
+        let realTimePickupItems = data.pickupItems || [];
+        let realTimePickupFromOrders = data.pickupFromOrders || [];
+
+        if ((data.status === "PENDING" || data.status === "ASSIGNED") && data.includePickup !== false) {
+          const propPickup = pickupByProperty.get(data.propertyId);
+          if (propPickup && propPickup.items.size > 0) {
+            realTimePickupItems = Array.from(propPickup.items.values()).filter(i => i.quantity > 0);
+            realTimePickupFromOrders = propPickup.orderIds;
+          }
+        }
+
+        const translateName = (item: any): string => {
+          const candidates = [item.itemId, item.id, item.name].filter(Boolean);
+          for (const key of candidates) {
+            const translated = getItemName(key);
+            if (translated !== key) return translated;
+          }
+          return resolveItemDisplayName(item.id, item.name);
+        };
+
+        const translatedItems = (data.items || []).map((item: any) => ({
+          ...item,
+          name: translateName(item),
+        }));
+
+        const translatedPickupItems = (realTimePickupItems || []).map((item: any) => ({
+          ...item,
+          name: translateName(item),
+        }));
+
+        return {
+          id: data.id,
+          ...data,
+          items: translatedItems,
+          propertyDoorCode: data.propertyDoorCode || property?.doorCode || "",
+          propertyKeysLocation: data.propertyKeysLocation || property?.keysLocation || "",
+          propertyAccessNotes: data.propertyAccessNotes || property?.accessNotes || "",
+          propertyFloor: data.propertyFloor || property?.floor || "",
+          propertyApartment: data.propertyApartment || property?.apartment || "",
+          propertyIntercom: data.propertyIntercom || property?.intercom || "",
+          propertyPostalCode: data.propertyPostalCode || property?.postalCode || "",
+          propertyCity: data.propertyCity || property?.city || "",
+          propertyAddress: data.propertyAddress || property?.address || "",
+          propertyName: data.propertyName || property?.name || "Proprietà",
+          propertyImages: data.propertyImages || property?.images || null,
+          propertyImageUrl: data.propertyImageUrl || property?.imageUrl || null,
+          urgency: data.urgency || "normal",
+          scheduledTime: data.scheduledTime,
+          cleaningId: data.cleaningId,
+          cleaning: cleaning,
+          sortTime: sortTime,
+          includePickup: data.includePickup !== false,
+          pickupItems: translatedPickupItems,
+          pickupCompleted: data.pickupCompleted || false,
+          pickupFromOrders: realTimePickupFromOrders,
+        } as Order;
+      });
+
+      // Filtra ordini rilevanti per questo rider (identico a prima)
+      const filtered = orders.filter(o => {
+        if ((o.status === "PENDING" || o.status === "ASSIGNED") && (!o.riderId || o.riderId === "")) {
+          return true;
+        }
+        if (o.riderId === user?.id) {
+          return true;
+        }
+        return false;
+      });
+
+      filtered.sort((a, b) => {
+        const aUrgent = a.urgency === 'urgent' ? 0 : 1;
+        const bUrgent = b.urgency === 'urgent' ? 0 : 1;
+        if (aUrgent !== bUrgent) return aUrgent - bUrgent;
+        const aTime = a.sortTime || "23:59";
+        const bTime = b.sortTime || "23:59";
+        return aTime.localeCompare(bTime);
+      });
+
+      setAllOrders(filtered);
+      storage.set(STORAGE_KEYS.ORDERS, filtered);
+      storage.set(STORAGE_KEYS.LAST_UPDATE, Date.now());
+      setIsFirstLoad(false);
+      setRealtimeReady(true);
+    };
+
+    // ═══════════════════════════════════════════════════════════════
+    // RAMO A: codice nuovo veloce (3 listener filtrati)
+    // ═══════════════════════════════════════════════════════════════
+    if (useFastQueries) {
+      const unsubs: Array<() => void> = [];
+
+      // Query A: ordini di OGGI (qualsiasi rider, qualsiasi status)
+      // — copre availableOrders, myDeliveredOrders, ordini PENDING/ASSIGNED del giorno
+      const queryToday = query(
+        collection(db, "orders"),
+        where("scheduledDate", ">=", Timestamp.fromDate(todayStart)),
+        where("scheduledDate", "<", Timestamp.fromDate(todayEnd))
+      );
+      unsubs.push(onSnapshot(
+        queryToday,
+        (snap) => {
+          docsToday = new Map(snap.docs.map(d => [d.id, d.data()]));
+          readyToday = true;
+          recompute();
+        },
+        (err) => {
+          console.error("[rider perf v2] query A (today) failed:", err);
+          readyToday = true; // sblocca recompute con dati parziali
+          recompute();
+        }
+      ));
+
+      // Query B: pickup pendenti (status=DELIVERED + pickupCompleted=false)
+      // — servono per calcolare i pickupItems delle nuove consegne
+      const queryPickup = query(
+        collection(db, "orders"),
+        where("status", "==", "DELIVERED"),
+        where("pickupCompleted", "==", false)
+      );
+      unsubs.push(onSnapshot(
+        queryPickup,
+        (snap) => {
+          docsPickup = new Map(snap.docs.map(d => [d.id, d.data()]));
+          readyPickup = true;
+          recompute();
+        },
+        (err) => {
+          console.error("[rider perf v2] query B (pickup) failed:", err);
+          readyPickup = true;
+          recompute();
+        }
+      ));
+
+      // Query C: i miei ordini in carico (riderId=me, status non terminale)
+      // — copre myPickingOrders, myInTransitOrders di QUALSIASI data
+      //   (un ordine PICKING di ieri non ancora completato deve restare visibile)
+      const queryMine = query(
+        collection(db, "orders"),
+        where("riderId", "==", user.id),
+        where("status", "in", ["ASSIGNED", "PICKING", "IN_TRANSIT"])
+      );
+      unsubs.push(onSnapshot(
+        queryMine,
+        (snap) => {
+          docsMine = new Map(snap.docs.map(d => [d.id, d.data()]));
+          readyMine = true;
+          recompute();
+        },
+        (err) => {
+          console.error("[rider perf v2] query C (mine) failed:", err);
+          readyMine = true;
+          recompute();
+        }
+      ));
+
+      return () => { unsubs.forEach(u => u()); };
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // RAMO B: codice vecchio (fallback sicuro se feature flag = false)
+    // ═══════════════════════════════════════════════════════════════
     const unsubOrders = onSnapshot(collection(db, "orders"), (snapshot) => {
       const allOrdersRaw = snapshot.docs.map(doc => {
         const data = doc.data() as Record<string, any>;
-        return { 
-          id: doc.id, 
+        return {
+          id: doc.id,
           ...data,
         };
       });
