@@ -4,7 +4,7 @@ import { useAuth } from "~/lib/firebase/AuthContext";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { DashboardLayoutClient } from "~/components/dashboard/DashboardLayoutClient";
-import { collection, onSnapshot } from "firebase/firestore";
+import { collection, onSnapshot, query, where } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 import { pulizieStore } from "~/lib/stores/pulizieDataStore";
 
@@ -34,16 +34,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }, [user?.id, user?.role]);
 
   // LISTENER REALTIME per contare proprietà pending
+  // 🚀 PERF (14/05/2026): filtra server-side status != ACTIVE invece di scaricare tutte
   useEffect(() => {
     const unsubscribe = onSnapshot(
-      collection(db, "properties"),
+      query(
+        collection(db, "properties"),
+        where("status", "in", ["PENDING", "DEACTIVATION_REQUESTED", "SUSPENDED"])
+      ),
       (snapshot) => {
+        // Filtra ulteriormente per status PENDING o deactivationRequested
         const count = snapshot.docs.filter(doc => {
           const data = doc.data() as Record<string, any>;
           return data.status === "PENDING" || data.deactivationRequested === true;
         }).length;
         setPendingCount(count);
-        // Salva in cache
         try { localStorage.setItem("dashboard_pending_count", String(count)); } catch {}
       },
       (error) => {

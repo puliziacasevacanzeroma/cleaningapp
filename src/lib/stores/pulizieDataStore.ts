@@ -8,7 +8,7 @@
  * - Spinner SOLO la primissima volta (cache completamente vuota)
  */
 
-import { collection, query, where, orderBy, onSnapshot } from "firebase/firestore";
+import { collection, query, where, orderBy, onSnapshot, Timestamp } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 
 // ─── Types ───────────────────────────────────────────────────
@@ -212,10 +212,22 @@ class PulizieDataStore {
       })
     );
 
-    // ─── 2. Cleanings (TUTTE, senza filtro date) ───
+    // ─── 2. Cleanings (ultimi 12 mesi) ───
+    // 🚀 PERF v3 (14/05/2026): prima caricava TUTTE le pulizie di sempre (1769 docs).
+    //    Era il vero collo di bottiglia della dashboard (~23 MB caricati ogni apertura).
+    //    Ora carichiamo solo gli ultimi 12 mesi: copre report mensili, calendario,
+    //    storico per dispute. Per analisi più vecchie ci sono i backup mensili.
+    const cleaningsRangeStart = new Date();
+    cleaningsRangeStart.setMonth(cleaningsRangeStart.getMonth() - 12);
+    cleaningsRangeStart.setHours(0, 0, 0, 0);
+
     this._unsubscribers.push(
       onSnapshot(
-        query(collection(db, "cleanings"), orderBy("scheduledDate", "asc")),
+        query(
+          collection(db, "cleanings"),
+          where("scheduledDate", ">=", Timestamp.fromDate(cleaningsRangeStart)),
+          orderBy("scheduledDate", "asc")
+        ),
         (snapshot) => {
           const cleans: PulizieCleaning[] = snapshot.docs.map(doc => {
             const d = doc.data() as Record<string, any>;
@@ -266,9 +278,21 @@ class PulizieDataStore {
       )
     );
 
-    // ─── 3. Orders ───
+    // ─── 3. Orders (ultimi 12 mesi) ───
+    // 🚀 PERF v3 (14/05/2026): prima caricava TUTTI gli ordini di sempre (2758 docs).
+    //    Ora ultimi 12 mesi, allineato alle cleanings. Per ordini storici molto
+    //    vecchi servono API server-side dedicate (es. report annuale).
+    const ordersRangeStart = new Date();
+    ordersRangeStart.setMonth(ordersRangeStart.getMonth() - 12);
+    ordersRangeStart.setHours(0, 0, 0, 0);
+
     this._unsubscribers.push(
-      onSnapshot(collection(db, "orders"), (snapshot) => {
+      onSnapshot(
+        query(
+          collection(db, "orders"),
+          where("scheduledDate", ">=", Timestamp.fromDate(ordersRangeStart))
+        ),
+        (snapshot) => {
         const orders: PulizieOrder[] = snapshot.docs
           .map(doc => {
             const d = doc.data() as Record<string, any>;
