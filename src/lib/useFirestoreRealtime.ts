@@ -319,9 +319,20 @@ export function useDashboardRealtime() {
       }
     );
 
-    // Listener 4: Ordini
+    // Listener 4: Ordini RECENTI (ultimi 7 giorni)
+    // 🚀 PERF v2 (14/05/2026): prima caricava TUTTI gli ordini di sempre (2758 docs).
+    //    Ora carichiamo solo quelli degli ultimi 7 giorni, che sono gli unici che
+    //    interessano per la dashboard "oggi" + buffer di sicurezza per cambi data
+    //    e per la visualizzazione di ordini completati di recente.
+    const ordersRangeStart = new Date(today);
+    ordersRangeStart.setDate(ordersRangeStart.getDate() - 7);
+    ordersRangeStart.setHours(0, 0, 0, 0);
+
     const unsubOrders = onSnapshot(
-      collection(db, "orders"),
+      query(
+        collection(db, "orders"),
+        where("scheduledDate", ">=", Timestamp.fromDate(ordersRangeStart))
+      ),
       (snapshot) => {
         ordersData = snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as Record<string, any>) }));
         loadedCount++;
@@ -422,8 +433,16 @@ export function useRiderOrdersRealtime() {
       }
     );
 
+    // 🚀 PERF v2: anche qui ordini ultimi 7 giorni invece di TUTTI
+    const todayStart = new Date();
+    todayStart.setDate(todayStart.getDate() - 7);
+    todayStart.setHours(0, 0, 0, 0);
+
     const unsubOrders = onSnapshot(
-      collection(db, "orders"),
+      query(
+        collection(db, "orders"),
+        where("scheduledDate", ">=", Timestamp.fromDate(todayStart))
+      ),
       (snapshot) => {
         ordersData = snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as Record<string, any>) }));
         loadedCount++;

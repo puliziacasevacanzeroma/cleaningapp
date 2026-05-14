@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, createContext, useContext, useRef } from "react";
-import { collection, onSnapshot, addDoc, Timestamp, query, where } from "firebase/firestore";
+import { collection, onSnapshot, addDoc, Timestamp, query, where, orderBy, limit } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 
 // ==================== TIPI ====================
@@ -380,12 +380,18 @@ export function useAdminRealtimeNotifications() {
   useEffect(() => {
 
     // ==================== LISTENER NOTIFICHE ADMIN ====================
-    // Ascolta TUTTE le nuove notifiche destinate all'admin
-    // NOTA: Le notifiche pulizie (iniziata/completata) vengono create dal CleaningWizard
-    // quindi NON serve un listener separato sulle pulizie (evita doppio toast!)
+    // 🚀 PERF v2 (14/05/2026): prima caricava TUTTE le notifiche ADMIN/ALL di
+    //    sempre (migliaia). Ora carichiamo solo quelle create da quando l'utente
+    //    apre la dashboard in poi (createdAt > now). Per mostrare toast NUOVI
+    //    non serve la storia: le notifiche vecchie non devono apparire come pop-up.
+    //    + limit(50) come safety net contro burst di notifiche.
+    const sessionStart = Timestamp.now();
     const notificationsQuery = query(
       collection(db, "notifications"),
-      where("recipientRole", "in", ["ADMIN", "ALL"])
+      where("recipientRole", "in", ["ADMIN", "ALL"]),
+      where("createdAt", ">", sessionStart),
+      orderBy("createdAt", "desc"),
+      limit(50)
     );
 
     const unsubNotifications = onSnapshot(notificationsQuery, (snapshot) => {
@@ -428,8 +434,18 @@ export function useAdminRealtimeNotifications() {
     });
 
     // ==================== LISTENER ORDINI (per cambi stato in tempo reale) ====================
-    // Gli ordini NON hanno notifiche automatiche create altrove, quindi il listener serve
-    const unsubOrders = onSnapshot(collection(db, "orders"), (snapshot) => {
+    // 🚀 PERF v2 (14/05/2026): prima caricava TUTTI gli ordini di sempre (2758).
+    //    Serve solo per intercettare cambi di stato → bastano gli ordini degli
+    //    ultimi 7 giorni (gli unici che possono cambiare stato in tempo reale).
+    const ordersRangeStart = new Date();
+    ordersRangeStart.setDate(ordersRangeStart.getDate() - 7);
+    ordersRangeStart.setHours(0, 0, 0, 0);
+    const ordersQuery = query(
+      collection(db, "orders"),
+      where("scheduledDate", ">=", Timestamp.fromDate(ordersRangeStart))
+    );
+
+    const unsubOrders = onSnapshot(ordersQuery, (snapshot) => {
       if (!ordersInitializedRef.current) {
         snapshot.docs.forEach(doc => {
           previousOrdersRef.current.set(doc.id, doc.data());
@@ -573,10 +589,15 @@ export function useProprietarioRealtimeNotifications(userId: string, userPropert
     }
 
 
-    // Ascolta le notifiche destinate a questo proprietario (senza indice composito)
+    // 🚀 PERF v2 (14/05/2026): solo notifiche da quando l'utente è loggato.
+    //    Vedi commento dettagliato nel listener admin sopra.
+    const sessionStart = Timestamp.now();
     const notificationsQuery = query(
       collection(db, "notifications"),
-      where("recipientId", "==", userId)
+      where("recipientId", "==", userId),
+      where("createdAt", ">", sessionStart),
+      orderBy("createdAt", "desc"),
+      limit(50)
     );
 
     const unsubNotifications = onSnapshot(notificationsQuery, (snapshot) => {
@@ -648,10 +669,14 @@ export function useOperatoreRealtimeNotifications(userId: string) {
     }
 
 
-    // Ascolta le notifiche destinate a questo operatore
+    // 🚀 PERF v2: solo notifiche da quando loggato (vedi commento admin)
+    const sessionStart = Timestamp.now();
     const notificationsQuery = query(
       collection(db, "notifications"),
-      where("recipientId", "==", userId)
+      where("recipientId", "==", userId),
+      where("createdAt", ">", sessionStart),
+      orderBy("createdAt", "desc"),
+      limit(50)
     );
 
     const unsubNotifications = onSnapshot(notificationsQuery, (snapshot) => {
@@ -772,11 +797,16 @@ export function useRiderRealtimeNotifications(userId: string) {
       seenNotificationsRef.current.add(docId);
     };
 
-    // UNICO LISTENER: ascolta TUTTE le notifiche per ruolo RIDER
-    // (include sia quelle con recipientId specifico che quelle broadcast)
+    // UNICO LISTENER: ascolta nuove notifiche per ruolo RIDER da quando loggato
+    // 🚀 PERF v2: prima caricava TUTTE le notifiche RIDER di sempre. Ora solo
+    //    quelle create da quando l'utente è loggato (vedi commento admin).
+    const sessionStart = Timestamp.now();
     const notificationsQuery = query(
       collection(db, "notifications"),
-      where("recipientRole", "==", "RIDER")
+      where("recipientRole", "==", "RIDER"),
+      where("createdAt", ">", sessionStart),
+      orderBy("createdAt", "desc"),
+      limit(50)
     );
 
     const unsubscribe = onSnapshot(notificationsQuery, (snapshot) => {

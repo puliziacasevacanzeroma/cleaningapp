@@ -503,9 +503,12 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
   }, [openCleaningId, router]);
 
   // 🔧 LISTENER REALTIME PROPRIETÀ - per maxGuests, serviceConfigs, imageUrl, bedrooms, bathrooms, cleaningPrice
+  // 🚀 PERF v2 (14/05/2026): filtra ACTIVE lato server invece di caricare tutte e filtrare in JS
   useEffect(() => {
-    
-    const unsubscribe = onSnapshot(collection(db, "properties"), (snapshot) => {
+
+    const unsubscribe = onSnapshot(
+      query(collection(db, "properties"), where("status", "==", "ACTIVE")),
+      (snapshot) => {
       const maxGuestsMap: Record<string, number> = {};
       const serviceConfigsMap: Record<string, any> = {};
       const imageUrlMap: Record<string, string> = {};
