@@ -5,9 +5,12 @@
  * restituisce come download diretto. NON usa Firebase Storage, NON usa
  * Resend. Quindi NON può fallire silenziosamente come il cron normale.
  *
+ * PATH: /api/cron/download-backup (sotto /cron per bypassare middleware admin)
+ * PROTEZIONE: CRON_SECRET nella query string (?secret=...)
+ *
  * USAGE:
  *   Apri nel browser:
- *   https://gestionale.puliziacasevacanze.it/api/admin/download-backup?secret=CRON_SECRET
+ *   https://gestionale.puliziacasevacanze.it/api/cron/download-backup?secret=CRON_SECRET
  *
  *   Il browser ti chiederà dove salvare il file. Salvalo SUBITO sul PC
  *   in una cartella tipo C:\Backup-CleaningApp\
@@ -17,7 +20,7 @@
  *
  * SICUREZZA:
  *   - Read-only: zero scritture al DB
- *   - Protetto da CRON_SECRET
+ *   - Protetto da CRON_SECRET (stesso usato per altri cron)
  *   - Streaming opzionale per file grossi (qui usiamo buffer perché ~50MB sta ok)
  *
  * Lascia questo endpoint sempre disponibile come fallback di emergenza,
