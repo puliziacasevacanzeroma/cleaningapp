@@ -346,6 +346,86 @@ function ConfirmAddModal({
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// MODAL CONFERMA CHIAMATA OPERATORE
+// ═══════════════════════════════════════════════════════════════════════════
+function CallOperatorModal({
+  order,
+  operatorName,
+  onConfirm,
+  onCancel,
+}: {
+  order: Order | null;
+  operatorName?: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  if (!order) return null;
+
+  const photo = order.propertyImageUrl || order.propertyImages?.door || order.propertyImages?.building || null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onCancel}>
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+      <div
+        className="relative bg-white rounded-3xl w-full max-w-sm shadow-2xl overflow-hidden"
+        onClick={e => e.stopPropagation()}
+        style={{ animation: 'modalSlideUp 0.3s ease-out' }}
+      >
+        {/* Foto struttura */}
+        <div className="relative w-full h-40 bg-gradient-to-br from-emerald-100 to-teal-100">
+          {photo ? (
+            <img src={photo} alt={order.propertyName} loading="lazy" decoding="async" className="w-full h-full object-cover" />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center">
+              <span className="text-5xl">🏠</span>
+            </div>
+          )}
+          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-3 pt-8">
+            <p className="text-white font-bold text-sm truncate">{order.propertyName}</p>
+            <p className="text-white/80 text-xs truncate">{order.propertyAddress}</p>
+          </div>
+        </div>
+
+        <div className="p-6">
+          <div className="w-16 h-16 bg-gradient-to-br from-emerald-100 to-teal-100 rounded-2xl flex items-center justify-center mx-auto mb-4 -mt-14 border-4 border-white shadow-lg relative z-10">
+            <span className="text-3xl">📞</span>
+          </div>
+
+          <h3 className="text-xl font-bold text-slate-800 text-center mb-1">Chiamare l'operatore?</h3>
+          <p className="text-slate-500 text-sm text-center mb-6">
+            {operatorName
+              ? <>Stai per chiamare <span className="font-semibold text-slate-700">{operatorName}</span>, l'operatore di questa pulizia.</>
+              : "Stai per chiamare l'operatore di questa pulizia."}
+          </p>
+
+          <div className="flex gap-3">
+            <button
+              onClick={onCancel}
+              className="flex-1 py-3.5 border-2 border-slate-200 text-slate-600 font-semibold rounded-2xl hover:bg-slate-50 active:scale-[0.98] transition-all"
+            >
+              Annulla
+            </button>
+            <button
+              onClick={onConfirm}
+              className="flex-1 py-3.5 bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-semibold rounded-2xl shadow-lg shadow-emerald-500/30 hover:shadow-emerald-500/40 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+            >
+              📞 Chiama
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <style>{`
+        @keyframes modalSlideUp {
+          from { transform: translateY(20px); opacity: 0; }
+          to { transform: translateY(0); opacity: 1; }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // MODAL CONFERMA CONSEGNA
 // ═══════════════════════════════════════════════════════════════════════════
 function ConfirmDeliveryModal({ 
@@ -971,6 +1051,8 @@ function RiderDashboardContent() {
   const [confirmDeliveryOrder, setConfirmDeliveryOrder] = useState<Order | null>(null);
   const [confirmPickupOrder, setConfirmPickupOrder] = useState<Order | null>(null); // NUOVO: modal ritiro
   const [accessOrder, setAccessOrder] = useState<Order | null>(null);
+  // 📞 Stato per la modal di conferma chiamata operatore
+  const [callConfirm, setCallConfirm] = useState<{ order: Order; operatorId?: string; operatorName?: string } | null>(null);
   const [showConfetti, setShowConfetti] = useState(false);
   
   // 📦 Modal riepilogo biancheria per giorno
@@ -2361,6 +2443,16 @@ function RiderDashboardContent() {
             onClose={() => setAccessOrder(null)}
           />
 
+          <CallOperatorModal
+            order={callConfirm?.order || null}
+            operatorName={callConfirm?.operatorName}
+            onConfirm={() => {
+              if (callConfirm) callOperator(callConfirm.operatorId, callConfirm.operatorName);
+              setCallConfirm(null);
+            }}
+            onCancel={() => setCallConfirm(null)}
+          />
+
           {/* Header - fisso */}
           <div className="flex-shrink-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-4 py-6 rounded-b-3xl shadow-lg">
             <div className="flex items-center justify-between mb-2">
@@ -2503,7 +2595,7 @@ function RiderDashboardContent() {
                               {order.cleaning.operators.map((op, idx) => (
                                 <button
                                   key={op.id || idx}
-                                  onClick={() => callOperator(op.id, op.name)}
+                                  onClick={() => setCallConfirm({ order, operatorId: op.id, operatorName: op.name })}
                                   className="flex-1 min-w-[120px] py-2 bg-emerald-500 text-white text-sm font-semibold rounded-xl flex items-center justify-center gap-1.5 hover:bg-emerald-600 active:scale-95 transition-all"
                                 >
                                   📞 Chiama{order.cleaning.operators.length > 1 ? ` ${op.name}` : " operatore"}
