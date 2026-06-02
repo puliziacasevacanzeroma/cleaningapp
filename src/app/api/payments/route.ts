@@ -111,6 +111,75 @@ export async function POST(request: NextRequest) {
 
       // @ts-expect-error TODO-FIX: TS2345 Argument of type 'string | number' is not assignable to parameter of type 'strin...
       const amountNum = parseFloat(amount);
+
+      // ═══════════════════════════════════════════════════════════════════
+      // 📦 SCATOLA NERA PAGAMENTI (paymentAudit)
+      // ═══════════════════════════════════════════════════════════════════
+      // Registra OGNI dettaglio dell'incasso così, se ricompare un acconto
+      // inatteso, sappiamo ESATTAMENTE cosa è stato cliccato e con quali
+      // numeri — senza dover indagare a posteriori.
+      //
+      // Per ogni pagamento salva:
+      //   - chi/quando: createdBy, timestamp
+      //   - cosa ha cliccato: type ("SALDO" = pulsante "Incassa Totale",
+      //     altro = acconto/manuale)
+      //   - cosa MOSTRAVA LA PAGINA al click: totalDue (saldo mostrato),
+      //     totalPaid (già pagato), amount (importo registrato)
+      //   - cosa dice il MOTORE nello stesso istante: totaleServizi e saldo
+      //     ricalcolati lato server con computeOwnerDebt (fonte canonica)
+      //   - lo SCARTO tra ciò che hai incassato e il totale reale del motore
+      //     → se ≠ 0, è il seme di un futuro acconto: qui lo vediamo subito.
+      // È solo logging: non altera il pagamento. Se fallisce, non blocca.
+      try {
+        const { computeOwnerDebt } = await import("~/lib/payments/computeOwnerDebt");
+        const debtNow = await computeOwnerDebt(proprietarioId);
+        const monthNow = debtNow?.debts.find(
+          (d) => d.month === Number(month) && d.year === Number(year)
+        );
+        const totaleServiziMotore = monthNow ? monthNow.totaleServizi : null;
+        const saldoMotoreDopoPagamento = monthNow ? monthNow.saldo : null;
+
+        // Scarto tra importo incassato e ciò che la pagina diceva di dover incassare
+        const totalDueNum = parseFloat(String(totalDue ?? "0")) || 0;
+        const scartoIncassoVsMostrato = Math.round((amountNum - totalDueNum) * 100) / 100;
+        // Scarto tra importo incassato e totale REALE del motore (al netto del già pagato)
+        const giaPagatoPrima = parseFloat(String(totalPaid ?? "0")) || 0;
+        const totaleMotoreVsIncassato =
+          totaleServiziMotore !== null
+            ? Math.round((totaleServiziMotore - (giaPagatoPrima + amountNum)) * 100) / 100
+            : null;
+
+        await adminDb.collection("paymentAudit").add({
+          // riferimenti
+          paymentId,
+          proprietarioId,
+          proprietarioName: proprietarioName || null,
+          month: Number(month),
+          year: Number(year),
+          // cosa è stato cliccato
+          pulsante: type === "SALDO" ? "INCASSA_TOTALE" : `ACCONTO/${type}`,
+          type,
+          method,
+          note: note || null,
+          // i numeri al momento del click (dal browser/pagina)
+          importoRegistrato: amountNum,
+          totaleDaIncassare_mostratoDallaPagina: totalDueNum,
+          giaPagatoPrima,
+          // i numeri ricalcolati dal MOTORE nello stesso istante (canonico)
+          totaleServizi_motore: totaleServiziMotore,
+          saldoDopoPagamento_motore: saldoMotoreDopoPagamento,
+          // gli SCARTI (qui si vede subito se nascerà un acconto)
+          scarto_incassato_meno_mostrato: scartoIncassoVsMostrato,
+          scarto_totaleMotore_meno_incassato: totaleMotoreVsIncassato,
+          // chi/quando
+          createdBy: currentUser.id,
+          createdByName: currentUser.name || currentUser.email || currentUser.id,
+          timestamp: Timestamp.now(),
+        });
+      } catch (auditErr) {
+        console.error("Errore scatola nera paymentAudit (non bloccante):", auditErr);
+      }
+
       await notifyOwnerPaymentReceived(
         proprietarioId, amountNum,
         // @ts-expect-error TODO-FIX: TS2345 Argument of type 'string | number' is not assignable to parameter of type 'strin...
