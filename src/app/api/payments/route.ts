@@ -255,7 +255,16 @@ export async function POST(request: NextRequest) {
         const userDoc = await adminDb.collection("users").doc(proprietarioId).get();
         if (userDoc.exists) {
           const userData = userDoc.data() as Record<string, any>;
-          if (userData.paymentBlock?.active === true && userData.paymentBlock?.overriddenByAdmin !== true) {
+          // 🔧 FIX: l'auto-sblocco ora scatta ANCHE sugli account sbloccati a
+          // mano (overriddenByAdmin: true). Prima la condizione li escludeva,
+          // quindi dopo il pagamento restavano per sempre con il banner
+          // "Sbloccato manualmente" + pulsante "Risospendi", anche una volta
+          // tornati in regola. Lo sblocco manuale serve a evitare che il CRON
+          // ri-sospenda; ma se il proprietario ha SALDATO e non ha più debiti
+          // scaduti, lo stato va ripulito del tutto — non c'è più nulla da
+          // proteggere. La sicurezza resta in `stillHasOverdueDebt`: se ci
+          // sono ancora debiti scaduti, non tocchiamo niente.
+          if (userData.paymentBlock?.active === true) {
             const { computeOwnerDebt } = await import("~/lib/payments/computeOwnerDebt");
             const debtSummary = await computeOwnerDebt(proprietarioId);
             const stillHasOverdueDebt = debtSummary !== null
