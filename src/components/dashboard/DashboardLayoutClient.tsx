@@ -325,6 +325,7 @@ export function DashboardLayoutClient({
               {/* 📅 Turni */}
               <Link
                 href="/dashboard/turni"
+                prefetch={false}
                 className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
                   isActive("/dashboard/turni")
                     ? "text-white bg-gradient-to-r from-indigo-500 to-purple-600 shadow-lg shadow-indigo-500/30"
