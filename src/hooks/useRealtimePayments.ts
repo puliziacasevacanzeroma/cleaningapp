@@ -176,10 +176,13 @@ async function loadStaticData(): Promise<boolean> {
   try {
     const startTime = Date.now();
 
-    const [propsSnap, inventorySnap] = await Promise.all([
-      getDocs(query(collection(db, "properties"), where("status", "==", "ACTIVE"))),
-      getDocs(collection(db, "inventory")),
-    ]);
+    const tProps = Date.now();
+    const propsSnap = await getDocs(query(collection(db, "properties"), where("status", "==", "ACTIVE")));
+    console.log(`⏱️ [PERF] → properties: ${Date.now() - tProps}ms, ${propsSnap.docs.length} docs`);
+
+    const tInv = Date.now();
+    const inventorySnap = await getDocs(collection(db, "inventory"));
+    console.log(`⏱️ [PERF] → inventory: ${Date.now() - tInv}ms, ${inventorySnap.docs.length} docs`);
 
     staticCache.properties.clear();
     propsSnap.docs.forEach(doc => {
@@ -842,12 +845,17 @@ export function useRealtimePayments(month: number, year: number) {
     let mounted = true;
 
     async function setup() {
+      // ⚡ PARALLELO: avvio loadStaticData SENZA bloccare le altre query.
+      // Prima static (7,5s) girava da solo PRIMA di tutto, mettendo in coda
+      // cleanings/orders. Ora parte in parallelo: lo static aggiorna il suo
+      // flag quando è pronto, ma cleanings/orders/payments scaricano subito.
       const tStatic = Date.now();
-      const ok = await loadStaticData();
-      console.log(`⏱️ [PERF] loadStaticData (properties+inventory): ${Date.now() - tStatic}ms`);
-      if (!mounted) return;
-      if (!ok) { setError("Errore caricamento dati statici"); return; }
-      setStaticLoaded(true);
+      loadStaticData().then((ok) => {
+        if (!mounted) return;
+        console.log(`⏱️ [PERF] loadStaticData (properties+inventory): ${Date.now() - tStatic}ms`);
+        if (!ok) { setError("Errore caricamento dati statici"); return; }
+        setStaticLoaded(true);
+      });
 
       const tFirstSnap = Date.now();
 
