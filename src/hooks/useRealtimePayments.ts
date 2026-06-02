@@ -802,6 +802,17 @@ export function useRealtimePayments(month: number, year: number) {
 
   const loading = !staticLoaded || !cleaningsLoaded || !ordersLoaded || !paymentsLoaded || !overridesLoaded;
 
+  // ⏱️ [PERF] log del tempo totale fino a pagina pronta
+  const perfStartRef = useRef<number>(Date.now());
+  const perfLoggedRef = useRef(false);
+  useEffect(() => {
+    if (loading) { perfLoggedRef.current = false; if (!perfStartRef.current) perfStartRef.current = Date.now(); }
+    else if (!perfLoggedRef.current) {
+      perfLoggedRef.current = true;
+      console.log(`⏱️ [PERF] ===== PAGINA PRONTA in ${Date.now() - perfStartRef.current}ms =====`);
+    }
+  }, [loading]);
+
   // Calcola range: dal 1 luglio anno precedente al 31 dicembre anno corrente
   // Copre: 6 mesi timeline indietro + intero anno corrente + possibilità di navigare avanti
   const rangeKey = `${year}`;
@@ -831,10 +842,14 @@ export function useRealtimePayments(month: number, year: number) {
     let mounted = true;
 
     async function setup() {
+      const tStatic = Date.now();
       const ok = await loadStaticData();
+      console.log(`⏱️ [PERF] loadStaticData (properties+inventory): ${Date.now() - tStatic}ms`);
       if (!mounted) return;
       if (!ok) { setError("Errore caricamento dati statici"); return; }
       setStaticLoaded(true);
+
+      const tFirstSnap = Date.now();
 
       // ⚡ CLEANINGS — intero range, filtro scheduledDate
       const unsubC = onSnapshot(
@@ -845,6 +860,7 @@ export function useRealtimePayments(month: number, year: number) {
         ),
         (snap) => {
           if (!mounted) return;
+          console.log(`⏱️ [PERF] cleanings: primo dato dopo ${Date.now() - tFirstSnap}ms, ${snap.docs.length} docs`);
           const data = snap.docs
             .map(d => ({ id: d.id, ...(d.data() as Record<string, any>) }))
             // @ts-expect-error TODO-FIX: TS2339 Property 'status' does not exist on type '{ id: string; }'.
@@ -865,6 +881,7 @@ export function useRealtimePayments(month: number, year: number) {
         ),
         (snap) => {
           if (!mounted) return;
+          console.log(`⏱️ [PERF] orders: primo dato dopo ${Date.now() - tFirstSnap}ms, ${snap.docs.length} docs`);
           const data = snap.docs
             .map(d => ({ id: d.id, ...(d.data() as Record<string, any>) }))
             // @ts-expect-error TODO-FIX: TS2339 Property 'status' does not exist on type '{ id: string; }'.
@@ -881,6 +898,7 @@ export function useRealtimePayments(month: number, year: number) {
         collection(db, "payments"),
         (snap) => {
           if (!mounted) return;
+          console.log(`⏱️ [PERF] payments: primo dato dopo ${Date.now() - tFirstSnap}ms, ${snap.docs.length} docs`);
           const data = snap.docs.map(d => ({ id: d.id, ...(d.data() as Record<string, any>) })) as Payment[];
           setAllPayments(data);
           setPaymentsLoaded(true);
@@ -890,12 +908,11 @@ export function useRealtimePayments(month: number, year: number) {
       unsubscribesRef.current.push(unsubP);
 
       // ⚡ PAYMENT OVERRIDES — tutti (sono pochi). Servono per il calcolo carryover
-      // dei mesi precedenti: se admin ha modificato il totale di un mese passato,
-      // il carryover deve usare l'override come "servizi del mese", non la somma raw.
       const unsubOv = onSnapshot(
         collection(db, "paymentOverrides"),
         (snap) => {
           if (!mounted) return;
+          console.log(`⏱️ [PERF] overrides: primo dato dopo ${Date.now() - tFirstSnap}ms, ${snap.docs.length} docs`);
           const data = snap.docs.map(d => ({ id: d.id, ...(d.data() as Record<string, any>) }));
           setAllOverrides(data);
           setOverridesLoaded(true);
