@@ -523,7 +523,7 @@ export default function PagamentiPage() {
   }, [currentMonth, currentYear]);
 
   // 🚀 TIMELINE REAL-TIME: Caricamento ISTANTANEO dalla cache Firebase!
-  const { loading: loadingTable, tableData } = useRealtimePaymentsTimeline(timelineMonths);
+  const { loading: loadingTable, tableData } = useRealtimePaymentsTimeline(timelineMonths, mainTab === "timeline");
 
   // Legacy fetchTableData - mantenuto per compatibilità con azioni (refresh dopo pagamento)
   const fetchTableData = useCallback(async () => {

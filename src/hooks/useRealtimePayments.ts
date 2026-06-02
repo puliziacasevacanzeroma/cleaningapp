@@ -1080,7 +1080,7 @@ export interface TimelineClientData {
   months: TimelineMonthData[];
 }
 
-export function useRealtimePaymentsTimeline(timelineMonths: { month: number; year: number }[]) {
+export function useRealtimePaymentsTimeline(timelineMonths: { month: number; year: number }[], enabled: boolean = true) {
   const [loading, setLoading] = useState(true);
   const [tableData, setTableData] = useState<TimelineClientData[]>([]);
 
@@ -1088,6 +1088,12 @@ export function useRealtimePaymentsTimeline(timelineMonths: { month: number; yea
     let cancelled = false;
 
     async function loadTimelineData() {
+      // ⚡ LAZY: non caricare finché la timeline non è effettivamente visibile.
+      // Evita il doppio download (lista + timeline) all'apertura della pagina,
+      // che era la causa principale dei 7-10s di attesa.
+      if (!enabled) {
+        return;
+      }
       if (timelineMonths.length === 0) {
         setTableData([]);
         setLoading(false);
@@ -1231,7 +1237,7 @@ export function useRealtimePaymentsTimeline(timelineMonths: { month: number; yea
 
     loadTimelineData();
     return () => { cancelled = true; };
-  }, [timelineMonths]);
+  }, [timelineMonths, enabled]);
 
   return { loading, tableData };
 }
