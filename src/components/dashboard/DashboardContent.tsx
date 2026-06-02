@@ -637,8 +637,22 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
     return () => unsubscribe();
   }, []);
 
+  // 🔑 Ricorda l'ultimo GIORNO per cui pulizie/ordini sono stati caricati.
+  // Serve a mostrare lo skeleton SOLO al cambio giorno (frecce), non ad ogni
+  // aggiornamento realtime: così il banner non lampeggia restando sullo stesso giorno.
+  const cleaningsDateKeyRef = useRef<string | null>(null);
+  const ordersDateKeyRef = useRef<string | null>(null);
+
   // 🔴 LISTENER REALTIME PER PULIZIE - Si aggiorna automaticamente
   useEffect(() => {
+    // ⚡ FIX FLASH: se è cambiato il GIORNO, segnala "in caricamento" subito,
+    // così il banner mostra lo skeleton invece dei numeri del giorno precedente.
+    const dateKey = selectedDate.toDateString();
+    if (cleaningsDateKeyRef.current !== dateKey) {
+      cleaningsDateKeyRef.current = dateKey;
+      setLoadingCleanings(true);
+    }
+
     const startOfDay = new Date(selectedDate);
     startOfDay.setHours(0, 0, 0, 0);
     const endOfDay = new Date(selectedDate);
@@ -753,7 +767,12 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
     const endOfDay = new Date(selectedDate);
     endOfDay.setHours(23, 59, 59, 999);
 
-    setLoadingOrders(true);
+    // ⚡ FIX FLASH: skeleton solo al cambio giorno, non ad ogni aggiornamento realtime.
+    const dateKey = selectedDate.toDateString();
+    if (ordersDateKeyRef.current !== dateKey) {
+      ordersDateKeyRef.current = dateKey;
+      setLoadingOrders(true);
+    }
 
     const ordersQuery = query(
       collection(db, "orders"),
@@ -1832,6 +1851,10 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
     }
   };
 
+  // ⚡ FIX FLASH: true finché i dati del giorno selezionato non sono arrivati.
+  // Durante questo stato il banner mostra skeleton invece di numeri del giorno vecchio.
+  const statsLoading = loadingCleanings || loadingOrders;
+
   // Mobile computed values
   const mobileStats = (() => {
     // Calcolo pulizie (inclusa maggiorazione festività)
@@ -2025,7 +2048,11 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
               <div className="flex items-start justify-between mb-3">
                 <div>
                   <p className="text-white/70 text-xs font-medium mb-1">Guadagno di oggi</p>
-                  <p className="text-4xl font-black text-white">€ {mobileStats.totalEarnings}</p>
+                  {statsLoading ? (
+                    <span className="inline-block h-9 w-32 rounded-lg bg-white/25 animate-pulse" />
+                  ) : (
+                    <p className="text-4xl font-black text-white">€ {mobileStats.totalEarnings}</p>
+                  )}
                 </div>
                 <div className="inline-flex items-center gap-1 bg-white/20 rounded-full px-2.5 py-1">
                   <svg className="w-3.5 h-3.5 text-emerald-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2038,25 +2065,45 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
               <div className="flex items-center gap-4 mb-3 pb-3 border-b border-white/20">
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full bg-cyan-300"></div>
-                  <span className="text-xs text-white/80">Pulizie: <span className="font-bold text-white">€{mobileStats.cleaningsRevenue}</span></span>
+                  <span className="text-xs text-white/80">Pulizie: {statsLoading ? (
+                    <span className="inline-block h-3 w-10 rounded bg-white/25 animate-pulse align-middle" />
+                  ) : (
+                    <span className="font-bold text-white">€{mobileStats.cleaningsRevenue}</span>
+                  )}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full bg-violet-300"></div>
-                  <span className="text-xs text-white/80">Biancheria: <span className="font-bold text-white">€{mobileStats.ordersRevenue}</span></span>
+                  <span className="text-xs text-white/80">Biancheria: {statsLoading ? (
+                    <span className="inline-block h-3 w-10 rounded bg-white/25 animate-pulse align-middle" />
+                  ) : (
+                    <span className="font-bold text-white">€{mobileStats.ordersRevenue}</span>
+                  )}</span>
                 </div>
               </div>
               
               <div className="grid grid-cols-3 gap-2 flex-1">
                 <button onClick={() => setStatusFilter(statusFilter === 'todo' ? null : 'todo')} className={'bg-white/20 rounded-2xl p-2 text-center transition-all flex flex-col items-center justify-center' + (statusFilter === 'todo' ? ' ring-2 ring-white/50' : '')}>
-                  <p className="text-2xl font-black text-white">{mobileStats.todo}</p>
+                  {statsLoading ? (
+                    <span className="h-7 w-7 rounded bg-white/25 animate-pulse" />
+                  ) : (
+                    <p className="text-2xl font-black text-white">{mobileStats.todo}</p>
+                  )}
                   <p className="text-[10px] font-medium text-white/80">Da fare</p>
                 </button>
                 <button onClick={() => setStatusFilter(statusFilter === 'inprogress' ? null : 'inprogress')} className={'bg-white/20 rounded-2xl p-2 text-center transition-all flex flex-col items-center justify-center' + (statusFilter === 'inprogress' ? ' ring-2 ring-white/50' : '')}>
-                  <p className="text-2xl font-black text-white">{mobileStats.inprogress}</p>
+                  {statsLoading ? (
+                    <span className="h-7 w-7 rounded bg-white/25 animate-pulse" />
+                  ) : (
+                    <p className="text-2xl font-black text-white">{mobileStats.inprogress}</p>
+                  )}
                   <p className="text-[10px] font-medium text-white/80">In corso</p>
                 </button>
                 <button onClick={() => setStatusFilter(statusFilter === 'done' ? null : 'done')} className={'bg-white/20 rounded-2xl p-2 text-center transition-all flex flex-col items-center justify-center' + (statusFilter === 'done' ? ' ring-2 ring-white/50' : '')}>
-                  <p className="text-2xl font-black text-emerald-300">{mobileStats.done}</p>
+                  {statsLoading ? (
+                    <span className="h-7 w-7 rounded bg-white/25 animate-pulse" />
+                  ) : (
+                    <p className="text-2xl font-black text-emerald-300">{mobileStats.done}</p>
+                  )}
                   <p className="text-[10px] font-medium text-white/80">Completate</p>
                 </button>
               </div>
