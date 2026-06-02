@@ -2048,9 +2048,7 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
               <div className="flex items-start justify-between mb-3">
                 <div>
                   <p className="text-white/70 text-xs font-medium mb-1">Guadagno di oggi</p>
-                  {statsLoading ? (
-                    <span className="inline-block h-9 w-32 rounded-lg bg-white/25 animate-pulse" />
-                  ) : (
+                  {statsLoading ? null : (
                     <p className="text-4xl font-black text-white">€ {mobileStats.totalEarnings}</p>
                   )}
                 </div>
@@ -2065,17 +2063,13 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
               <div className="flex items-center gap-4 mb-3 pb-3 border-b border-white/20">
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full bg-cyan-300"></div>
-                  <span className="text-xs text-white/80">Pulizie: {statsLoading ? (
-                    <span className="inline-block h-3 w-10 rounded bg-white/25 animate-pulse align-middle" />
-                  ) : (
+                  <span className="text-xs text-white/80">Pulizie: {statsLoading ? null : (
                     <span className="font-bold text-white">€{mobileStats.cleaningsRevenue}</span>
                   )}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full bg-violet-300"></div>
-                  <span className="text-xs text-white/80">Biancheria: {statsLoading ? (
-                    <span className="inline-block h-3 w-10 rounded bg-white/25 animate-pulse align-middle" />
-                  ) : (
+                  <span className="text-xs text-white/80">Biancheria: {statsLoading ? null : (
                     <span className="font-bold text-white">€{mobileStats.ordersRevenue}</span>
                   )}</span>
                 </div>
@@ -2083,25 +2077,19 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
               
               <div className="grid grid-cols-3 gap-2 flex-1">
                 <button onClick={() => setStatusFilter(statusFilter === 'todo' ? null : 'todo')} className={'bg-white/20 rounded-2xl p-2 text-center transition-all flex flex-col items-center justify-center' + (statusFilter === 'todo' ? ' ring-2 ring-white/50' : '')}>
-                  {statsLoading ? (
-                    <span className="h-7 w-7 rounded bg-white/25 animate-pulse" />
-                  ) : (
+                  {statsLoading ? null : (
                     <p className="text-2xl font-black text-white">{mobileStats.todo}</p>
                   )}
                   <p className="text-[10px] font-medium text-white/80">Da fare</p>
                 </button>
                 <button onClick={() => setStatusFilter(statusFilter === 'inprogress' ? null : 'inprogress')} className={'bg-white/20 rounded-2xl p-2 text-center transition-all flex flex-col items-center justify-center' + (statusFilter === 'inprogress' ? ' ring-2 ring-white/50' : '')}>
-                  {statsLoading ? (
-                    <span className="h-7 w-7 rounded bg-white/25 animate-pulse" />
-                  ) : (
+                  {statsLoading ? null : (
                     <p className="text-2xl font-black text-white">{mobileStats.inprogress}</p>
                   )}
                   <p className="text-[10px] font-medium text-white/80">In corso</p>
                 </button>
                 <button onClick={() => setStatusFilter(statusFilter === 'done' ? null : 'done')} className={'bg-white/20 rounded-2xl p-2 text-center transition-all flex flex-col items-center justify-center' + (statusFilter === 'done' ? ' ring-2 ring-white/50' : '')}>
-                  {statsLoading ? (
-                    <span className="h-7 w-7 rounded bg-white/25 animate-pulse" />
-                  ) : (
+                  {statsLoading ? null : (
                     <p className="text-2xl font-black text-emerald-300">{mobileStats.done}</p>
                   )}
                   <p className="text-[10px] font-medium text-white/80">Completate</p>
