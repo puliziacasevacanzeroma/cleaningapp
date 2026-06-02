@@ -2103,6 +2103,27 @@ function RiderDashboardContent() {
     window.open(url, '_blank');
   };
 
+  // 📞 Chiama l'operatore: recupera il numero dal DB (via API server, Admin SDK)
+  // e apre il dialer del telefono. Il numero è quello inserito dall'operatore
+  // in fase di registrazione (campo `phone` su users).
+  const callOperator = async (operatorId?: string, operatorName?: string) => {
+    if (!operatorId) {
+      alert("Operatore non disponibile");
+      return;
+    }
+    try {
+      const res = await fetch(`/api/rider/operator-phone?operatorId=${encodeURIComponent(operatorId)}`);
+      const data = await res.json();
+      if (data?.phone) {
+        window.location.href = `tel:${String(data.phone).replace(/\s+/g, "")}`;
+      } else {
+        alert(`Numero di telefono non disponibile per ${operatorName || "l'operatore"}`);
+      }
+    } catch {
+      alert("Impossibile recuperare il numero in questo momento");
+    }
+  };
+
   // Check articoli per preparazione
   const allItemsChecked = preparingOrder?.items?.every(item => checkedItems[item.id]) ?? false;
   const checkedCount = Object.values(checkedItems).filter(Boolean).length;
@@ -2459,6 +2480,7 @@ function RiderDashboardContent() {
                           </div>
                           {/* Badge operatore/i assegnato/i */}
                           {(order.cleaning.operators && order.cleaning.operators.length > 0) ? (
+                            <>
                             <div className="flex items-center gap-2 mt-2 pt-2 border-t border-slate-200">
                               <div className="flex -space-x-1.5">
                                 {order.cleaning.operators.map((op, idx) => (
@@ -2476,6 +2498,19 @@ function RiderDashboardContent() {
                                 {order.cleaning.operators.length > 1 ? `${order.cleaning.operators.length} operatori` : "Assegnato"}
                               </span>
                             </div>
+                            {/* 📞 Chiama operatore (numero recuperato dal DB) */}
+                            <div className="flex flex-wrap gap-2 mt-2">
+                              {order.cleaning.operators.map((op, idx) => (
+                                <button
+                                  key={op.id || idx}
+                                  onClick={() => callOperator(op.id, op.name)}
+                                  className="flex-1 min-w-[120px] py-2 bg-emerald-500 text-white text-sm font-semibold rounded-xl flex items-center justify-center gap-1.5 hover:bg-emerald-600 active:scale-95 transition-all"
+                                >
+                                  📞 Chiama{order.cleaning.operators.length > 1 ? ` ${op.name}` : " operatore"}
+                                </button>
+                              ))}
+                            </div>
+                            </>
                           ) : (
                             <div className="flex items-center gap-2 mt-2 pt-2 border-t border-slate-200">
                               <div className="w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
