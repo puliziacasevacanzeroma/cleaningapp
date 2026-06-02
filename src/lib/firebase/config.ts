@@ -1,5 +1,10 @@
 import { initializeApp, getApps } from "firebase/app";
-import { getFirestore, initializeFirestore } from "firebase/firestore";
+import {
+  getFirestore,
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+} from "firebase/firestore";
 import { getAuth, setPersistence, browserLocalPersistence } from "firebase/auth";
 import { getStorage } from "firebase/storage";
 
@@ -15,17 +20,30 @@ const firebaseConfig = {
 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0]!;
 
-// ⚡ PERF: initializeFirestore con auto-detect long polling.
-// Con un service worker attivo (notifiche push) e certe reti/proxy, la
-// connessione WebSocket di Firestore può fallire e ricadere su long-polling
-// solo DOPO un timeout di ~10-15s → ecco i ~13s di attesa all'apertura.
-// experimentalAutoDetectLongPolling rileva subito il tipo di connessione
-// giusto, eliminando l'attesa del timeout. Se Firestore è già inizializzato
-// (hot reload / doppio import), ricade su getFirestore.
+// ⚡ PERF: initializeFirestore con due ottimizzazioni chiave.
+//
+// 1) experimentalAutoDetectLongPolling — con un service worker attivo (notifiche
+//    push) e certe reti/proxy, la connessione WebSocket di Firestore può fallire
+//    e ricadere su long-polling solo DOPO un timeout di ~10-15s → attesa all'avvio.
+//    L'autodetect sceglie subito il tipo di connessione giusto.
+//
+// 2) persistentLocalCache (IndexedDB) — QUESTA è la chiave della latenza alla
+//    RIAPERTURA. Senza cache persistente, ad ogni apertura dell'app TUTTI i
+//    listener onSnapshot riscaricano i dati dal server da zero (~10s). Con la
+//    cache persistente, onSnapshot serve ISTANTANEAMENTE l'ultimo stato noto dal
+//    disco e poi sincronizza in background solo i delta. Risultato: dati reali
+//    visibili in pochi ms, non in 10 secondi. persistentMultipleTabManager evita
+//    conflitti quando l'app è aperta in più schede contemporaneamente.
+//
+// Se Firestore è già inizializzato (hot reload / doppio import) o IndexedDB non è
+// disponibile (es. modalità privata su alcuni browser), ricade su getFirestore.
 export const db = (() => {
   try {
     return initializeFirestore(app, {
       experimentalAutoDetectLongPolling: true,
+      localCache: persistentLocalCache({
+        tabManager: persistentMultipleTabManager(),
+      }),
     });
   } catch {
     return getFirestore(app);

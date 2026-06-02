@@ -25,6 +25,12 @@ import type {
 
 const COLLECTION = "notifications";
 
+// 🚀 PERF: numero massimo di notifiche caricate nel feed/campanella.
+// Prima i listener scaricavano TUTTA la collezione (migliaia di doc, ~14 MB)
+// ad ogni apertura: saturava la connessione Firestore e bloccava la dashboard.
+// La campanella mostra solo le più recenti, quindi un limit è più che sufficiente.
+const NOTIFICATION_FEED_LIMIT = 100;
+
 // ==================== CREATE ====================
 
 export interface CreateNotificationData {
@@ -251,6 +257,11 @@ export async function getNotificationById(id: string): Promise<FirebaseNotificat
 }
 
 // Ottieni notifiche per admin (tutte quelle destinate ad ADMIN)
+// 🚀 PERF: filtro server-side per recipientRole + ordinamento, invece di scaricare
+//   l'intera collezione e filtrare in memoria. Il limit si applica SOLO se richiesto
+//   (così "segna tutte come lette" / "elimina tutte" continuano a vedere l'elenco
+//   completo delle notifiche admin, ma comunque filtrate per ruolo e non tutta la
+//   collezione). Indice composito presente: recipientRole + createdAt DESC.
 export async function getAdminNotifications(
   options?: { 
     unreadOnly?: boolean; 
@@ -258,11 +269,16 @@ export async function getAdminNotifications(
     limitCount?: number;
   }
 ): Promise<FirebaseNotification[]> {
-  const snapshot = await getDocs(collection(db, COLLECTION));
+  const base = query(
+    collection(db, COLLECTION),
+    where("recipientRole", "in", ["ADMIN", "ALL"]),
+    orderBy("createdAt", "desc")
+  );
+  const q = options?.limitCount ? query(base, limit(options.limitCount)) : base;
+  const snapshot = await getDocs(q);
   
   let notifications = snapshot.docs
-    .map(doc => ({ id: doc.id, ...(doc.data() as Record<string, any>) } as FirebaseNotification))
-    .filter(n => n.recipientRole === "ADMIN" || n.recipientRole === "ALL");
+    .map(doc => ({ id: doc.id, ...(doc.data() as Record<string, any>) } as FirebaseNotification));
   
   if (options?.unreadOnly) {
     notifications = notifications.filter(n => n.status === "UNREAD");
@@ -272,17 +288,7 @@ export async function getAdminNotifications(
     notifications = notifications.filter(n => n.actionRequired && n.actionStatus === "PENDING");
   }
   
-  // Ordina per data decrescente
-  notifications.sort((a, b) => {
-    const dateA = a.createdAt?.toDate?.() || new Date(0);
-    const dateB = b.createdAt?.toDate?.() || new Date(0);
-    return dateB.getTime() - dateA.getTime();
-  });
-  
-  if (options?.limitCount) {
-    notifications = notifications.slice(0, options.limitCount);
-  }
-  
+  // Già ordinate dal server (createdAt desc). Nessun sort/limit client necessario.
   return notifications;
 }
 
@@ -523,55 +529,109 @@ export async function deleteOldNotifications(daysOld: number = 30): Promise<numb
 
 // ==================== REAL-TIME LISTENER ====================
 
+// 🚀 PERF: prima anche questo faceva onSnapshot sull'intera collezione e filtrava
+//   in memoria (recipientId OR ruolo). Ora due query bounded server-side che
+//   coprono esattamente la stessa logica, unite client-side:
+//     Q1: notifiche indirizzate proprio a questo utente (recipientId == userId)
+//     Q2: notifiche di ruolo/ALL SENZA recipientId specifico
+//   Entrambe ordinate per createdAt desc + limit. Indici già presenti:
+//   recipientId+createdAt e recipientRole+createdAt.
 export function subscribeToNotifications(
   recipientRole: string,
   recipientId: string | undefined,
   callback: (notifications: FirebaseNotification[]) => void
 ): Unsubscribe {
-  // Listener real-time sulla collezione
-  return onSnapshot(
-    collection(db, COLLECTION),
-    (snapshot) => {
-      const notifications = snapshot.docs
-        .map(doc => ({ id: doc.id, ...(doc.data() as Record<string, any>) } as FirebaseNotification))
-        .filter(n => {
-          // Se la notifica ha un recipientId specifico, mostrala SOLO a quell'utente
-          if (n.recipientId) {
-            return n.recipientId === recipientId;
-          }
-          // Se non ha recipientId, mostrala a tutti gli utenti del ruolo corrispondente
-          return n.recipientRole === recipientRole.toUpperCase() || n.recipientRole === "ALL";
-        })
-        .sort((a, b) => {
-          const dateA = a.createdAt?.toDate?.() || new Date(0);
-          const dateB = b.createdAt?.toDate?.() || new Date(0);
-          return dateB.getTime() - dateA.getTime();
-        });
-      
-      callback(notifications);
-    },
-    (error) => {
-      console.error("Errore listener notifiche:", error);
-    }
+  const roleUpper = recipientRole.toUpperCase();
+
+  let targeted: FirebaseNotification[] = [];
+  let byRole: FirebaseNotification[] = [];
+
+  const emit = () => {
+    // Unisci, deduplica per id, ordina e taglia al limite
+    const map = new Map<string, FirebaseNotification>();
+    for (const n of targeted) map.set(n.id, n);
+    for (const n of byRole) if (!map.has(n.id)) map.set(n.id, n);
+
+    const merged = Array.from(map.values()).sort((a, b) => {
+      const dateA = a.createdAt?.toDate?.() || new Date(0);
+      const dateB = b.createdAt?.toDate?.() || new Date(0);
+      return dateB.getTime() - dateA.getTime();
+    });
+
+    callback(merged.slice(0, NOTIFICATION_FEED_LIMIT));
+  };
+
+  const unsubs: Unsubscribe[] = [];
+
+  // Q1 — notifiche indirizzate a questo utente specifico
+  if (recipientId) {
+    unsubs.push(
+      onSnapshot(
+        query(
+          collection(db, COLLECTION),
+          where("recipientId", "==", recipientId),
+          orderBy("createdAt", "desc"),
+          limit(NOTIFICATION_FEED_LIMIT)
+        ),
+        (snapshot) => {
+          targeted = snapshot.docs.map(
+            doc => ({ id: doc.id, ...(doc.data() as Record<string, any>) } as FirebaseNotification)
+          );
+          emit();
+        },
+        (error) => console.error("Errore listener notifiche (targeted):", error)
+      )
+    );
+  }
+
+  // Q2 — notifiche di ruolo o ALL. Teniamo solo quelle SENZA recipientId:
+  //   una notifica con recipientId va mostrata SOLO al destinatario (gestita da Q1).
+  unsubs.push(
+    onSnapshot(
+      query(
+        collection(db, COLLECTION),
+        where("recipientRole", "in", [roleUpper, "ALL"]),
+        orderBy("createdAt", "desc"),
+        limit(NOTIFICATION_FEED_LIMIT)
+      ),
+      (snapshot) => {
+        byRole = snapshot.docs
+          .map(doc => ({ id: doc.id, ...(doc.data() as Record<string, any>) } as FirebaseNotification))
+          .filter(n => !n.recipientId);
+        emit();
+      },
+      (error) => console.error("Errore listener notifiche (ruolo):", error)
+    )
   );
+
+  return () => unsubs.forEach(fn => fn());
 }
 
 // Listener specifico per admin
+// 🚀 PERF (root cause latenza dashboard): prima questo listener faceva
+//   onSnapshot(collection(db, "notifications")) SENZA filtri → scaricava l'INTERA
+//   collezione (tutta la storia, ~14 MB) ad ogni apertura dell'app. Su una
+//   connessione Firestore condivisa con gli altri listener della dashboard,
+//   questo download enorme saturava il canale: ecco perché "tutto si aggiornava
+//   insieme" solo dopo ~10s, quando finiva di arrivare la campanella.
+//   ORA: filtro server-side (recipientRole in [ADMIN, ALL]) + ordinamento +
+//   limit. Si scaricano solo le ~100 notifiche più recenti (pochi KB).
+//   Indice composito già presente: notifications.recipientRole + createdAt DESC.
 export function subscribeToAdminNotifications(
   callback: (notifications: FirebaseNotification[]) => void
 ): Unsubscribe {
   return onSnapshot(
-    collection(db, COLLECTION),
+    query(
+      collection(db, COLLECTION),
+      where("recipientRole", "in", ["ADMIN", "ALL"]),
+      orderBy("createdAt", "desc"),
+      limit(NOTIFICATION_FEED_LIMIT)
+    ),
     (snapshot) => {
-      const notifications = snapshot.docs
-        .map(doc => ({ id: doc.id, ...(doc.data() as Record<string, any>) } as FirebaseNotification))
-        .filter(n => n.recipientRole === "ADMIN" || n.recipientRole === "ALL")
-        .sort((a, b) => {
-          const dateA = a.createdAt?.toDate?.() || new Date(0);
-          const dateB = b.createdAt?.toDate?.() || new Date(0);
-          return dateB.getTime() - dateA.getTime();
-        });
-      
+      // Già filtrate e ordinate dal server: nessun filtro/sort client necessario.
+      const notifications = snapshot.docs.map(
+        doc => ({ id: doc.id, ...(doc.data() as Record<string, any>) } as FirebaseNotification)
+      );
       callback(notifications);
     },
     (error) => {

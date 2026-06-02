@@ -25,12 +25,38 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     } catch {}
   }, []);
 
-  // 🚀 PRE-CARICA dati pulizie subito nel layout
-  // Così quando l'utente clicca "Pulizie", i dati sono GIÀ pronti in cache
+  // 🚀 PRE-CARICA dati pulizie — ma SENZA competere col caricamento della home.
+  // Prima partiva immediatamente al mount del layout: i suoi 5 listener (incl.
+  // 12 mesi di pulizie + ordini) saturavano la connessione Firestore in parallelo
+  // ai dati critici della dashboard, contribuendo ai ~10s di attesa.
+  // Ora lo avviamo quando il browser è "idle" (dopo il primo paint e dopo che i
+  // dati della home hanno iniziato ad arrivare): la navigazione verso "Pulizie"
+  // resta istantanea, ma l'apertura della home non paga più questo costo.
   useEffect(() => {
-    if (user?.id && user.role?.toUpperCase() === "ADMIN") {
-      pulizieStore.start(user.id, true);
+    if (!(user?.id && user.role?.toUpperCase() === "ADMIN")) return;
+
+    const uid = user.id;
+    let cancelled = false;
+    const startPreload = () => {
+      if (!cancelled) pulizieStore.start(uid, true);
+    };
+
+    const w = window as any;
+    let idleId: number | undefined;
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    if (typeof w.requestIdleCallback === "function") {
+      idleId = w.requestIdleCallback(startPreload, { timeout: 3000 });
+    } else {
+      timeoutId = setTimeout(startPreload, 1200);
     }
+
+    return () => {
+      cancelled = true;
+      if (idleId !== undefined && typeof w.cancelIdleCallback === "function") {
+        w.cancelIdleCallback(idleId);
+      }
+      if (timeoutId !== undefined) clearTimeout(timeoutId);
+    };
   }, [user?.id, user?.role]);
 
   // LISTENER REALTIME per contare proprietà pending

@@ -95,7 +95,12 @@ export function DashboardLayoutClient({
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  // 🚀 Prefetch route principali per navigazione istantanea
+  // 🚀 Prefetch route principali per navigazione istantanea.
+  // PERF: prima partiva immediatamente e ad OGNI cambio pathname, scaricando i
+  // bundle di 6 pagine pesanti (incl. DashboardContent ~188 KB, PropertyServiceConfig
+  // ~375 KB) proprio mentre la home stava caricando i suoi dati → contesa di rete/CPU
+  // su mobile ("altre pagine già caricate"). Ora: una sola volta, a browser idle,
+  // così la navigazione resta istantanea ma l'avvio della home non ne paga il costo.
   useEffect(() => {
     const routes = [
       "/dashboard",
@@ -105,10 +110,27 @@ export function DashboardLayoutClient({
       "/dashboard/utenti",
       "/dashboard/assegnazioni",
     ];
-    routes.forEach(route => {
-      if (route !== pathname) router.prefetch(route);
-    });
-  }, [pathname, router]);
+    const doPrefetch = () => {
+      routes.forEach(route => router.prefetch(route));
+    };
+
+    const w = window as any;
+    let idleId: number | undefined;
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    if (typeof w.requestIdleCallback === "function") {
+      idleId = w.requestIdleCallback(doPrefetch, { timeout: 4000 });
+    } else {
+      timeoutId = setTimeout(doPrefetch, 2000);
+    }
+
+    return () => {
+      if (idleId !== undefined && typeof w.cancelIdleCallback === "function") {
+        w.cancelIdleCallback(idleId);
+      }
+      if (timeoutId !== undefined) clearTimeout(timeoutId);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [pendingCount, setPendingCount] = useState(pendingPropertiesCount);
   const [pendingUsersCount, setPendingUsersCount] = useState(0);
   const [openMenus, setOpenMenus] = useState<Record<string, boolean>>({
