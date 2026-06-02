@@ -322,6 +322,14 @@ export default function PagamentiPage() {
   const [quickPayClient, setQuickPayClient] = useState<ClientStats | null>(null);
   const [editingService, setEditingService] = useState<ServiceDetail | null>(null);
   const [confirmSaldoModal, setConfirmSaldoModal] = useState<{ client: ClientStats; amount: number } | null>(null);
+  // Modale di conferma generica (stile pagina) per azioni sì/no
+  const [confirmModal, setConfirmModal] = useState<{
+    title: string;
+    message: string;
+    confirmLabel: string;
+    tone: "emerald" | "red" | "amber";
+    onConfirm: () => void;
+  } | null>(null);
   const [showNewPaymentModal, setShowNewPaymentModal] = useState(false); // Modal nuovo pagamento
   const [newPaymentSearch, setNewPaymentSearch] = useState(""); // Ricerca nel modal
   
@@ -390,48 +398,63 @@ export default function PagamentiPage() {
 
   // 🟢 Toggle esenzione permanente dal blocco pagamenti
   const handleToggleExempt = async (proprietarioId: string, proprietarioName: string, enable: boolean) => {
-    const msg = enable
-      ? `Rendere ${proprietarioName} ESENTE dal blocco?\n\nNon verrà mai sospeso automaticamente, anche con pagamenti scaduti. Usalo per clienti con termini di pagamento concordati diversi.`
-      : `Rimuovere l'esenzione di ${proprietarioName}?\n\nTornerà a seguire le regole automatiche di sospensione.`;
-    if (!confirm(msg)) return;
-    try {
-      const res = await fetch('/api/payment-block', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'set_exempt', proprietarioId, exempt: enable }),
-      });
-      if (res.ok) {
-        setSuccessMessage(enable ? '✅ Cliente reso esente' : '✅ Esenzione rimossa');
-        setTimeout(() => setSuccessMessage(null), 3000);
-      } else {
-        const data = await res.json();
-        setLocalError(data.error || 'Errore aggiornamento esenzione');
+    const doToggle = async () => {
+      try {
+        const res = await fetch('/api/payment-block', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'set_exempt', proprietarioId, exempt: enable }),
+        });
+        if (res.ok) {
+          setSuccessMessage(enable ? '✅ Cliente reso esente' : '✅ Esenzione rimossa');
+          setTimeout(() => setSuccessMessage(null), 3000);
+        } else {
+          const data = await res.json();
+          setLocalError(data.error || 'Errore aggiornamento esenzione');
+        }
+      } catch {
+        setLocalError('Errore di rete');
       }
-    } catch {
-      setLocalError('Errore di rete');
-    }
+    };
+    setConfirmModal({
+      title: enable ? `Rendere ${proprietarioName} esente?` : `Rimuovere l'esenzione di ${proprietarioName}?`,
+      message: enable
+        ? "Non verrà mai sospeso automaticamente, anche con pagamenti scaduti. Usalo per clienti con termini di pagamento concordati diversi."
+        : "Tornerà a seguire le regole automatiche di sospensione (blocco se ha pagamenti scaduti).",
+      confirmLabel: enable ? "Rendi esente" : "Rimuovi esenzione",
+      tone: enable ? "emerald" : "amber",
+      onConfirm: () => { setConfirmModal(null); doToggle(); },
+    });
   };
 
   const isOwnerExempt = (proprietarioId: string): boolean => exemptOwners.has(proprietarioId);
 
   const handleUnblockOwner = async (proprietarioId: string, proprietarioName: string) => {
-    if (!confirm(`Sbloccare l'account di ${proprietarioName}?\n\nL'utente potrà usare il gestionale anche se ha pagamenti scaduti.`)) return;
-    try {
-      const res = await fetch('/api/payment-block', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'override', proprietarioId }),
-      });
-      if (res.ok) {
-        setSuccessMessage('✅ Account sbloccato');
-        setTimeout(() => setSuccessMessage(null), 3000);
-      } else {
-        const data = await res.json();
-        setLocalError(data.error || 'Errore durante lo sblocco');
+    const doUnblock = async () => {
+      try {
+        const res = await fetch('/api/payment-block', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'override', proprietarioId }),
+        });
+        if (res.ok) {
+          setSuccessMessage('✅ Account sbloccato');
+          setTimeout(() => setSuccessMessage(null), 3000);
+        } else {
+          const data = await res.json();
+          setLocalError(data.error || 'Errore durante lo sblocco');
+        }
+      } catch {
+        setLocalError('Errore di rete');
       }
-    } catch {
-      setLocalError('Errore di rete');
-    }
+    };
+    setConfirmModal({
+      title: `Sbloccare ${proprietarioName}?`,
+      message: "L'utente potrà usare il gestionale anche se ha pagamenti scaduti.",
+      confirmLabel: "Sblocca",
+      tone: "emerald",
+      onConfirm: () => { setConfirmModal(null); doUnblock(); },
+    });
   };
 
   const isOwnerBlocked = (proprietarioId: string): boolean => {
@@ -446,23 +469,31 @@ export default function PagamentiPage() {
   };
 
   const handleResuspendOwner = async (proprietarioId: string, proprietarioName: string) => {
-    if (!confirm(`Risospendere l'account di ${proprietarioName}?\n\nL'utente vedrà di nuovo la modal di blocco e potrà accedere solo ai pagamenti.`)) return;
-    try {
-      const res = await fetch('/api/payment-block', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'activate', proprietarioId, reason: 'Risospeso manualmente dall\'amministratore', force: true }),
-      });
-      if (res.ok) {
-        setSuccessMessage('✅ Account risospeso');
-        setTimeout(() => setSuccessMessage(null), 3000);
-      } else {
-        const data = await res.json();
-        setLocalError(data.error || 'Errore durante la sospensione');
+    const doResuspend = async () => {
+      try {
+        const res = await fetch('/api/payment-block', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'activate', proprietarioId, reason: 'Risospeso manualmente dall\'amministratore', force: true }),
+        });
+        if (res.ok) {
+          setSuccessMessage('✅ Account risospeso');
+          setTimeout(() => setSuccessMessage(null), 3000);
+        } else {
+          const data = await res.json();
+          setLocalError(data.error || 'Errore durante la sospensione');
+        }
+      } catch {
+        setLocalError('Errore di rete');
       }
-    } catch {
-      setLocalError('Errore di rete');
-    }
+    };
+    setConfirmModal({
+      title: `Risospendere ${proprietarioName}?`,
+      message: "L'utente vedrà di nuovo la schermata di blocco e potrà accedere solo ai pagamenti.",
+      confirmLabel: "Risospendi",
+      tone: "red",
+      onConfirm: () => { setConfirmModal(null); doResuspend(); },
+    });
   };
 
   useEffect(() => {
@@ -2100,6 +2131,39 @@ export default function PagamentiPage() {
               <button onClick={() => setConfirmSaldoModal(null)} className="flex-1 py-3 border-2 border-slate-200 rounded-xl font-semibold text-slate-600 hover:bg-slate-50">Annulla</button>
               <button onClick={() => { handleSubmitPayment(confirmSaldoModal.client.proprietarioId, confirmSaldoModal.client.proprietarioName, confirmSaldoModal.amount, confirmSaldoModal.client.totaleEffettivo, confirmSaldoModal.client.totalePagato); setConfirmSaldoModal(null); setQuickPayClient(null); }}
                 className="flex-1 py-3 bg-emerald-500 text-white rounded-xl font-semibold hover:bg-emerald-600 flex items-center justify-center gap-2">{Icons.check} Conferma</button>
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  };
+
+  // Modale di conferma generica, stile pagina (sostituisce confirm() nativo)
+  const ConfirmModal = () => {
+    if (!confirmModal) return null;
+    const tone = confirmModal.tone;
+    const ring = tone === "red" ? "from-red-400 to-rose-600" : tone === "amber" ? "from-amber-400 to-orange-500" : "from-emerald-400 to-emerald-600";
+    const btn = tone === "red" ? "bg-red-500 hover:bg-red-600" : tone === "amber" ? "bg-amber-500 hover:bg-amber-600" : "bg-emerald-500 hover:bg-emerald-600";
+    const icon = tone === "red"
+      ? <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+      : tone === "amber"
+      ? <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+      : <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />;
+    return (
+      <>
+        <div className="fixed inset-0 bg-black/70 z-[120]" onClick={() => setConfirmModal(null)} />
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+          <div className="bg-white max-w-sm w-full rounded-2xl shadow-2xl p-6">
+            <div className="text-center mb-6">
+              <div className={`w-14 h-14 bg-gradient-to-br ${ring} rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg text-white`}>
+                <svg className="w-7 h-7" fill="currentColor" viewBox="0 0 20 20">{icon}</svg>
+              </div>
+              <h3 className="text-lg font-bold text-slate-800 mb-2">{confirmModal.title}</h3>
+              <p className="text-sm text-slate-500 leading-relaxed">{confirmModal.message}</p>
+            </div>
+            <div className="flex gap-3">
+              <button onClick={() => setConfirmModal(null)} className="flex-1 py-3 border-2 border-slate-200 rounded-xl font-semibold text-slate-600 hover:bg-slate-50">Annulla</button>
+              <button onClick={confirmModal.onConfirm} className={`flex-1 py-3 ${btn} text-white rounded-xl font-semibold`}>{confirmModal.confirmLabel}</button>
             </div>
           </div>
         </div>
@@ -4213,6 +4277,7 @@ export default function PagamentiPage() {
       {/* Modals - solo dopo mount per evitare hydration mismatch */}
       {mounted && <QuickPayModal />}
       {mounted && <ConfirmSaldoModal />}
+      {mounted && <ConfirmModal />}
       {mounted && <ServiceEditModal />}
       {mounted && <DangerousActionConfirmModal />}
       {mounted && <BiancheriaEditModal />}
