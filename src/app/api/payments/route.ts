@@ -120,6 +120,65 @@ export async function POST(request: NextRequest) {
         month, year
       );
 
+      // ═══════════════════════════════════════════════════════════════════
+      // 🔒 LUCCHETTO MORBIDO: congela il totale del mese quando viene saldato
+      // ═══════════════════════════════════════════════════════════════════
+      // PERCHÉ: dopo l'incasso, il sync iCal / ricalcolo biancheria possono
+      // riportare ordini a PENDING o pulizie a SCHEDULED, facendo CALARE il
+      // totale del mese. La differenza tra quanto incassato e il nuovo totale
+      // più basso diventava un "acconto fantasma" il mese successivo.
+      //
+      // COSA FA: se questo pagamento porta il mese a saldo (pagato ≥ servizi),
+      // scrive un paymentOverride = totale servizi ATTUALE. Da quel momento
+      // computeMonthDebt usa quel totale fisso (override sostituisce solo
+      // `totaleServizi`, riga 355 di debtCalculator) → saldo = 0 stabile,
+      // qualunque cosa faccia il cron in seguito.
+      //
+      // REGOLA RISPETTATA: solo le AZIONI MANUALI aggiornano il totale.
+      //   - "Incassa Totale" (qui) → fissa il lucchetto.
+      //   - "Modifica totale" (set_override) → riscrive il lucchetto.
+      //   - escludi/elimina servizio → creditTransfer al mese dopo (invariato).
+      //   - cron/sync → NON tocca paymentOverrides (verificato) → nessun acconto.
+      //
+      // NB: non congela gli ACCONTI parziali (solo i saldi effettivi), così i
+      // sovra-pagamenti reali continuano a generare il loro credito legittimo.
+      try {
+        const { computeOwnerDebt } = await import("~/lib/payments/computeOwnerDebt");
+        const debtSummary = await computeOwnerDebt(proprietarioId);
+        const monthDebt = debtSummary?.debts.find(
+          (d) => d.month === Number(month) && d.year === Number(year)
+        );
+        if (monthDebt) {
+          const totaleServizi = monthDebt.totaleServizi;
+          // Congela solo se il mese risulta ORA saldato (saldo ≈ 0 o pagato in eccesso)
+          // e c'è effettivamente un totale da proteggere (> 0).
+          if (totaleServizi > 0.01 && monthDebt.saldo <= 0.01) {
+            const { getPaymentOverride } = await import("~/lib/firebase/payments");
+            const existingOverride = await getPaymentOverride(proprietarioId, Number(month), Number(year));
+            // Non sovrascrivere un override impostato a mano dall'admin con motivo diverso:
+            // aggiorna solo se assente o se è un lucchetto automatico precedente.
+            const isManualOverride = existingOverride
+              && existingOverride.reason
+              && !String(existingOverride.reason).startsWith("Lucchetto automatico");
+            if (!isManualOverride) {
+              await setPaymentOverride({
+                proprietarioId,
+                month: Number(month),
+                year: Number(year),
+                originalTotal: totaleServizi,
+                overrideTotal: totaleServizi,
+                reason: "Lucchetto automatico: totale congelato all'incasso del saldo",
+                createdBy: currentUser.id,
+              });
+            }
+          }
+        }
+      } catch (freezeErr) {
+        // Il congelamento è una protezione aggiuntiva: se fallisce, il pagamento
+        // resta comunque registrato. Non blocchiamo il flusso principale.
+        console.error("Errore lucchetto totale mese:", freezeErr);
+      }
+
       // ═══ AUTO-SBLOCCO ACCOUNT: dopo pagamento, ri-verifica il blocco ═══
       // Usa la fonte di verità centralizzata `computeOwnerDebt` per evitare
       // duplicazione di logica (e bug come doppio conteggio dell'isCreditTransfer).
