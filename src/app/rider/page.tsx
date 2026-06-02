@@ -2521,12 +2521,22 @@ function RiderDashboardContent() {
                     
                     <div className="p-4">
                       <div className="flex items-start gap-3 mb-3">
-                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-2xl ${
+                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-2xl overflow-hidden flex-shrink-0 ${
                           order.urgency === 'urgent' 
                             ? 'bg-gradient-to-br from-red-100 to-rose-100' 
                             : 'bg-gradient-to-br from-emerald-100 to-teal-100'
                         }`}>
-                          📦
+                          {(order.propertyImageUrl || order.propertyImages?.door || order.propertyImages?.building) ? (
+                            <img
+                              src={order.propertyImageUrl || order.propertyImages?.door || order.propertyImages?.building || ""}
+                              alt={order.propertyName}
+                              loading="lazy"
+                              decoding="async"
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <span>📦</span>
+                          )}
                         </div>
                         <div className="flex-1">
                           <h3 className="font-bold text-slate-800">{order.propertyName}</h3>
