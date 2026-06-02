@@ -246,15 +246,28 @@ function calculateOrderRawPrice(
 
       const itemKey = item.itemId || item.id;
       const invItem = itemKey ? inventoryById.get(itemKey) : undefined;
+      // 🔧 FIX disallineamento pagina/canonico: un prezzo salvato a 0 (o
+      // mancante) sull'item NON è un prezzo valido — è un dato sporco (es.
+      // articolo salvato con unitPrice/totalPrice = 0 ma con prezzo di
+      // listino in inventario). Va trattato come "mancante" e si ricade sul
+      // sellPrice dell'inventario, ESATTAMENTE come fa la pagina admin
+      // (processOrder usa `||`). Senza questo, lo stesso ordine veniva
+      // fatturato 1,50€ in meno dal carryover rispetto a quanto incassato
+      // → acconto fantasma su ogni incasso. (caso reale: "Canavaccio Cucina"
+      // con unitPrice:0 in Casa Galilei).
+      // NB: nessun articolo è legittimamente gratis (verificato su
+      // systemItems), quindi forzare il listino sullo 0 è sicuro.
       const basePrice =
-        item.unitPrice ??
-        item.price ??
+        (item.unitPrice || undefined) ??
+        (item.price || undefined) ??
         invItem?.sellPrice ??
         invItem?.price ??
         0;
       const unitPrice = item.priceOverride ?? basePrice;
       const quantity = item.quantity ?? 1;
-      const itemTotal = item.totalPrice ?? unitPrice * quantity;
+      // Allo stesso modo: un totalPrice salvato a 0 viene ignorato a favore
+      // del calcolo unit*qty (che ora ha il prezzo di listino corretto).
+      const itemTotal = (item.totalPrice || undefined) ?? unitPrice * quantity;
       total += itemTotal;
     }
   }
