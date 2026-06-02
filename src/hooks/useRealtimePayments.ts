@@ -177,6 +177,7 @@ async function loadStaticData(): Promise<boolean> {
     const startTime = Date.now();
 
     const tProps = Date.now();
+    console.log(`⏱️ [PERF] >>> sto per chiamare getDocs(properties) <<< ${new Date().toISOString().slice(11,23)}`);
     const propsSnap = await getDocs(query(collection(db, "properties"), where("status", "==", "ACTIVE")));
     console.log(`⏱️ [PERF] → properties: ${Date.now() - tProps}ms, ${propsSnap.docs.length} docs`);
 
@@ -830,6 +831,7 @@ export function useRealtimePayments(month: number, year: number) {
     if (loadedRangeRef.current === currentRange) return;
 
     const t0 = Date.now();
+    console.log(`⏱️ [PERF] === useEffect setup PARTITO === ${new Date().toISOString().slice(11,23)}`);
 
     // Cleanup
     unsubscribesRef.current.forEach(u => { try { u(); } catch {} });
