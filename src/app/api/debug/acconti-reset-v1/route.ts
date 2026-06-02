@@ -40,7 +40,7 @@ export const maxDuration = 60;
 
 const round = (n: number) => Math.round(n * 100) / 100;
 
-export async function POST(request: NextRequest) {
+async function handler(request: NextRequest) {
   const cronSecret = process.env.CRON_SECRET;
   let body: any = {};
   try { body = await request.json(); } catch { /* vuoto */ }
@@ -180,3 +180,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Errore server", message: error?.message, stack: error?.stack?.split("\n").slice(0, 6).join("\n") }, { status: 500 });
   }
 }
+
+export async function POST(request: NextRequest) { return handler(request); }
+export async function GET(request: NextRequest) { return handler(request); }
