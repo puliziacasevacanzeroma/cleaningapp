@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { 
-  collection, query, where, getDocs, Timestamp, 
+  collection, query, where, getDocs, getDocsFromCache, Timestamp, 
   onSnapshot} from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 import type { Unsubscribe } from "firebase/firestore";
@@ -170,51 +170,93 @@ const staticCache: StaticCache = {
   loaded: false,
 };
 
-async function loadStaticData(): Promise<boolean> {
+// Popola staticCache dagli snapshot (stessa identica logica di prima,
+// estratta per essere riusabile da cache E da server). Nessun cambiamento
+// sui dati: solo riorganizzazione.
+function populateStaticCache(propsSnap: any, inventorySnap: any) {
+  staticCache.properties.clear();
+  propsSnap.docs.forEach((doc: any) => {
+    const data = doc.data() as Record<string, any>;
+    staticCache.properties.set(doc.id, {
+      id: doc.id, ...data,
+      cleaningPrice: data.cleaningPrice || 0,
+    });
+  });
+
+  staticCache.inventory.clear();
+  inventorySnap.docs.forEach((doc: any) => {
+    const data = doc.data() as Record<string, any>;
+    const itemData = {
+      id: doc.id,
+      name: data.name || "",
+      sellPrice: data.sellPrice || data.price || 0,
+      categoryName: data.categoryName || data.category || data.categoryId || "Altro",
+      categoryId: data.categoryId || data.category || undefined,
+    };
+    staticCache.inventory.set(doc.id, itemData);
+    if (data.key) staticCache.inventory.set(data.key, itemData);
+    if (doc.id.startsWith("item_")) staticCache.inventory.set(doc.id.replace("item_", ""), itemData);
+  });
+}
+
+// ⚡ PERF — strategia CACHE-FIRST (sicura al 100% sui numeri).
+// I dati statici (proprietà + inventario) cambiano raramente. Invece di
+// aspettare SEMPRE il server (~secondi anche alla riapertura), proviamo prima
+// la cache locale IndexedDB: se c'è, popoliamo e dipingiamo ISTANTANEAMENTE,
+// poi aggiorniamo dal server in background. Se i dati freschi differiscono,
+// `onServerRefresh` fa ricalcolare la UI. La prima volta in assoluto (cache
+// vuota) il comportamento è identico a prima: blocca fino al server.
+// Importante: NESSUN calcolo di credito/debito è toccato — stessi dati,
+// solo letti prima da disco.
+async function loadStaticData(onServerRefresh?: () => void): Promise<boolean> {
   if (staticCache.loaded) return true;
 
+  const propsQuery = query(collection(db, "properties"), where("status", "==", "ACTIVE"));
+  const invQuery = collection(db, "inventory");
+
+  // 1) CACHE-FIRST: lettura istantanea da IndexedDB (zero rete).
+  let servedFromCache = false;
   try {
-    const startTime = Date.now();
-
-    const tProps = Date.now();
-    console.log(`⏱️ [PERF] >>> sto per chiamare getDocs(properties) <<< ${new Date().toISOString().slice(11,23)}`);
-    const propsSnap = await getDocs(query(collection(db, "properties"), where("status", "==", "ACTIVE")));
-    console.log(`⏱️ [PERF] → properties: ${Date.now() - tProps}ms, ${propsSnap.docs.length} docs`);
-
-    const tInv = Date.now();
-    const inventorySnap = await getDocs(collection(db, "inventory"));
-    console.log(`⏱️ [PERF] → inventory: ${Date.now() - tInv}ms, ${inventorySnap.docs.length} docs`);
-
-    staticCache.properties.clear();
-    propsSnap.docs.forEach(doc => {
-      const data = doc.data() as Record<string, any>;
-      staticCache.properties.set(doc.id, {
-        id: doc.id, ...data,
-        cleaningPrice: data.cleaningPrice || 0,
-      });
-    });
-
-    staticCache.inventory.clear();
-    inventorySnap.docs.forEach(doc => {
-      const data = doc.data() as Record<string, any>;
-      const itemData = {
-        id: doc.id,
-        name: data.name || "",
-        sellPrice: data.sellPrice || data.price || 0,
-        categoryName: data.categoryName || data.category || data.categoryId || "Altro",
-        categoryId: data.categoryId || data.category || undefined,
-      };
-      staticCache.inventory.set(doc.id, itemData);
-      if (data.key) staticCache.inventory.set(data.key, itemData);
-      if (doc.id.startsWith("item_")) staticCache.inventory.set(doc.id.replace("item_", ""), itemData);
-    });
-
-    staticCache.loaded = true;
-    return true;
-  } catch (error) {
-    console.error("❌ Errore caricamento dati statici:", error);
-    return false;
+    const tCache = Date.now();
+    const [propsCache, invCache] = await Promise.all([
+      getDocsFromCache(propsQuery),
+      getDocsFromCache(invQuery),
+    ]);
+    if (propsCache.docs.length > 0) {
+      populateStaticCache(propsCache, invCache);
+      staticCache.loaded = true;
+      servedFromCache = true;
+      console.log(`⏱️ [PERF] → static da CACHE (istantaneo): ${Date.now() - tCache}ms, ${propsCache.docs.length} props / ${invCache.docs.length} inv`);
+    }
+  } catch {
+    // cache vuota o non disponibile (es. modalità privata) → si prosegue col server
   }
+
+  // 2) SERVER: aggiorna sempre con i dati freschi.
+  const serverFetch = (async () => {
+    try {
+      const tServer = Date.now();
+      const [propsSnap, inventorySnap] = await Promise.all([
+        getDocs(propsQuery),
+        getDocs(invQuery),
+      ]);
+      populateStaticCache(propsSnap, inventorySnap);
+      staticCache.loaded = true;
+      console.log(`⏱️ [PERF] → static da SERVER: ${Date.now() - tServer}ms, ${propsSnap.docs.length} props / ${inventorySnap.docs.length} inv`);
+      // Se avevamo già dipinto dalla cache, segnala che ora i dati sono freschi
+      // così la UI ricalcola (gestisce il caso raro: prezzo cambiato nel frattempo).
+      if (servedFromCache) onServerRefresh?.();
+      return true;
+    } catch (error) {
+      console.error("❌ Errore caricamento dati statici dal server:", error);
+      return staticCache.loaded; // se la cache ci aveva già salvato, restiamo validi
+    }
+  })();
+
+  // Se la cache ha già fornito i dati → ritorna subito (paint istantaneo),
+  // il server gira in background. Altrimenti aspetta il server come prima.
+  if (servedFromCache) return true;
+  return await serverFetch;
 }
 
 // ==================== UTILITÀ ====================
@@ -787,6 +829,9 @@ export function useRealtimePayments(month: number, year: number) {
 
   // Loading states
   const [staticLoaded, setStaticLoaded] = useState(staticCache.loaded);
+  // ⚡ Bump quando i dati statici freschi arrivano dal server DOPO un paint da
+  // cache: forza il ricalcolo della useMemo coi dati aggiornati.
+  const [staticVersion, setStaticVersion] = useState(0);
   const [cleaningsLoaded, setCleaningsLoaded] = useState(false);
   const [ordersLoaded, setOrdersLoaded] = useState(false);
   const [paymentsLoaded, setPaymentsLoaded] = useState(false);
@@ -852,7 +897,11 @@ export function useRealtimePayments(month: number, year: number) {
       // cleanings/orders. Ora parte in parallelo: lo static aggiorna il suo
       // flag quando è pronto, ma cleanings/orders/payments scaricano subito.
       const tStatic = Date.now();
-      loadStaticData().then((ok) => {
+      loadStaticData(() => {
+        // Dati statici freschi arrivati dal server dopo il paint da cache:
+        // forza il ricalcolo della UI (caso raro: prezzo cambiato nel frattempo).
+        if (mounted) setStaticVersion(v => v + 1);
+      }).then((ok) => {
         if (!mounted) return;
         console.log(`⏱️ [PERF] loadStaticData (properties+inventory): ${Date.now() - tStatic}ms`);
         if (!ok) { setError("Errore caricamento dati statici"); return; }
@@ -1081,7 +1130,7 @@ export function useRealtimePayments(month: number, year: number) {
     };
 
     return { clients: stats, summary: summaryData, propertiesWithoutPrice: propsWithoutPrice };
-  }, [month, year, loading, allCleanings, allOrders, allPayments, allOverrides]);
+  }, [month, year, loading, allCleanings, allOrders, allPayments, allOverrides, staticVersion]);
 
   return { loading, error, clients, summary, propertiesWithoutPrice, refresh };
 }
