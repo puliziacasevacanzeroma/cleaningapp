@@ -2425,7 +2425,86 @@ function RiderDashboardContent() {
                           </p>
                         </div>
                       </div>
-                      
+
+                      {/* 🧹 Stato Pulizia / Operatore (realtime, come nella card iniziale) */}
+                      <div className={`rounded-xl p-3 mb-3 ${
+                        order.cleaning
+                          ? 'bg-gradient-to-r from-slate-50 to-slate-100 border border-slate-200'
+                          : 'bg-gradient-to-r from-sky-50 to-blue-50 border border-sky-200'
+                      }`}>
+                        {order.cleaning ? (
+                          <>
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span className="text-lg">🧹</span>
+                              <span className="text-sm font-semibold text-slate-700">
+                                Pulizia: {order.cleaning.scheduledTime || order.scheduledTime}
+                              </span>
+                            </div>
+                            <div className={`px-2.5 py-1 rounded-lg text-xs font-bold ${
+                              order.cleaning.status === 'SCHEDULED'
+                                ? 'bg-amber-100 text-amber-700'
+                              : order.cleaning.status === 'IN_PROGRESS'
+                                ? 'bg-green-100 text-green-700'
+                              : order.cleaning.status === 'COMPLETED'
+                                ? 'bg-slate-200 text-slate-600'
+                              : 'bg-red-100 text-red-700'
+                            }`}>
+                              {(order.cleaning.status === 'SCHEDULED' || order.cleaning.status === 'ASSIGNED' || order.cleaning.status === 'assigned' || order.cleaning.status === 'pending') && '🟡 Non iniziata'}
+                              {order.cleaning.status === 'IN_PROGRESS' && '🟢 In corso'}
+                              {order.cleaning.status === 'COMPLETED' && '✅ Completata'}
+                              {order.cleaning.status === 'CANCELLED' && '❌ Annullata'}
+                              {!['SCHEDULED', 'ASSIGNED', 'assigned', 'pending', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'].includes(order.cleaning.status) && '🟡 In attesa'}
+                            </div>
+                          </div>
+                          {/* Badge operatore/i assegnato/i */}
+                          {(order.cleaning.operators && order.cleaning.operators.length > 0) ? (
+                            <div className="flex items-center gap-2 mt-2 pt-2 border-t border-slate-200">
+                              <div className="flex -space-x-1.5">
+                                {order.cleaning.operators.map((op, idx) => (
+                                  <div key={op.id || idx} className="w-6 h-6 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0 border-2 border-white" title={op.name}>
+                                    <span className="text-[10px] font-bold text-emerald-700">
+                                      {(op.name || "?").charAt(0).toUpperCase()}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                              <span className="text-xs font-medium text-slate-600 truncate">
+                                {order.cleaning.operators.map(op => op.name).join(", ")}
+                              </span>
+                              <span className="ml-auto px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700 flex-shrink-0">
+                                {order.cleaning.operators.length > 1 ? `${order.cleaning.operators.length} operatori` : "Assegnato"}
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2 mt-2 pt-2 border-t border-slate-200">
+                              <div className="w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
+                                <span className="text-[10px]">👤</span>
+                              </div>
+                              <span className="text-xs font-medium text-amber-600">
+                                Operatore da assegnare
+                              </span>
+                              <span className="ml-auto px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700 flex-shrink-0">
+                                Da assegnare
+                              </span>
+                            </div>
+                          )}
+                          </>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <span className="text-lg">🛏️</span>
+                            <span className="text-sm font-semibold text-sky-700">
+                              Solo Biancheria
+                            </span>
+                            {order.scheduledTime && (
+                              <span className="text-xs text-sky-600 ml-auto">
+                                Consegna: {order.scheduledTime}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
                       {/* 🛏️ PREPARAZIONE LETTI */}
                       {order.bedMaking && (
                         <div className="mb-3 bg-gradient-to-r from-violet-50 to-purple-50 rounded-xl border-2 border-violet-300 p-3">
