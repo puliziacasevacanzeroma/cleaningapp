@@ -167,7 +167,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, action: "removed" });
     }
 
-    return NextResponse.json({ error: "Azione non valida. Usa: activate, override, remove" }, { status: 400 });
+    if (action === "set_exempt") {
+      // Solo admin: attiva/disattiva l'esenzione permanente dal blocco.
+      // Per clienti con termini di pagamento concordati diversi: non
+      // verranno MAI sospesi dal cron finché esenti.
+      if (currentUser.role !== "ADMIN") {
+        return NextResponse.json({ error: "Solo gli amministratori" }, { status: 403 });
+      }
+      const exempt = body.exempt === true;
+      const update: Record<string, any> = { paymentExempt: exempt };
+      // Se attivo l'esenzione e c'era un blocco attivo, lo rimuovo subito
+      if (exempt && userData.paymentBlock?.active === true) {
+        update.paymentBlock = null;
+      }
+      await userRef.update(update);
+      return NextResponse.json({ success: true, action: "exempt_set", exempt });
+    }
+
+    return NextResponse.json({ error: "Azione non valida. Usa: activate, override, remove, set_exempt" }, { status: 400 });
   } catch (error) {
     console.error("Errore payment-block:", error);
     return NextResponse.json({ error: "Errore server" }, { status: 500 });

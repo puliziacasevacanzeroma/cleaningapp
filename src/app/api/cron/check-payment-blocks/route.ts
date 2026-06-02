@@ -187,6 +187,20 @@ export async function GET(request: NextRequest) {
       const userData = userDoc.data();
       const existingBlock = userData.paymentBlock;
 
+      // 🟢 ESENZIONE PERMANENTE: clienti con termini di pagamento diversi
+      // (paymentExempt: true) non vengono MAI bloccati dal cron, qualunque
+      // sia il loro ritardo. Se per qualche motivo risultano bloccati, li
+      // sblocchiamo. È il sostituto stabile dello sblocco manuale ripetuto.
+      if (userData.paymentExempt === true) {
+        if (existingBlock?.active === true) {
+          pendingUpdates.push({ userId, data: { paymentBlock: null } });
+          unblocked++;
+        } else {
+          skipped++;
+        }
+        continue;
+      }
+
       if (existingBlock?.overriddenByAdmin === true) {
         skipped++;
         continue;

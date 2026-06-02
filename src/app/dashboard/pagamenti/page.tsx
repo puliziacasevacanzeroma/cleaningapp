@@ -359,6 +359,8 @@ export default function PagamentiPage() {
 
   // ═══ BLOCCO PAGAMENTI: mappa proprietarioId → paymentBlock per mostrare badge/pulsante ═══
   const [blockedOwners, setBlockedOwners] = useState<Map<string, { active: boolean; overriddenByAdmin: boolean; since?: any }>>(new Map());
+  // 🟢 ESENZIONE: clienti con termini di pagamento speciali (mai bloccati)
+  const [exemptOwners, setExemptOwners] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     // Listener realtime su tutti gli utenti proprietari con paymentBlock attivo
@@ -368,6 +370,7 @@ export default function PagamentiPage() {
     );
     const unsub = onSnapshot(q, (snap) => {
       const map = new Map<string, { active: boolean; overriddenByAdmin: boolean; since?: any }>();
+      const exempt = new Set<string>();
       snap.docs.forEach(doc => {
         const data = doc.data();
         if (data.paymentBlock && data.paymentBlock.active === true) {
@@ -377,11 +380,39 @@ export default function PagamentiPage() {
             since: data.paymentBlock.since,
           });
         }
+        if (data.paymentExempt === true) exempt.add(doc.id);
       });
       setBlockedOwners(map);
+      setExemptOwners(exempt);
     });
     return () => unsub();
   }, []);
+
+  // 🟢 Toggle esenzione permanente dal blocco pagamenti
+  const handleToggleExempt = async (proprietarioId: string, proprietarioName: string, enable: boolean) => {
+    const msg = enable
+      ? `Rendere ${proprietarioName} ESENTE dal blocco?\n\nNon verrà mai sospeso automaticamente, anche con pagamenti scaduti. Usalo per clienti con termini di pagamento concordati diversi.`
+      : `Rimuovere l'esenzione di ${proprietarioName}?\n\nTornerà a seguire le regole automatiche di sospensione.`;
+    if (!confirm(msg)) return;
+    try {
+      const res = await fetch('/api/payment-block', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'set_exempt', proprietarioId, exempt: enable }),
+      });
+      if (res.ok) {
+        setSuccessMessage(enable ? '✅ Cliente reso esente' : '✅ Esenzione rimossa');
+        setTimeout(() => setSuccessMessage(null), 3000);
+      } else {
+        const data = await res.json();
+        setLocalError(data.error || 'Errore aggiornamento esenzione');
+      }
+    } catch {
+      setLocalError('Errore di rete');
+    }
+  };
+
+  const isOwnerExempt = (proprietarioId: string): boolean => exemptOwners.has(proprietarioId);
 
   const handleUnblockOwner = async (proprietarioId: string, proprietarioName: string) => {
     if (!confirm(`Sbloccare l'account di ${proprietarioName}?\n\nL'utente potrà usare il gestionale anche se ha pagamenti scaduti.`)) return;
@@ -2116,6 +2147,7 @@ export default function PagamentiPage() {
     
     const ownerBlocked = isOwnerBlocked(client.proprietarioId);
     const ownerOverridden = isOwnerOverridden(client.proprietarioId);
+    const ownerExempt = isOwnerExempt(client.proprietarioId);
 
     return (
       <div 
@@ -2131,7 +2163,7 @@ export default function PagamentiPage() {
         }`}
       >
         {/* Banner STATO in alto (solo se presente) */}
-        {ownerBlocked && (
+        {ownerBlocked && !ownerExempt && (
           <div className="bg-gradient-to-r from-red-500 to-rose-500 px-4 py-2 flex items-center gap-2">
             <svg className="w-3.5 h-3.5 text-white flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
               <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
@@ -2145,7 +2177,7 @@ export default function PagamentiPage() {
             </button>
           </div>
         )}
-        {ownerOverridden && client.saldo > 0 && !ownerBlocked && (
+        {ownerOverridden && client.saldo > 0 && !ownerBlocked && !ownerExempt && (
           <div className="bg-gradient-to-r from-amber-50 to-orange-50 border-b border-amber-200 px-4 py-2 flex items-center gap-2">
             <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse flex-shrink-0"></span>
             <span className="text-[11px] font-bold text-amber-700 tracking-wide truncate">🔓 Sbloccato manualmente</span>
@@ -2157,6 +2189,33 @@ export default function PagamentiPage() {
                 <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
               </svg>
               Risospendi
+            </button>
+          </div>
+        )}
+        {/* 🟢 ESENZIONE: badge verde + toggle, sempre visibile */}
+        {ownerExempt ? (
+          <div className="bg-gradient-to-r from-emerald-50 to-green-50 border-b border-emerald-200 px-4 py-2 flex items-center gap-2">
+            <svg className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
+            </svg>
+            <span className="text-[11px] font-bold text-emerald-700 tracking-wide truncate">Esente / termini speciali</span>
+            <button
+              onClick={(e) => { e.stopPropagation(); handleToggleExempt(client.proprietarioId, client.proprietarioName, false); }}
+              className="ml-auto text-[11px] font-semibold text-slate-500 hover:text-slate-700 active:scale-95 transition-transform flex-shrink-0"
+            >
+              Rimuovi esenzione
+            </button>
+          </div>
+        ) : (
+          <div className="px-4 py-1.5 flex items-center justify-end border-b border-slate-50">
+            <button
+              onClick={(e) => { e.stopPropagation(); handleToggleExempt(client.proprietarioId, client.proprietarioName, true); }}
+              className="text-[11px] font-semibold text-emerald-600 hover:text-emerald-700 flex items-center gap-1 active:scale-95 transition-transform"
+            >
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" />
+              </svg>
+              Rendi esente
             </button>
           </div>
         )}
