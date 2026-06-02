@@ -44,16 +44,22 @@ export async function POST(request: NextRequest) {
   const cronSecret = process.env.CRON_SECRET;
   let body: any = {};
   try { body = await request.json(); } catch { /* vuoto */ }
-  if (cronSecret && body.cronSecret !== cronSecret) {
+  // Accetta il secret dal body OPPURE dalla query (?cronSecret=...), così
+  // funziona anche se CMD/curl di Windows rompe le virgolette del body JSON.
+  const { searchParams } = new URL(request.url);
+  const providedSecret = body.cronSecret || searchParams.get("cronSecret");
+  if (cronSecret && providedSecret !== cronSecret) {
     return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
   }
+  // I parametri possono arrivare da body o da query (fallback robusto)
+  const qp = (k: string) => searchParams.get(k);
 
-  const dryRun = body.dryRun !== false; // DEFAULT true: non scrive
-  const ownerFilter = body.ownerId || null;
+  const dryRun = (body.dryRun ?? qp("dryRun")) === false || (body.dryRun ?? qp("dryRun")) === "false" ? false : true; // DEFAULT true: non scrive
+  const ownerFilter = body.ownerId || qp("ownerId") || null;
   const now = new Date();
-  const refMonth = parseInt(body.refMonth || String(now.getMonth() + 1));
-  const refYear = parseInt(body.refYear || String(now.getFullYear()));
-  const monthsBack = parseInt(body.monthsBack || "24");
+  const refMonth = parseInt(body.refMonth || qp("refMonth") || String(now.getMonth() + 1));
+  const refYear = parseInt(body.refYear || qp("refYear") || String(now.getFullYear()));
+  const monthsBack = parseInt(body.monthsBack || qp("monthsBack") || "24");
 
   try {
     const [propsSnap, cleaningsSnap, ordersSnap, paymentsSnap, overridesSnap, inventorySnap] =
