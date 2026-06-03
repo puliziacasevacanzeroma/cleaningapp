@@ -2645,7 +2645,8 @@ export default function PagamentiPage() {
                 <span className="font-semibold text-slate-700">{formatCurrency(client.totaleEffettivo)}</span>
               </div>
             </div>
-            <div className="border-t border-slate-200" />
+            {/* 🆕 Lista proprietà come card staccate su sfondo tenue */}
+            <div className="border-t border-slate-200 bg-slate-50/70 px-3 py-3 space-y-3">
             {/* Proprietà COLLASSABILI */}
             {propertyNames.map((propName, propIdx) => {
               const propServices = groupedServices[propName];
@@ -2669,7 +2670,7 @@ export default function PagamentiPage() {
               const isBiancheriaExpanded = (serviceId: string) => expandedBiancheria.has(`${client.proprietarioId}-${serviceId}`);
               
               return (
-                <div key={propIdx} className={`${propIdx > 0 ? "border-t border-slate-200" : ""}`}>
+                <div key={propIdx} className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
                   {/* Header proprietà - CLICCABILE con FOTO */}
                   <button 
                     onClick={() => toggleProperty(propName)}
@@ -2728,15 +2729,15 @@ export default function PagamentiPage() {
                         {Icons.chevronDown}
                       </div>
                     </div>
-                    {/* Riga 2: fascia sfumata col totale (separato dal nome) */}
-                    <div className="w-full px-4 py-2.5 flex items-center justify-between" style={{ background: "linear-gradient(135deg,#0A2540 0%,#123a63 55%,#1A4E85 100%)" }}>
+                    {/* Riga 2: fascia col totale (bianca, separata dal nome) */}
+                    <div className="w-full px-4 py-2.5 flex items-center justify-between bg-white border-t border-slate-100">
                       <div className="flex items-center gap-2">
-                        <div className="w-[26px] h-[26px] rounded-lg bg-white/10 flex items-center justify-center">
-                          <svg className="w-[15px] h-[15px]" style={{ color: "#9FD0FF" }} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                        <div className="w-[26px] h-[26px] rounded-lg bg-slate-100 flex items-center justify-center">
+                          <svg className="w-[15px] h-[15px] text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                         </div>
-                        <span className="text-xs" style={{ color: "#9FD0FF" }}>Totale mese</span>
+                        <span className="text-xs text-slate-400">Totale mese</span>
                       </div>
-                      <span className="text-[21px] font-medium text-white -tracking-[0.3px]">{formatCurrency(propTotal)}</span>
+                      <span className="text-[21px] font-medium text-slate-800 -tracking-[0.3px]">{formatCurrency(propTotal)}</span>
                     </div>
                   </button>
                   
@@ -3243,6 +3244,7 @@ export default function PagamentiPage() {
                 </div>
               );
             })}
+            </div>
             
             {/* Pagamenti effettuati */}
             {client.payments.length > 0 && (
