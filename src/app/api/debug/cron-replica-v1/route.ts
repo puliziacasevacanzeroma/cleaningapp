@@ -9,6 +9,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "~/lib/firebase/admin";
 import { Timestamp } from "firebase-admin/firestore";
+import { isCleaningProductItem } from "~/lib/payments/debtCalculator";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -103,10 +104,11 @@ export async function GET(request: NextRequest) {
       if (!date) return;
       let total = 0;
       (data.items || []).forEach((item: any) => {
+        if (isCleaningProductItem(item)) return; // ← FIX: esclude prodotti pulizia come la pagina
         const itemKey = item.itemId || item.id;
         const inv = itemKey ? inventoryById.get(itemKey) : undefined;
-        const unit = item.priceOverride ?? item.unitPrice ?? item.price ?? inv ?? 0;
-        total += (item.totalPrice || (unit * (item.quantity || 1)));
+        const unit = item.priceOverride ?? (item.unitPrice || undefined) ?? (item.price || undefined) ?? inv ?? 0;
+        total += ((item.totalPrice || undefined) ?? (unit * (item.quantity || 1)));
       });
       if (data.deliveryFee && data.deliveryFeeEnabled !== false) total += data.deliveryFee;
       total = data.totalPriceOverride ?? total;
