@@ -251,6 +251,161 @@ function formatCurrencyCompact(amount: number): string {
   return `€${amount.toFixed(0)}`;
 }
 
+// 🆕 Blocco riepilogo per categoria con tessere TRASCINABILI per combinarle.
+// Trascina una tessera su un'altra → si fondono mostrando la somma.
+// La X separa una tessera combinata. Le combinazioni sono temporanee
+// (si azzerano quando la card si chiude/riapre). Stato isolato per istanza.
+const CAT_ORDER = ["pulizie", "biancheria", "kit", "extra"];
+
+function CategorySummary({
+  totPulizie, totBiancheria, totKit, totExtra,
+}: { totPulizie: number; totBiancheria: number; totKit: number; totExtra: number }) {
+  const cats = useMemo(() => ({
+    pulizie: {
+      name: "Pulizie", short: "Pulizie", total: totPulizie,
+      bg: "bg-emerald-50", label: "text-emerald-700", num: "text-emerald-900", ic: "text-emerald-600",
+      path: "M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z",
+    },
+    biancheria: {
+      name: "Biancheria", short: "Biancheria", total: totBiancheria,
+      bg: "bg-violet-50", label: "text-violet-700", num: "text-violet-900", ic: "text-violet-600",
+      path: "M3 12h18M3 12v6a1 1 0 001 1h16a1 1 0 001-1v-6M3 12V8a2 2 0 012-2h2a2 2 0 012 2v4m0 0h6V8a2 2 0 012-2h0a2 2 0 012 2v4",
+    },
+    kit: {
+      name: "Kit cortesia", short: "Kit", total: totKit,
+      bg: "bg-amber-50", label: "text-amber-700", num: "text-amber-900", ic: "text-amber-600",
+      path: "M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z",
+    },
+    extra: {
+      name: "Servizi extra", short: "Extra", total: totExtra,
+      bg: "bg-pink-50", label: "text-pink-700", num: "text-pink-900", ic: "text-pink-600",
+      path: "M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4",
+    },
+  } as Record<string, { name: string; short: string; total: number; bg: string; label: string; num: string; ic: string; path: string }>), [totPulizie, totBiancheria, totKit, totExtra]);
+
+  const normalize = (arr: string[][]) =>
+    [...arr].sort((a, b) => b.length - a.length);
+
+  const [groups, setGroups] = useState<string[][]>(() => CAT_ORDER.map(k => [k]));
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [overIdx, setOverIdx] = useState<number | null>(null);
+  const touchIdx = useRef<number | null>(null);
+
+  const sortGroup = (g: string[]) => [...g].sort((a, b) => CAT_ORDER.indexOf(a) - CAT_ORDER.indexOf(b));
+
+  const mergeGroups = useCallback((from: number, to: number) => {
+    if (from === to) return;
+    setGroups(prev => {
+      if (from < 0 || to < 0 || from >= prev.length || to >= prev.length) return prev;
+      const next = prev.map(g => [...g]);
+      next[to] = [...next[to], ...next[from]];
+      next.splice(from, 1);
+      return normalize(next);
+    });
+  }, []);
+
+  const splitGroup = useCallback((idx: number) => {
+    setGroups(prev => {
+      if (idx < 0 || idx >= prev.length) return prev;
+      const next = prev.map(g => [...g]);
+      const members = next[idx];
+      next.splice(idx, 1, ...members.map(k => [k]));
+      return normalize(next);
+    });
+  }, []);
+
+  const grip = (
+    <svg viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3 flex-shrink-0 opacity-50">
+      <circle cx="5" cy="4" r="1.2" /><circle cx="5" cy="8" r="1.2" /><circle cx="5" cy="12" r="1.2" />
+      <circle cx="11" cy="4" r="1.2" /><circle cx="11" cy="8" r="1.2" /><circle cx="11" cy="12" r="1.2" />
+    </svg>
+  );
+
+  return (
+    <div className="bg-white border border-slate-200 rounded-xl p-3">
+      <p className="text-[10px] text-slate-400 uppercase tracking-wide mb-2.5">
+        Totale per categoria <span className="text-slate-300 normal-case tracking-normal">· trascina per unire</span>
+      </p>
+      <div className="grid grid-cols-2 gap-2">
+        {groups.map((group, idx) => {
+          const sorted = sortGroup(group);
+          const lead = cats[sorted[0]];
+          if (!lead) return null;
+          const sum = group.reduce((s, k) => s + (cats[k]?.total || 0), 0);
+          const isCombined = group.length > 1;
+          const label = isCombined ? sorted.map(k => cats[k]?.short).join(" + ") : lead.name;
+          const isOver = overIdx === idx && dragIdx !== null && dragIdx !== idx;
+          return (
+            <div
+              key={sorted.join("-")}
+              data-idx={idx}
+              draggable
+              onDragStart={(e) => { setDragIdx(idx); e.dataTransfer.effectAllowed = "move"; try { e.dataTransfer.setData("text/plain", String(idx)); } catch { /* noop */ } }}
+              onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; if (overIdx !== idx) setOverIdx(idx); }}
+              onDragLeave={() => { if (overIdx === idx) setOverIdx(null); }}
+              onDrop={(e) => { e.preventDefault(); if (dragIdx !== null) mergeGroups(dragIdx, idx); setDragIdx(null); setOverIdx(null); }}
+              onDragEnd={() => { setDragIdx(null); setOverIdx(null); }}
+              onTouchStart={() => { touchIdx.current = idx; setDragIdx(idx); }}
+              onTouchMove={(e) => {
+                if (touchIdx.current === null) return;
+                const t = e.touches[0];
+                if (!t) return;
+                const el = document.elementFromPoint(t.clientX, t.clientY);
+                const tile = el ? (el.closest("[data-idx]") as HTMLElement | null) : null;
+                if (tile) {
+                  const overI = Number(tile.getAttribute("data-idx"));
+                  if (!Number.isNaN(overI) && overI !== touchIdx.current) {
+                    if (overIdx !== overI) setOverIdx(overI);
+                  } else if (overIdx !== null) setOverIdx(null);
+                }
+              }}
+              onTouchEnd={() => {
+                if (touchIdx.current !== null && overIdx !== null && overIdx !== touchIdx.current) {
+                  mergeGroups(touchIdx.current, overIdx);
+                }
+                touchIdx.current = null;
+                setDragIdx(null);
+                setOverIdx(null);
+              }}
+              className={`${lead.bg} rounded-lg px-3 py-2.5 select-none cursor-grab active:cursor-grabbing transition-all ${isCombined ? "col-span-2" : ""} ${dragIdx === idx ? "opacity-40" : ""} ${isOver ? "ring-2 ring-blue-400 ring-offset-1" : ""}`}
+              style={{ touchAction: "none" }}
+            >
+              {isOver ? (
+                <div className="flex items-center gap-1.5 mb-1">
+                  <svg className={`w-4 h-4 ${lead.ic}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
+                  <span className={`text-xs font-medium ${lead.label}`}>Unisci qui</span>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between mb-1">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    {grip}
+                    <svg className={`w-4 h-4 flex-shrink-0 ${lead.ic}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d={lead.path} /></svg>
+                    <span className={`text-xs truncate ${lead.label}`}>{label}</span>
+                  </div>
+                  {isCombined && (
+                    <button
+                      type="button"
+                      aria-label="Separa"
+                      onClick={(e) => { e.stopPropagation(); splitGroup(idx); }}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onTouchStart={(e) => { e.stopPropagation(); }}
+                      className={`flex-shrink-0 ml-1 ${lead.label} hover:opacity-70`}
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
+                  )}
+                </div>
+              )}
+              <p className={`text-base font-bold ${lead.num}`}>{formatCurrency(sum)}</p>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+
 function formatDate(date: any): string {
   if (!date) return "-";
   try {
@@ -2568,6 +2723,14 @@ export default function PagamentiPage() {
                   {/* Servizi della proprietà - RAGGRUPPATI PER DATA */}
                   {isPropExpanded && (
                     <div className="px-4 py-3 space-y-3 bg-white">
+                      {/* 🆕 RIEPILOGO TOTALE PER CATEGORIA (tessere trascinabili per combinarle) */}
+                      {(() => {
+                        const totPulizie = propServices.filter(s => s.type === "PULIZIA").reduce((sum, s) => sum + s.effectivePrice, 0);
+                        const totBiancheria = propServices.filter(s => s.type === "BIANCHERIA").reduce((sum, s) => sum + s.effectivePrice, 0);
+                        const totKit = propServices.filter(s => s.type === "KIT_CORTESIA").reduce((sum, s) => sum + s.effectivePrice, 0);
+                        const totExtra = propServices.filter(s => s.type === "SERVIZI_EXTRA").reduce((sum, s) => sum + s.effectivePrice, 0);
+                        return <CategorySummary totPulizie={totPulizie} totBiancheria={totBiancheria} totKit={totKit} totExtra={totExtra} />;
+                      })()}
                       {(() => {
                         // Raggruppa servizi (pulizia + biancheria collegata insieme)
                         const dateGroups = groupServicesByDate(propServices);
