@@ -388,9 +388,10 @@ export default function ProprietarioPagamentiPage() {
               {/* Header proprietà */}
               <button
                 onClick={() => toggleProperty(prop.propertyId)}
-                className="w-full px-4 py-3 bg-gradient-to-r from-slate-50 to-white flex items-center justify-between hover:from-slate-100 hover:to-slate-50 transition-colors"
+                className="w-full px-4 py-3 bg-gradient-to-r from-slate-50 to-white flex flex-col gap-2.5 hover:from-slate-100 hover:to-slate-50 transition-colors"
               >
-                <div className="flex items-center gap-3">
+                {/* Riga 1: foto + nome + freccia */}
+                <div className="flex items-center gap-3 w-full">
                   {prop.propertyImage ? (
                     <img src={prop.propertyImage} alt={prop.propertyName} className="w-12 h-12 rounded-xl object-cover shadow-md flex-shrink-0 border-2 border-violet-200" />
                   ) : (
@@ -410,12 +411,14 @@ export default function ProprietarioPagamentiPage() {
                       })()}
                     </p>
                   </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <p className="font-bold text-slate-800 text-lg">{formatCurrency(prop.total)}</p>
-                  <div className={`w-8 h-8 rounded-lg bg-slate-200 flex items-center justify-center transition-transform ${isPropExpanded ? "rotate-180" : ""}`}>
+                  <div className={`w-8 h-8 rounded-lg bg-slate-200 flex items-center justify-center transition-transform flex-shrink-0 ${isPropExpanded ? "rotate-180" : ""}`}>
                     {Icons.chevronDown}
                   </div>
+                </div>
+                {/* Riga 2: totale su riga propria (separato dal nome per evitare sovrapposizioni) */}
+                <div className="flex items-baseline justify-between w-full border-t border-slate-200 pt-2">
+                  <span className="text-xs text-slate-400">Totale mese</span>
+                  <p className="font-bold text-slate-800 text-lg">{formatCurrency(prop.total)}</p>
                 </div>
               </button>
 
