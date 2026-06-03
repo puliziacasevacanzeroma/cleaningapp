@@ -251,6 +251,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     setLoginPending(true);
+
+    // 🚀 I PROPRIETARI saltano lo splash di benvenuto.
+    // Il prefetch dello splash riempiva chiavi react-query
+    // (proprietario-dashboard / proprietario-properties / properties) che
+    // NESSUNA pagina proprietario legge, scaricando intanto TUTTE le proprietà
+    // e l'INTERA collezione bookings → solo ritardo e letture sprecate. Vanno
+    // direttamente alla loro area, che carica i propri dati (già scopati per
+    // proprietà) in modo rapido.
+    if (destination.startsWith("/proprietario")) {
+      window.location.href = destination;
+      return;
+    }
+
     window.location.href = `/welcome?to=${encodeURIComponent(destination)}`;
   };
 
