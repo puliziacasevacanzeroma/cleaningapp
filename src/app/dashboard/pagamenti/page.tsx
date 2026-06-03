@@ -2673,23 +2673,27 @@ export default function PagamentiPage() {
                   {/* Header proprietà - CLICCABILE con FOTO */}
                   <button 
                     onClick={() => toggleProperty(propName)}
-                    className="w-full px-4 py-3 bg-gradient-to-r from-slate-100 to-white flex items-center justify-between hover:from-slate-50 hover:to-slate-50 transition-colors"
+                    className="w-full flex flex-col text-left hover:bg-slate-50/60 transition-colors overflow-hidden"
                   >
-                    <div className="flex items-center gap-3">
+                    {/* Riga 1: foto + nome + indirizzo + conteggi + freccia */}
+                    <div className="w-full px-4 py-3 flex items-center gap-3">
                       {/* Avatar proprietà con FOTO o lettera */}
-                      {propImage ? (
-                        <img 
-                          src={propImage} 
-                          alt={propName}
-                          className="w-10 h-10 rounded-xl object-cover shadow-md flex-shrink-0 border-2 border-violet-200"
-                        />
-                      ) : (
-                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center text-white text-sm font-bold shadow-md flex-shrink-0">
-                          {propName.charAt(0)}
-                        </div>
-                      )}
-                      <div className="text-left min-w-0 flex-1">
-                        <p className="font-semibold text-slate-800 truncate">{propName}</p>
+                      <div className="relative flex-shrink-0">
+                        {propImage ? (
+                          <img 
+                            src={propImage} 
+                            alt={propName}
+                            className="w-12 h-12 rounded-xl object-cover block"
+                          />
+                        ) : (
+                          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center text-white text-base font-bold">
+                            {propName.charAt(0)}
+                          </div>
+                        )}
+                        <div className="absolute inset-0 rounded-xl ring-[1.5px] ring-violet-300/40"></div>
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[15px] font-semibold text-slate-800 truncate -tracking-[0.2px]">{propName}</p>
                         {propAddress && (
                           <p className="text-[11px] text-slate-400 font-normal truncate flex items-center gap-1 mt-0.5">
                             <svg className="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
@@ -2699,24 +2703,40 @@ export default function PagamentiPage() {
                             <span className="truncate">{propAddress}</span>
                           </p>
                         )}
-                        <p className="text-xs text-slate-500 mt-0.5 truncate">
+                        <div className="flex gap-1.5 mt-1.5">
                           {(() => {
-                            // 🆕 Distinguo servizi (pulizie) e ordini (biancheria/kit/extra)
                             const servCount = propServices.filter(s => s.type === "PULIZIA").length;
                             const ordCount = propServices.length - servCount;
-                            const parts: string[] = [];
-                            if (servCount > 0) parts.push(`${servCount} ${servCount === 1 ? "pulizia" : "pulizie"}`);
-                            if (ordCount > 0) parts.push(`${ordCount} ${ordCount === 1 ? "ordine" : "ordini"}`);
-                            return parts.length > 0 ? parts.join(" · ") : `${propServices.length} pulizie`;
+                            const pills: React.ReactNode[] = [];
+                            if (servCount > 0) pills.push(
+                              <span key="s" className="inline-flex items-center gap-1 text-[10px] bg-gradient-to-br from-emerald-50 to-emerald-100/80 text-emerald-700 px-2 py-0.5 rounded-full font-medium">
+                                <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" /></svg>
+                                {servCount} {servCount === 1 ? "pulizia" : "pulizie"}
+                              </span>
+                            );
+                            if (ordCount > 0) pills.push(
+                              <span key="o" className="inline-flex items-center gap-1 text-[10px] bg-gradient-to-br from-violet-50 to-violet-100/80 text-violet-700 px-2 py-0.5 rounded-full font-medium">
+                                <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
+                                {ordCount} {ordCount === 1 ? "ordine" : "ordini"}
+                              </span>
+                            );
+                            return pills;
                           })()}
-                        </p>
+                        </div>
                       </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <p className="font-bold text-slate-800 text-lg">{formatCurrency(propTotal)}</p>
-                      <div className={`w-8 h-8 rounded-lg bg-slate-200 flex items-center justify-center transition-transform ${isPropExpanded ? "rotate-180" : ""}`}>
+                      <div className={`w-[30px] h-[30px] rounded-[9px] bg-slate-200 flex items-center justify-center transition-transform flex-shrink-0 ${isPropExpanded ? "rotate-180" : ""}`}>
                         {Icons.chevronDown}
                       </div>
+                    </div>
+                    {/* Riga 2: fascia sfumata col totale (separato dal nome) */}
+                    <div className="w-full px-4 py-2.5 flex items-center justify-between" style={{ background: "linear-gradient(135deg,#0A2540 0%,#123a63 55%,#1A4E85 100%)" }}>
+                      <div className="flex items-center gap-2">
+                        <div className="w-[26px] h-[26px] rounded-lg bg-white/10 flex items-center justify-center">
+                          <svg className="w-[15px] h-[15px]" style={{ color: "#9FD0FF" }} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                        </div>
+                        <span className="text-xs" style={{ color: "#9FD0FF" }}>Totale mese</span>
+                      </div>
+                      <span className="text-[21px] font-medium text-white -tracking-[0.3px]">{formatCurrency(propTotal)}</span>
                     </div>
                   </button>
                   
