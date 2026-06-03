@@ -621,7 +621,7 @@ export default function PagamentiPage() {
   const [inventorySearch, setInventorySearch] = useState("");
   const [expandedInvCategory, setExpandedInvCategory] = useState<string | null>(null);
   
-  const [paymentForm, setPaymentForm] = useState({ type: "ACCONTO" as PaymentType, amount: "", method: "CONTANTI" as PaymentMethod, note: "" });
+  const [paymentForm, setPaymentForm] = useState({ type: "ACCONTO" as PaymentType, amount: "", method: "" as PaymentMethod | "", note: "" });
   const [serviceEditForm, setServiceEditForm] = useState({ newPrice: "", reason: "" });
 
   // ===== GESTIONE SERVIZIO: esclusione billing / eliminazione totale =====
@@ -824,6 +824,7 @@ export default function PagamentiPage() {
   const handleSubmitPayment = async (proprietarioId: string, proprietarioName: string, customAmount?: number, totalDue?: number, totalPaid?: number) => {
     const amount = customAmount || parseFloat(paymentForm.amount);
     if (!amount || amount <= 0) { setLocalError("Inserisci un importo valido"); return; }
+    if (!paymentForm.method) { alert("Inserire il metodo di pagamento"); return; }
     try {
       const res = await fetch("/api/payments", {
         method: "POST",
@@ -833,7 +834,7 @@ export default function PagamentiPage() {
       if (!res.ok) throw new Error((await res.json()).error);
       showSuccess(`Pagamento di ${formatCurrency(amount)} registrato`);
       setQuickPayClient(null);
-      setPaymentForm({ type: "ACCONTO", amount: "", method: "CONTANTI", note: "" });
+      setPaymentForm({ type: "ACCONTO", amount: "", method: "", note: "" });
       fetchData();
       // 🚀 Timeline si aggiorna automaticamente in real-time!
     } catch (err: any) { setLocalError(err.message); }
@@ -2355,6 +2356,7 @@ export default function PagamentiPage() {
           <div className="flex-shrink-0 p-4 border-t border-slate-200 bg-white">
             <button 
               onClick={() => {
+                if (!paymentForm.method) { alert("Inserire il metodo di pagamento"); return; }
                 if (paymentMode === "totale") {
                   setConfirmSaldoModal({ client: quickPayClient, amount: quickPayClient.saldo });
                 } else if (finalAmount > 0) {
