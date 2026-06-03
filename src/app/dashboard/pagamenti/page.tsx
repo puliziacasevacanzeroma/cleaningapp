@@ -2559,17 +2559,25 @@ export default function PagamentiPage() {
         )}
 
         <div className="p-4">
-          {/* Header: avatar + nome + bottone incassa */}
-          <div className="flex items-center gap-3 mb-3">
+          {/* Header: avatar + nome + badge stato + sottotitolo (Versione 2) */}
+          <div className="flex items-start gap-3">
             <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${clientColors[index % clientColors.length]} flex items-center justify-center shadow-lg flex-shrink-0 ${ownerBlocked ? 'opacity-60' : ''}`}>
               <span className="text-white text-xs font-bold">{initials}</span>
             </div>
             <div className="flex-1 min-w-0">
-              <h3 className="font-bold text-slate-900 text-[17px] truncate">{client.proprietarioName}</h3>
-              <p className="text-[11px] text-slate-500 font-medium mt-0.5 truncate">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="font-bold text-slate-900 text-[16px] truncate">{client.proprietarioName}</h3>
+                {client.saldoConCredito > 0.01 ? (
+                  <span className="text-[10px] font-semibold bg-red-50 text-red-700 px-2 py-0.5 rounded-full flex-shrink-0">Da incassare</span>
+                ) : (
+                  <span className="text-[10px] font-semibold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full flex items-center gap-1 flex-shrink-0">
+                    <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                    Saldato
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-slate-500 font-medium mt-1 truncate">
                 {(() => {
-                  // 🆕 Distinguo "servizi" (pulizie) da "ordini" (biancheria + kit + extra)
-                  // come fa già il riepilogo per categoria sotto
                   const ordiniCount = client.ordersCount + client.kitCortesiaCount + client.serviziExtraCount;
                   const parts: string[] = [`${propertyNames.length} proprietà`];
                   if (client.cleaningsCount > 0) parts.push(`${client.cleaningsCount} ${client.cleaningsCount === 1 ? "pulizia" : "pulizie"}`);
@@ -2578,67 +2586,42 @@ export default function PagamentiPage() {
                 })()}
               </p>
             </div>
-            {client.saldoConCredito > 0.01 ? (
-              <button 
-                onClick={(e) => { e.stopPropagation(); setQuickPayClient(client); }}
-                className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-400 to-teal-500 text-white flex items-center justify-center shadow-lg shadow-emerald-500/30 active:scale-95 transition-transform flex-shrink-0"
-                title="Incassa"
-              >
-                {Icons.creditCard}
-              </button>
-            ) : (
-              <div className="flex items-center gap-1.5 px-3 py-2 bg-gradient-to-br from-emerald-400 to-teal-500 text-white rounded-xl shadow-md shadow-emerald-500/30 flex-shrink-0">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                </svg>
-                <span className="text-[11px] font-bold">Saldato</span>
-              </div>
-            )}
           </div>
 
-          {/* Saldo compatto + Mostra dettagli sulla stessa riga */}
-          {client.saldoConCredito > 0.01 ? (
-            <div className="flex items-center justify-between gap-3 mt-1">
-              {/* Box saldo circoscritto alla cifra */}
-              <div className="inline-flex flex-col px-3 py-2 rounded-2xl bg-gradient-to-br from-red-50 to-red-100/70 shadow-[inset_0_0_0_1px_rgba(220,38,38,0.18)]">
-                <p className="text-[9px] text-red-600/80 font-semibold uppercase tracking-[0.15em] leading-none mb-1">Da incassare</p>
-                <p className="text-xl font-bold text-red-700 leading-none" style={{ letterSpacing: '-0.02em' }}>
-                  {formatCurrency(client.saldoConCredito)}
-                </p>
-                {/* Indicatore acconto se c'è */}
+          {/* Riga inferiore: totale grande + azioni (Dettagli + Incassa) */}
+          <div className="flex items-center justify-between gap-3 mt-3 pt-3 border-t border-slate-100">
+            {client.saldoConCredito > 0.01 ? (
+              <div className="min-w-0">
+                <span className="text-xl font-bold text-red-700" style={{ letterSpacing: '-0.02em' }}>{formatCurrency(client.saldoConCredito)}</span>
                 {client.creditoPrecedente > 0.01 && (
-                  <p className="text-[9px] text-emerald-700 font-medium mt-1 leading-none">
-                    Acconto −{formatCurrency(client.creditoPrecedente)}
-                  </p>
+                  <span className="text-[10px] text-emerald-700 font-medium ml-2 whitespace-nowrap">Acconto −{formatCurrency(client.creditoPrecedente)}</span>
                 )}
               </div>
-              {/* Mostra dettagli a destra */}
-              <button 
+            ) : (
+              <span className="text-base font-bold text-slate-400">{formatCurrency(client.totaleEffettivo)}</span>
+            )}
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <button
                 onClick={handleExpand}
-                className="text-[13px] text-indigo-600 font-semibold flex items-center gap-1 flex-shrink-0 active:scale-[0.98] transition-transform"
+                className="text-[13px] text-indigo-600 font-semibold flex items-center gap-1 active:scale-[0.98] transition-transform"
               >
                 <span>{isExpanded ? "Nascondi" : "Dettagli"}</span>
                 <div className={`transition-transform ${isExpanded ? "rotate-180" : ""}`}>
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
-                  </svg>
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" /></svg>
                 </div>
               </button>
+              {client.saldoConCredito > 0.01 && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); setQuickPayClient(client); }}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-gradient-to-br from-emerald-400 to-teal-500 text-white rounded-xl shadow-md shadow-emerald-500/30 active:scale-95 transition-transform text-[13px] font-semibold flex-shrink-0"
+                  title="Incassa"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M5 6h14a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2z" /></svg>
+                  <span>Incassa</span>
+                </button>
+              )}
             </div>
-          ) : (
-            /* Se saldato: solo il bottone Mostra dettagli (no box saldo) */
-            <button 
-              onClick={handleExpand}
-              className="w-full mt-1 py-2 text-[13px] text-indigo-600 font-semibold flex items-center justify-center gap-1 active:scale-[0.98] transition-transform"
-            >
-              <span>{isExpanded ? "Nascondi dettagli" : "Mostra dettagli"}</span>
-              <div className={`transition-transform ${isExpanded ? "rotate-180" : ""}`}>
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
-                </svg>
-              </div>
-            </button>
-          )}
+          </div>
         </div>
         
         {/* Contenuto espanso */}
