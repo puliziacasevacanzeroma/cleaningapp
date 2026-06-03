@@ -290,13 +290,11 @@ function CategorySummary({
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [overIdx, setOverIdx] = useState<number | null>(null);
   const [armedIdx, setArmedIdx] = useState<number | null>(null); // tessera "pronta" al trascinamento (dopo tieni-premuto)
-  const [hint, setHint] = useState(false); // suggerimento "tieni premuto" dopo un tap veloce
   const touchIdx = useRef<number | null>(null);
   const touchDragging = useRef(false); // true solo quando il long-press ha attivato il drag
   const movedRef = useRef(false); // true se il dito si è mosso (= scroll, non tap)
   const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const startPos = useRef<{ x: number; y: number } | null>(null);
-  const hintTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const clearPress = () => {
     if (pressTimer.current) { clearTimeout(pressTimer.current); pressTimer.current = null; }
@@ -337,12 +335,6 @@ function CategorySummary({
       <p className="text-[10px] text-slate-400 uppercase tracking-wide mb-2.5">
         Totale per categoria <span className="text-slate-300 normal-case tracking-normal">· tieni premuto e trascina per unire</span>
       </p>
-      {hint && (
-        <div className="mb-2 flex items-center gap-1.5 text-[11px] text-violet-600 bg-violet-50 border border-violet-100 rounded-lg px-2.5 py-1.5">
-          <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.042 21.672L13.684 16.6m0 0l-2.51 2.225.569-9.47 5.227 7.917-3.286-.672zM12 2.25V4.5m5.834.166l-1.591 1.591M20.25 10.5H18M7.757 14.743l-1.59 1.59M6 10.5H3.75m4.007-4.243l-1.59-1.591" /></svg>
-          Tieni premuto una tessera per trascinarla e unirla a un'altra
-        </div>
-      )}
       <div className="grid grid-cols-2 gap-2">
         {groups.map((group, idx) => {
           const sorted = sortGroup(group);
@@ -410,12 +402,6 @@ function CategorySummary({
                   if (touchIdx.current !== null && overIdx !== null && overIdx !== touchIdx.current) {
                     mergeGroups(touchIdx.current, overIdx);
                   }
-                } else if (!movedRef.current) {
-                  // Tap vero (tocco e rilascio SENZA muoversi) → mostra il suggerimento.
-                  // Se invece il dito si è mosso era uno scroll → nessun avviso.
-                  setHint(true);
-                  if (hintTimer.current) clearTimeout(hintTimer.current);
-                  hintTimer.current = setTimeout(() => setHint(false), 2500);
                 }
                 touchIdx.current = null;
                 touchDragging.current = false;
