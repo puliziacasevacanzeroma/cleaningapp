@@ -6,6 +6,7 @@ import { monthlyReportEmail, type MonthlyReportEmailParams } from "~/lib/email/m
 import { generateMonthlyReportPdf, type CleaningForPdf, type LaundryItemForPdf, type PropertyForPdf } from "~/lib/email/monthlyReportPdf";
 import { resolveItemDisplayName } from "~/lib/itemNames";
 import { getApiUser } from "~/lib/api-auth";
+import { isCleaningProductItem } from "~/lib/payments/debtCalculator";
 
 export const dynamic = 'force-dynamic';
 
@@ -316,6 +317,11 @@ export async function GET(req: NextRequest) {
       let extraItemsTotal = 0;
       if (d.items && Array.isArray(d.items)) {
         for (const item of d.items) {
+          // 🔧 ALLINEAMENTO PAGINA: i prodotti-pulizia operatore NON si
+          // addebitano al proprietario. La pagina li esclude; il resoconto
+          // (email + PDF) li includeva → totale più alto di quello mostrato
+          // nei Pagamenti (es. 977,30 vs 974,60). Escludo qui per coerenza.
+          if (isCleaningProductItem(item)) continue;
           const itemKey = item.itemId || item.id;
           const invItem = inventoryById.get(itemKey);
           const itemBasePrice = item.unitPrice || item.price || invItem?.sellPrice || 0;
