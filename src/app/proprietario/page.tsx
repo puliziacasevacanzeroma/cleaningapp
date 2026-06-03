@@ -181,8 +181,12 @@ export default function ProprietarioDashboard() {
 
   const balance = useOwnerDebts(user?.id);
   const cur = useOwnerRealtimePayments(user?.id, curMonth, curYear);
-  const prev = useOwnerRealtimePayments(user?.id, prevMonth, prevYear);
   const trendHook = useOwnerMonthlyTrend(user?.id, 12);
+  // Totale del mese precedente: preso dal trend (gratis) → niente secondo hook pagamenti.
+  const prevTotal = useMemo(() => {
+    const pt = trendHook.trend.find(t => t.month === prevMonth && t.year === prevYear);
+    return pt ? pt.total : 0;
+  }, [trendHook.trend, prevMonth, prevYear]);
 
   const firstName = user?.name?.split(" ")[0] || "Utente";
 
@@ -190,11 +194,11 @@ export default function ProprietarioDashboard() {
     now, firstName,
     activeCount: cur.stats?.propertyCount ?? trendHook.activeCount,
     pendingCount: trendHook.pendingCount,
-    cur: cur.stats, prev: prev.stats, summary: cur.summary,
+    cur: cur.stats, prevTotal, summary: cur.summary,
     debts: balance.debts, totalDebt: balance.totalDebt,
     countScaduti: balance.countScaduti, countWarning: balance.countWarning, countDaPagare: balance.countDaPagare,
     trend: trendHook.trend,
-  }), [now, firstName, cur.stats, prev.stats, cur.summary, balance.debts, balance.totalDebt, balance.countScaduti, balance.countWarning, balance.countDaPagare, trendHook.trend, trendHook.activeCount, trendHook.pendingCount]);
+  }), [now, firstName, cur.stats, prevTotal, cur.summary, balance.debts, balance.totalDebt, balance.countScaduti, balance.countWarning, balance.countDaPagare, trendHook.trend, trendHook.activeCount, trendHook.pendingCount]);
 
   // hero slider
   const [slide, setSlide] = useState(0);
@@ -321,9 +325,9 @@ export default function ProprietarioDashboard() {
             <div className="pd-v">{vm.activeCount}</div><div className="pd-l">{vm.activeCount === 1 ? "Proprietà attiva" : "Proprietà attive"}</div>
             {vm.pendingCount > 0 && <span className="pd-tr" style={{ background: "#fffbeb", color: "#d97706" }}>+{vm.pendingCount} in attesa</span>}</div>
           <div className="pd-kpi"><div className="pd-kic" style={{ background: "#ecfeff", color: "#06b6d4" }}><Ico k="check" /></div>
-            <div className="pd-v">{vm.kpis.servicesCount}</div><div className="pd-l">Servizi nel mese</div>{trendDelta(vm.kpis.servDelta)}</div>
+            <div className="pd-v">{vm.kpis.servicesCount}</div><div className="pd-l">Servizi nel mese</div></div>
           <div className="pd-kpi"><div className="pd-kic" style={{ background: "#fef3c7", color: "#d97706" }}><Ico k="card" /></div>
-            <div className="pd-v">{fmtEur(vm.kpis.avgCost)}</div><div className="pd-l">Costo medio servizio</div>{trendDelta(vm.kpis.avgDelta)}</div>
+            <div className="pd-v">{fmtEur(vm.kpis.avgCost)}</div><div className="pd-l">Costo medio servizio</div></div>
         </div>
 
         {/* categorie */}
@@ -406,12 +410,6 @@ export default function ProprietarioDashboard() {
 }
 
 // ─────────────────── small bits ───────────────────
-function trendDelta(d: number) {
-  if (d > 0) return <span className="pd-tr" style={{ background: "#ecfdf5", color: "#059669" }}><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M7 14l5-5 5 5" /></svg>+{d}</span>;
-  if (d < 0) return <span className="pd-tr" style={{ background: "#eff6ff", color: "#2563eb" }}><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M7 10l5 5 5-5" /></svg>{d}</span>;
-  return <span className="pd-tr" style={{ background: "#f1f5f9", color: "#64748b" }}>stabile</span>;
-}
-
 function Spark({ values }: { values: number[] }) {
   if (!values.length) return <div className="pd-spark" />;
   const max = Math.max(...values), min = Math.min(...values), W = 300, H = 38, n = values.length;

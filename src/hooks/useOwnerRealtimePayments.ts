@@ -166,6 +166,11 @@ const staticCache: StaticCache = {
   loaded: false,
 };
 
+// Cache module-level del RISULTATO (stats/summary) per chiave `${owner}-${anno}-${mese}`.
+// Consente il ritorno ISTANTANEO quando si rientra nella pagina: si mostra subito
+// l'ultimo valore calcolato mentre i listener Firestore si riallineano in background.
+const resultCache = new Map<string, { stats: OwnerStats | null; summary: OwnerSummary | null }>();
+
 async function loadInventory(): Promise<boolean> {
   if (staticCache.loaded) return true;
   try {
@@ -728,8 +733,10 @@ export function useOwnerRealtimePayments(ownerId: string | undefined, month: num
   // CALCOLO MESE SELEZIONATO
   // ═══════════════════════════════════════════════════════════
   const { stats, summary } = useMemo(() => {
+    const cacheKey = `${ownerId}-${year}-${month}`;
     if (loading || !ownerId || ownerProperties.length === 0) {
-      return { stats: null as OwnerStats | null, summary: null as OwnerSummary | null };
+      const cached = ownerId ? resultCache.get(cacheKey) : undefined;
+      return cached || { stats: null as OwnerStats | null, summary: null as OwnerSummary | null };
     }
 
     // ─── 1. Calcolo TOTALE tramite funzione condivisa ─────
@@ -961,7 +968,9 @@ export function useOwnerRealtimePayments(ownerId: string | undefined, month: num
       totaleAltro: realPayments.filter(p => p.method === "ALTRO").reduce((s, p) => s + (p.amount || 0), 0),
     };
 
-    return { stats: ownerStats, summary: ownerSummary };
+    const out = { stats: ownerStats, summary: ownerSummary };
+    resultCache.set(cacheKey, out);
+    return out;
   }, [month, year, loading, ownerId, ownerProperties, allCleanings, allOrders, allPayments, allOverrides]);
 
   return { loading, error, stats, summary, refresh };

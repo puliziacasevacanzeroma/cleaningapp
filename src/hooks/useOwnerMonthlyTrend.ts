@@ -36,6 +36,11 @@ export interface OwnerMonthlyTrendResult {
   loading: boolean;
 }
 
+// Cache module-level: ritorno istantaneo al rientro nella dashboard, refresh in bg.
+const trendCache = new Map<string, { trend: MonthlyTrendPoint[]; activeCount: number; pendingCount: number }>();
+// Inventario globale: letto una sola volta per sessione (condiviso tra i mount).
+let invDocsCache: Array<{ id: string; data: Record<string, any> }> | null = null;
+
 function lastNMonths(refDate: Date, months: number): MonthlyTrendPoint[] {
   const cm = refDate.getMonth() + 1;
   const cy = refDate.getFullYear();
@@ -93,13 +98,19 @@ export function useOwnerMonthlyTrend(ownerId: string | undefined, months = 12): 
     let mounted = true;
 
     async function setup() {
-      // Inventario (una volta)
-      try {
-        const invSnap = await getDocs(collection(db, "inventory"));
-        if (!mounted) return;
-        setInventoryDocs(invSnap.docs.map(d => ({ id: d.id, data: d.data() as Record<string, any> })));
+      // Inventario (una volta per sessione, condiviso)
+      if (invDocsCache) {
+        setInventoryDocs(invDocsCache);
         setInventoryReady(true);
-      } catch { if (mounted) setInventoryReady(true); }
+      } else {
+        try {
+          const invSnap = await getDocs(collection(db, "inventory"));
+          if (!mounted) return;
+          invDocsCache = invSnap.docs.map(d => ({ id: d.id, data: d.data() as Record<string, any> }));
+          setInventoryDocs(invDocsCache);
+          setInventoryReady(true);
+        } catch { if (mounted) setInventoryReady(true); }
+      }
 
       // Proprietà (TUTTE le proprietà del proprietario → active per il calcolo, pending per il KPI)
       const propsSnap = await getDocs(query(collection(db, "properties"), where("ownerId", "==", ownerId)));
@@ -185,7 +196,7 @@ export function useOwnerMonthlyTrend(ownerId: string | undefined, months = 12): 
     return () => { mounted = false; unsubsRef.current.forEach(u => { try { u(); } catch {} }); unsubsRef.current = []; };
   }, [ownerId, months]);
 
-  const trend = useMemo<MonthlyTrendPoint[]>(() => {
+  const liveTrend = useMemo<MonthlyTrendPoint[]>(() => {
     const base = lastNMonths(new Date(), months);
     if (loading || !ownerId || properties.length === 0) return base;
     const propertiesById = new Map(properties.map(p => [p.id, p]));
@@ -198,5 +209,17 @@ export function useOwnerMonthlyTrend(ownerId: string | undefined, months = 12): 
     });
   }, [loading, ownerId, properties, cleanings, orders, payments, overrides, inventoryDocs, months]);
 
-  return { trend, activeCount: properties.length, pendingCount, loading };
+  // Cache-first: se sto ricaricando ma ho un risultato in cache, lo restituisco
+  // subito (loading:false) → niente spinner al rientro nella dashboard.
+  return useMemo<OwnerMonthlyTrendResult>(() => {
+    const key = ownerId || "";
+    if (!loading && ownerId) {
+      const live = { trend: liveTrend, activeCount: properties.length, pendingCount };
+      trendCache.set(key, live);
+      return { ...live, loading: false };
+    }
+    const cached = key ? trendCache.get(key) : undefined;
+    if (cached) return { ...cached, loading: false };
+    return { trend: liveTrend, activeCount: properties.length, pendingCount, loading };
+  }, [loading, ownerId, liveTrend, properties.length, pendingCount]);
 }

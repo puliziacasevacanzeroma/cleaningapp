@@ -49,7 +49,7 @@ export interface DashboardInput {
   activeCount: number;
   pendingCount: number;
   cur: OwnerStats | null;
-  prev: OwnerStats | null;
+  prevTotal: number; // totale spesa mese precedente (dal trend) — evita un hook in più
   summary: OwnerSummary | null;
   debts: MonthDebt[];
   totalDebt: number;
@@ -84,7 +84,7 @@ export interface DashboardVM {
   countdown: NearestVM | null;
   spend: { total: number; prevTotal: number; deltaPct: number; deltaDir: 1 | 0 | -1; prevMonthName: string };
   spark: number[];
-  kpis: { servicesCount: number; servDelta: number; avgCost: number; avgDelta: number };
+  kpis: { servicesCount: number; avgCost: number };
   cats: CatVM[];
   catsTotal: number;
   monthBilled: number;
@@ -110,7 +110,7 @@ function servicesCountOf(s: OwnerStats | null): number {
 }
 
 export function buildDashboardViewModel(input: DashboardInput): DashboardVM {
-  const { now, firstName, activeCount, pendingCount, cur, prev, summary,
+  const { now, firstName, activeCount, pendingCount, cur, prevTotal, summary,
     debts, totalDebt, countScaduti, countWarning, countDaPagare, trend } = input;
 
   const curMonth = now.getMonth() + 1;
@@ -140,7 +140,6 @@ export function buildDashboardViewModel(input: DashboardInput): DashboardVM {
 
   // ── SPESA mese (canonico: totaleCalcolato) ──
   const total = cur?.totaleCalcolato ?? 0;
-  const prevTotal = prev?.totaleCalcolato ?? 0;
   const deltaPct = prevTotal > 0 ? r0(((total - prevTotal) / prevTotal) * 100) : 0;
   const deltaDir: 1 | 0 | -1 = deltaPct > 0 ? 1 : deltaPct < 0 ? -1 : 0;
 
@@ -148,11 +147,7 @@ export function buildDashboardViewModel(input: DashboardInput): DashboardVM {
 
   // ── KPI ──
   const servicesCount = servicesCountOf(cur);
-  const prevServices = servicesCountOf(prev);
-  const servDelta = servicesCount - prevServices;
   const avgCost = servicesCount > 0 ? r0(total / servicesCount) : 0;
-  const prevAvg = prevServices > 0 ? r0(prevTotal / prevServices) : 0;
-  const avgDelta = avgCost - prevAvg;
 
   // ── CATEGORIE (donut) — solo > 0 ──
   const catsRaw: CatVM[] = cur ? [
@@ -274,7 +269,7 @@ export function buildDashboardViewModel(input: DashboardInput): DashboardVM {
     countdown: nearest,
     spend: { total, prevTotal, deltaPct, deltaDir, prevMonthName: capit(prevMonthName) },
     spark,
-    kpis: { servicesCount, servDelta, avgCost, avgDelta },
+    kpis: { servicesCount, avgCost },
     cats, catsTotal, monthBilled: total,
     trend: trendVM,
     recent, properties, paySplit, insights,
