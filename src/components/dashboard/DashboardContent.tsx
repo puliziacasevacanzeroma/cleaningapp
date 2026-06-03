@@ -2035,7 +2035,7 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
               <div className="flex items-start justify-between mb-3">
                 <div>
                   <p className="text-white/70 text-xs font-medium mb-1">Guadagno di oggi</p>
-                  <p className="text-4xl font-black text-white">{(loadingCleanings || loadingOrders) ? <span className="opacity-50">€ —</span> : <>€ {mobileStats.totalEarnings}</>}</p>
+                  <p className="text-4xl font-black text-white">{(loadingCleanings || loadingOrders) ? "" : `€ ${mobileStats.totalEarnings}`}</p>
                 </div>
                 <div className="inline-flex items-center gap-1 bg-white/20 rounded-full px-2.5 py-1">
                   <svg className="w-3.5 h-3.5 text-emerald-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2048,11 +2048,11 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
               <div className="flex items-center gap-4 mb-3 pb-3 border-b border-white/20">
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full bg-cyan-300"></div>
-                  <span className="text-xs text-white/80">Pulizie: <span className="font-bold text-white">{(loadingCleanings || loadingOrders) ? "—" : `€${mobileStats.cleaningsRevenue}`}</span></span>
+                  <span className="text-xs text-white/80">Pulizie: <span className="font-bold text-white">{(loadingCleanings || loadingOrders) ? "" : `€${mobileStats.cleaningsRevenue}`}</span></span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full bg-violet-300"></div>
-                  <span className="text-xs text-white/80">Biancheria: <span className="font-bold text-white">{(loadingCleanings || loadingOrders) ? "—" : `€${mobileStats.ordersRevenue}`}</span></span>
+                  <span className="text-xs text-white/80">Biancheria: <span className="font-bold text-white">{(loadingCleanings || loadingOrders) ? "" : `€${mobileStats.ordersRevenue}`}</span></span>
                 </div>
               </div>
               
