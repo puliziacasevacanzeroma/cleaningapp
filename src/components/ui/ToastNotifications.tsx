@@ -53,6 +53,24 @@ export function useToast() {
   return context;
 }
 
+// ==================== TRACCIAMENTO VISIBILITÀ ====================
+// Quando l'app torna in primo piano (da background/chiusa), i listener
+// Firestore ricevono in blocco le notifiche accumulate. Per non mostrarle
+// tutte come toast (devono restare solo push), registriamo l'istante in cui
+// l'app è tornata visibile e ignoriamo i toast nei primi istanti dopo.
+let lastBecameVisibleAt = Date.now();
+// Periodo di grazia: i toast che arrivano entro questo tempo dal ritorno in
+// primo piano sono considerati "backlog" e NON mostrati.
+const VISIBILITY_GRACE_MS = 1500;
+
+if (typeof document !== "undefined") {
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
+      lastBecameVisibleAt = Date.now();
+    }
+  });
+}
+
 // ==================== SUONO DOLCE A DUE NOTE ====================
 
 function playNotificationSound() {
@@ -193,6 +211,16 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   ) => {
     // 🔇 Non mostrare toast/suono se l'app è in background (la push notification gestisce tutto)
     if (document.visibilityState !== 'visible') {
+      return;
+    }
+
+    // 🔇 Non mostrare il "backlog": quando l'app torna in primo piano dopo essere
+    // stata in background/chiusa, i listener Firestore sputano in blocco le
+    // notifiche accumulate. Quelle le hai già ricevute come push: NON devono
+    // comparire come raffica di toast. Le ignoriamo nei primi istanti dopo il
+    // ritorno in primo piano. I toast genuini (arrivati mentre usi l'app)
+    // passano normalmente perché distano molto più del periodo di grazia.
+    if (Date.now() - lastBecameVisibleAt < VISIBILITY_GRACE_MS) {
       return;
     }
     
