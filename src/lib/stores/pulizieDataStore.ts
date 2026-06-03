@@ -8,8 +8,7 @@
  * - Spinner SOLO la primissima volta (cache completamente vuota)
  */
 
-import { collection, query, where, orderBy, onSnapshot, getDocs, Timestamp } from "firebase/firestore";
-import { subscribeByPropertyChunks } from "~/lib/firebase/scopedSnapshot";
+import { collection, query, where, orderBy, onSnapshot, Timestamp } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 
 // ─── Types ───────────────────────────────────────────────────
@@ -148,6 +147,12 @@ class PulizieDataStore {
   private _unsubscribers: (() => void)[] = [];
   private _activeUserId: string | null = null;
   private _activeIsAdmin: boolean = false;
+  // 🚀 PROPRIETARIO: listener pulizie/ordini filtrati per propertyId (gestiti a parte)
+  private _ownerCleaningsUnsubs: (() => void)[] = [];
+  private _ownerOrdersUnsubs: (() => void)[] = [];
+  private _ownerCleaningsByChunk = new Map<number, PulizieCleaning[]>();
+  private _ownerOrdersByChunk = new Map<number, PulizieOrder[]>();
+  private _ownerPropIdsKey = "";
 
   /** Subscribe for React (useSyncExternalStore) */
   subscribe = (callback: Listener): (() => void) => {
@@ -181,11 +186,6 @@ class PulizieDataStore {
     }
 
     // ─── 1. Properties ───
-    // 🚀 PERF v2: filtro server-side `status == "ACTIVE"` per admin. Prima: scaricava
-    // tutte le proprietà (ACTIVE, PENDING, SUSPENDED, INACTIVE) e filtrava in memoria
-    // alla riga sotto. Il filtro in memoria resta per safety (gestisce eventuali stati
-    // transitori/legacy), ma la query server-side riduce drasticamente il traffico.
-    // Indice composito già presente: properties.status+name (firestore.indexes.json).
     const propsQuery = isAdmin
       ? query(collection(db, "properties"), where("status", "==", "ACTIVE"))
       : query(collection(db, "properties"), where("ownerId", "==", userId));
@@ -210,89 +210,20 @@ class PulizieDataStore {
             };
           });
         this._patch({ properties: props });
+        // 🚀 PROPRIETARIO: appena arrivano le sue proprietà, (ri)avvia pulizie/ordini
+        // filtrati per i suoi propertyId (così non scarica i dati di tutti).
+        if (!isAdmin) this._resubscribeOwnerData(props.map(p => p.id));
       })
     );
 
-    // ─── 2+3. Cleanings & Orders ───
-    // 🚀 PERF: per i PROPRIETARI le query sono SCOPATE alle loro proprietà
-    // (propertyId IN, a blocchi di 30). Prima scaricavano pulizie/ordini di
-    // TUTTI i proprietari (anche col limite 12 mesi: ~1000+ doc) → era la causa
-    // della lentezza di OGNI pagina proprietario, perché il layout fa partire
-    // questo store come prefetch. Per gli ADMIN resta la query ampia (devono
-    // vedere tutti) con il limite 12 mesi.
-    const mapCleaning = (doc: any): PulizieCleaning => {
-      const d = doc.data() as Record<string, any>;
-      return {
-        id: doc.id,
-        propertyId: d.propertyId || "",
-        propertyName: d.propertyName || "",
-        date: d.scheduledDate?.toDate?.() || new Date(),
-        scheduledTime: d.scheduledTime || "10:00",
-        status: d.status || "SCHEDULED",
-        operator: d.operatorId ? { id: d.operatorId, name: d.operatorName || "" } : null,
-        operators: d.operators || [],
-        guestName: d.guestName || "",
-        guestsCount: d.guestsCount || 2,
-        guestsConfirmed: d.guestsConfirmed || false,
-        adulti: d.adulti || 0,
-        neonati: d.neonati || 0,
-        bookingSource: d.bookingSource || "",
-        notes: d.notes || "",
-        price: d.price,
-        contractPrice: d.contractPrice || d.price,
-        customLinenConfig: d.customLinenConfig || null,
-        linenConfigModified: d.linenConfigModified || false,
-        hasLinenOrder: d.hasLinenOrder,
-        priceModified: d.priceModified || false,
-        serviceType: d.serviceType || "STANDARD",
-        serviceTypeName: d.serviceTypeName || "",
-        sgrossoReason: d.sgrossoReason || null,
-        sgrossoNotes: d.sgrossoNotes || null,
-        ratingScore: d.ratingScore || null,
-        ratingId: d.ratingId || null,
-        extraServices: d.extraServices || [],
-        photos: d.photos || [],
-        startedAt: d.startedAt || null,
-        completedAt: d.completedAt || null,
-        originalDate: d.originalDate?.toDate?.() || null,
-        dateModifiedAt: d.dateModifiedAt?.toDate?.() || null,
-        dateModifiedBy: d.dateModifiedBy || null,
-        dateModifiedByName: d.dateModifiedByName || null,
-        missedDeadline: d.missedDeadline || false,
-        missedDeadlineAt: d.missedDeadlineAt || null,
-        holidayFee: d.holidayFee || 0,
-        holidayName: d.holidayName || null,
-      };
-    };
-    const mapOrder = (doc: any): PulizieOrder => {
-      const d = doc.data() as Record<string, any>;
-      return {
-        id: doc.id,
-        cleaningId: d.cleaningId || null,
-        propertyId: d.propertyId,
-        propertyName: d.propertyName || "",
-        propertyAddress: d.propertyAddress || "",
-        scheduledDate: d.scheduledDate?.toDate?.() || new Date(),
-        scheduledTime: d.scheduledTime || "10:00",
-        items: d.items || [],
-        status: d.status || "PENDING",
-        riderName: d.riderName || null,
-        deliveryFee: d.deliveryFee || 0,
-        deliveryFeeEnabled: d.deliveryFeeEnabled !== false,
-        bedMaking: d.bedMaking || false,
-        bedMakingCount: d.bedMakingCount || 0,
-        bedMakingFee: d.bedMakingFee || 0,
-        bedMakingBeds: d.bedMakingBeds || [],
-      } as PulizieOrder;
-    };
-    const sortByDateAsc = (a: PulizieCleaning, b: PulizieCleaning) => a.date.getTime() - b.date.getTime();
-    const notCancelled = (o: PulizieOrder) => o.status !== "CANCELLED" && o.status !== "cancelled";
-
+    // ─── 2. Cleanings + 3. Orders ───
+    // 🚀 ADMIN: query globali ultimi 12 mesi (l'admin deve vedere tutto).
+    //    PROPRIETARIO: gestite da _resubscribeOwnerData (filtrate per le sue proprietà).
     if (isAdmin) {
-      // ADMIN: query ampia su tutti i proprietari, ultimi 12 mesi.
       const cleaningsRangeStart = new Date();
       cleaningsRangeStart.setMonth(cleaningsRangeStart.getMonth() - 12);
       cleaningsRangeStart.setHours(0, 0, 0, 0);
+
       this._unsubscribers.push(
         onSnapshot(
           query(
@@ -300,48 +231,27 @@ class PulizieDataStore {
             where("scheduledDate", ">=", Timestamp.fromDate(cleaningsRangeStart)),
             orderBy("scheduledDate", "asc")
           ),
-          (snapshot) => { this._patch({ cleanings: snapshot.docs.map(mapCleaning) }); }
+          (snapshot) => {
+            this._patch({ cleanings: snapshot.docs.map(doc => this._mapCleaning(doc)) });
+          }
         )
       );
+
       const ordersRangeStart = new Date();
       ordersRangeStart.setMonth(ordersRangeStart.getMonth() - 12);
       ordersRangeStart.setHours(0, 0, 0, 0);
+
       this._unsubscribers.push(
         onSnapshot(
           query(
             collection(db, "orders"),
             where("scheduledDate", ">=", Timestamp.fromDate(ordersRangeStart))
           ),
-          (snapshot) => { this._patch({ orders: snapshot.docs.map(mapOrder).filter(notCancelled) }); }
+          (snapshot) => {
+            this._patch({ orders: snapshot.docs.map(doc => this._mapOrder(doc)).filter(o => o.status !== "CANCELLED" && o.status !== "cancelled") });
+          }
         )
       );
-    } else {
-      // PROPRIETARIO: scopa alle PROPRIE proprietà (propertyId IN, blocchi di 30).
-      // getDocs una tantum per gli id (stabili in sessione); pulizie/ordini
-      // restano in tempo reale via subscribeByPropertyChunks. Niente range su
-      // scheduledDate nella query → nessun indice composito richiesto.
-      void (async () => {
-        try {
-          const propsSnap = await getDocs(
-            query(collection(db, "properties"), where("ownerId", "==", userId))
-          );
-          if (this._activeUserId !== userId) return; // utente cambiato nel frattempo
-          const propIds = propsSnap.docs.map(d => d.id);
-          if (propIds.length === 0) { this._patch({ cleanings: [], orders: [] }); return; }
-          this._unsubscribers.push(
-            subscribeByPropertyChunks("cleanings", propIds, mapCleaning, (items) => {
-              this._patch({ cleanings: (items as PulizieCleaning[]).slice().sort(sortByDateAsc) });
-            })
-          );
-          this._unsubscribers.push(
-            subscribeByPropertyChunks("orders", propIds, mapOrder, (items) => {
-              this._patch({ orders: (items as PulizieOrder[]).filter(notCancelled) });
-            })
-          );
-        } catch (e) {
-          if (process.env.NODE_ENV !== "production") console.error("🔴 PulizieStore: errore caricamento scopato", e);
-        }
-      })();
     }
 
     // ─── 4. Inventory ───
@@ -373,10 +283,145 @@ class PulizieDataStore {
     );
   }
 
+  // 🔧 Mapping condiviso (admin + proprietario) — stesso output per coerenza dati
+  private _mapCleaning(doc: any): PulizieCleaning {
+    const d = doc.data() as Record<string, any>;
+    return {
+      id: doc.id,
+      propertyId: d.propertyId || "",
+      propertyName: d.propertyName || "",
+      date: d.scheduledDate?.toDate?.() || new Date(),
+      scheduledTime: d.scheduledTime || "10:00",
+      status: d.status || "SCHEDULED",
+      operator: d.operatorId ? { id: d.operatorId, name: d.operatorName || "" } : null,
+      operators: d.operators || [],
+      guestName: d.guestName || "",
+      guestsCount: d.guestsCount || 2,
+      guestsConfirmed: d.guestsConfirmed || false,
+      adulti: d.adulti || 0,
+      neonati: d.neonati || 0,
+      bookingSource: d.bookingSource || "",
+      notes: d.notes || "",
+      price: d.price,
+      contractPrice: d.contractPrice || d.price,
+      customLinenConfig: d.customLinenConfig || null,
+      linenConfigModified: d.linenConfigModified || false,
+      hasLinenOrder: d.hasLinenOrder,
+      priceModified: d.priceModified || false,
+      serviceType: d.serviceType || "STANDARD",
+      serviceTypeName: d.serviceTypeName || "",
+      sgrossoReason: d.sgrossoReason || null,
+      sgrossoNotes: d.sgrossoNotes || null,
+      ratingScore: d.ratingScore || null,
+      ratingId: d.ratingId || null,
+      extraServices: d.extraServices || [],
+      photos: d.photos || [],
+      startedAt: d.startedAt || null,
+      completedAt: d.completedAt || null,
+      originalDate: d.originalDate?.toDate?.() || null,
+      dateModifiedAt: d.dateModifiedAt?.toDate?.() || null,
+      dateModifiedBy: d.dateModifiedBy || null,
+      dateModifiedByName: d.dateModifiedByName || null,
+      missedDeadline: d.missedDeadline || false,
+      missedDeadlineAt: d.missedDeadlineAt || null,
+      holidayFee: d.holidayFee || 0,
+      holidayName: d.holidayName || null,
+    };
+  }
+
+  private _mapOrder(doc: any): PulizieOrder {
+    const d = doc.data() as Record<string, any>;
+    return {
+      id: doc.id,
+      cleaningId: d.cleaningId || null,
+      propertyId: d.propertyId,
+      propertyName: d.propertyName || "",
+      propertyAddress: d.propertyAddress || "",
+      scheduledDate: d.scheduledDate?.toDate?.() || new Date(),
+      scheduledTime: d.scheduledTime || "10:00",
+      items: d.items || [],
+      status: d.status || "PENDING",
+      riderName: d.riderName || null,
+      deliveryFee: d.deliveryFee || 0,
+      deliveryFeeEnabled: d.deliveryFeeEnabled !== false,
+      bedMaking: d.bedMaking || false,
+      bedMakingCount: d.bedMakingCount || 0,
+      bedMakingFee: d.bedMakingFee || 0,
+      bedMakingBeds: d.bedMakingBeds || [],
+    } as PulizieOrder;
+  }
+
+  private _chunk<T>(arr: T[], size: number): T[][] {
+    const out: T[][] = [];
+    for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+    return out;
+  }
+
+  /** PROPRIETARIO: (ri)sottoscrive pulizie/ordini filtrati per i suoi propertyId.
+   *  Solo `in` su propertyId (niente range/orderBy server-side) → nessun indice
+   *  composito richiesto. Finestra 12 mesi applicata lato client. */
+  private _resubscribeOwnerData(propertyIds: string[]): void {
+    const key = [...propertyIds].sort().join(",");
+    if (key === this._ownerPropIdsKey) return; // nessun cambiamento → non rifare nulla
+    this._ownerPropIdsKey = key;
+
+    this._ownerCleaningsUnsubs.forEach(fn => fn());
+    this._ownerOrdersUnsubs.forEach(fn => fn());
+    this._ownerCleaningsUnsubs = [];
+    this._ownerOrdersUnsubs = [];
+    this._ownerCleaningsByChunk.clear();
+    this._ownerOrdersByChunk.clear();
+
+    if (propertyIds.length === 0) {
+      this._patch({ cleanings: [], orders: [] });
+      return;
+    }
+
+    const cutoff = new Date();
+    cutoff.setMonth(cutoff.getMonth() - 12);
+    cutoff.setHours(0, 0, 0, 0);
+
+    const chunks = this._chunk(propertyIds, 30); // Firestore "in" max 30 valori
+    chunks.forEach((chunk, idx) => {
+      this._ownerCleaningsUnsubs.push(
+        onSnapshot(
+          query(collection(db, "cleanings"), where("propertyId", "in", chunk)),
+          (snap) => {
+            const list = snap.docs.map(doc => this._mapCleaning(doc)).filter(c => c.date >= cutoff);
+            this._ownerCleaningsByChunk.set(idx, list);
+            const merged: PulizieCleaning[] = [];
+            this._ownerCleaningsByChunk.forEach(arr => merged.push(...arr));
+            merged.sort((a, b) => a.date.getTime() - b.date.getTime());
+            this._patch({ cleanings: merged });
+          }
+        )
+      );
+      this._ownerOrdersUnsubs.push(
+        onSnapshot(
+          query(collection(db, "orders"), where("propertyId", "in", chunk)),
+          (snap) => {
+            const list = snap.docs.map(doc => this._mapOrder(doc)).filter(o => o.status !== "CANCELLED" && o.status !== "cancelled" && o.scheduledDate >= cutoff);
+            this._ownerOrdersByChunk.set(idx, list);
+            const merged: PulizieOrder[] = [];
+            this._ownerOrdersByChunk.forEach(arr => merged.push(...arr));
+            this._patch({ orders: merged });
+          }
+        )
+      );
+    });
+  }
+
   /** Ferma tutti i listener */
   stop(): void {
     this._unsubscribers.forEach(fn => fn());
     this._unsubscribers = [];
+    this._ownerCleaningsUnsubs.forEach(fn => fn());
+    this._ownerOrdersUnsubs.forEach(fn => fn());
+    this._ownerCleaningsUnsubs = [];
+    this._ownerOrdersUnsubs = [];
+    this._ownerCleaningsByChunk.clear();
+    this._ownerOrdersByChunk.clear();
+    this._ownerPropIdsKey = "";
     this._activeUserId = null;
   }
 
