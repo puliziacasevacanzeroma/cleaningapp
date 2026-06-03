@@ -583,6 +583,7 @@ export default function PagamentiPage() {
   
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [methodError, setMethodError] = useState(false); // 🆕 avviso in stile: metodo mancante
   
   const [expandedClient, setExpandedClient] = useState<string | null>(null);
   const [expandedProperties, setExpandedProperties] = useState<Set<string>>(new Set()); // Proprietà espanse
@@ -594,6 +595,7 @@ export default function PagamentiPage() {
   const [mainTab, setMainTab] = useState<"lista" | "timeline">("lista"); // Default lista
   
   const [quickPayClient, setQuickPayClient] = useState<ClientStats | null>(null);
+  useEffect(() => { setMethodError(false); }, [quickPayClient]); // 🆕 reset avviso metodo all'apertura del modal
   const [editingService, setEditingService] = useState<ServiceDetail | null>(null);
   const [confirmSaldoModal, setConfirmSaldoModal] = useState<{ client: ClientStats; amount: number } | null>(null);
   // Modale di conferma generica (stile pagina) per azioni sì/no
@@ -824,7 +826,7 @@ export default function PagamentiPage() {
   const handleSubmitPayment = async (proprietarioId: string, proprietarioName: string, customAmount?: number, totalDue?: number, totalPaid?: number) => {
     const amount = customAmount || parseFloat(paymentForm.amount);
     if (!amount || amount <= 0) { setLocalError("Inserisci un importo valido"); return; }
-    if (!paymentForm.method) { alert("Inserire il metodo di pagamento"); return; }
+    if (!paymentForm.method) { setMethodError(true); return; }
     try {
       const res = await fetch("/api/payments", {
         method: "POST",
@@ -2333,22 +2335,30 @@ export default function PagamentiPage() {
             
             {/* Metodo pagamento */}
             <div>
-              <p className="text-sm font-semibold text-slate-600 mb-2">Metodo di pagamento</p>
+              <p className={`text-sm font-semibold mb-2 ${methodError ? "text-red-600" : "text-slate-600"}`}>Metodo di pagamento {methodError && <span className="font-normal">— obbligatorio</span>}</p>
               <div className="flex gap-2">
                 {(["CONTANTI", "BONIFICO", "ALTRO"] as PaymentMethod[]).map((m) => (
                   <button 
                     key={m} 
-                    onClick={() => setPaymentForm({ ...paymentForm, method: m })}
+                    onClick={() => { setPaymentForm({ ...paymentForm, method: m }); setMethodError(false); }}
                     className={`flex-1 py-3 rounded-xl font-semibold text-sm transition-all ${
                       paymentForm.method === m 
                         ? "bg-slate-800 text-white shadow-md" 
-                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                        : methodError
+                          ? "bg-red-50 text-red-600 ring-1 ring-red-300"
+                          : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                     }`}
                   >
                     {m === "CONTANTI" ? "Contanti" : m === "BONIFICO" ? "Bonifico" : "Altro"}
                   </button>
                 ))}
               </div>
+              {methodError && (
+                <div className="mt-2 flex items-center gap-2 text-[13px] text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2">
+                  <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                  Inserire il metodo di pagamento
+                </div>
+              )}
             </div>
           </div>
           
@@ -2356,7 +2366,7 @@ export default function PagamentiPage() {
           <div className="flex-shrink-0 p-4 border-t border-slate-200 bg-white">
             <button 
               onClick={() => {
-                if (!paymentForm.method) { alert("Inserire il metodo di pagamento"); return; }
+                if (!paymentForm.method) { setMethodError(true); return; }
                 if (paymentMode === "totale") {
                   setConfirmSaldoModal({ client: quickPayClient, amount: quickPayClient.saldo });
                 } else if (finalAmount > 0) {
