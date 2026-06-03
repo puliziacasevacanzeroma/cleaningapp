@@ -1784,6 +1784,29 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                 }
               });
             }
+
+            // 🎁 Servizi Extra (config.ex) — FIX: prima venivano salvati solo
+            // sulla pulizia (customLinenConfig) ma NON propagati all'ordine del
+            // rider, che quindi non li vedeva e non li consegnava (es. Prosecco
+            // dry richiesto dalla cliente). config.ex è {itemId: boolean}: un
+            // servizio è attivo se true. Quantità 1 (flag on/off).
+            if (currentConfig.ex) {
+              Object.entries(currentConfig.ex).forEach(([itemId, attivo]) => {
+                if (attivo === true) {
+                  const invItem = invExtras.find(i => i.id === itemId);
+                  const unitPrice = invItem?.p || 0;
+                  orderItems.push({
+                    itemId: itemId,
+                    id: itemId,
+                    name: invItem?.n || getItemName(itemId),
+                    quantity: 1,
+                    unitPrice: unitPrice,
+                    totalPrice: unitPrice,
+                    categoryName: "Servizi Extra"
+                  });
+                }
+              });
+            }
             
             orderItems.forEach((item, i) => {
             });
