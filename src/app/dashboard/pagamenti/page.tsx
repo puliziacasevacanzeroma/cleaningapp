@@ -289,7 +289,17 @@ function CategorySummary({
   const [groups, setGroups] = useState<string[][]>(() => CAT_ORDER.map(k => [k]));
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [overIdx, setOverIdx] = useState<number | null>(null);
+  const [armedIdx, setArmedIdx] = useState<number | null>(null); // tessera "pronta" al trascinamento (dopo tieni-premuto)
+  const [hint, setHint] = useState(false); // suggerimento "tieni premuto" dopo un tap veloce
   const touchIdx = useRef<number | null>(null);
+  const touchDragging = useRef(false); // true solo quando il long-press ha attivato il drag
+  const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const startPos = useRef<{ x: number; y: number } | null>(null);
+  const hintTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearPress = () => {
+    if (pressTimer.current) { clearTimeout(pressTimer.current); pressTimer.current = null; }
+  };
 
   const sortGroup = (g: string[]) => [...g].sort((a, b) => CAT_ORDER.indexOf(a) - CAT_ORDER.indexOf(b));
 
@@ -324,8 +334,14 @@ function CategorySummary({
   return (
     <div className="bg-white border border-slate-200 rounded-xl p-3">
       <p className="text-[10px] text-slate-400 uppercase tracking-wide mb-2.5">
-        Totale per categoria <span className="text-slate-300 normal-case tracking-normal">· trascina per unire</span>
+        Totale per categoria <span className="text-slate-300 normal-case tracking-normal">· tieni premuto e trascina per unire</span>
       </p>
+      {hint && (
+        <div className="mb-2 flex items-center gap-1.5 text-[11px] text-violet-600 bg-violet-50 border border-violet-100 rounded-lg px-2.5 py-1.5">
+          <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.042 21.672L13.684 16.6m0 0l-2.51 2.225.569-9.47 5.227 7.917-3.286-.672zM12 2.25V4.5m5.834.166l-1.591 1.591M20.25 10.5H18M7.757 14.743l-1.59 1.59M6 10.5H3.75m4.007-4.243l-1.59-1.591" /></svg>
+          Tieni premuto una tessera per trascinarla e unirla a un'altra
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-2">
         {groups.map((group, idx) => {
           const sorted = sortGroup(group);
@@ -335,6 +351,7 @@ function CategorySummary({
           const isCombined = group.length > 1;
           const label = isCombined ? sorted.map(k => cats[k]?.short).join(" + ") : lead.name;
           const isOver = overIdx === idx && dragIdx !== null && dragIdx !== idx;
+          const isArmed = armedIdx === idx;
           return (
             <div
               key={sorted.join("-")}
@@ -345,9 +362,35 @@ function CategorySummary({
               onDragLeave={() => { if (overIdx === idx) setOverIdx(null); }}
               onDrop={(e) => { e.preventDefault(); if (dragIdx !== null) mergeGroups(dragIdx, idx); setDragIdx(null); setOverIdx(null); }}
               onDragEnd={() => { setDragIdx(null); setOverIdx(null); }}
-              onTouchStart={() => { touchIdx.current = idx; setDragIdx(idx); }}
+              onTouchStart={(e) => {
+                // NON blocchiamo lo scroll qui: parte un timer. Solo se l'utente
+                // tiene premuto ~400ms senza muovere, "armiamo" il trascinamento.
+                const t = e.touches[0];
+                startPos.current = t ? { x: t.clientX, y: t.clientY } : null;
+                touchDragging.current = false;
+                clearPress();
+                pressTimer.current = setTimeout(() => {
+                  touchIdx.current = idx;
+                  touchDragging.current = true;
+                  setArmedIdx(idx);
+                  setDragIdx(idx);
+                  if (typeof navigator !== "undefined" && navigator.vibrate) { try { navigator.vibrate(15); } catch { /* noop */ } }
+                }, 400);
+              }}
               onTouchMove={(e) => {
-                if (touchIdx.current === null) return;
+                // Se non abbiamo ancora "armato" il drag, lasciamo scrollare:
+                // se il dito si muove troppo presto, annulliamo il long-press.
+                if (!touchDragging.current) {
+                  const t = e.touches[0];
+                  if (t && startPos.current) {
+                    const dx = Math.abs(t.clientX - startPos.current.x);
+                    const dy = Math.abs(t.clientY - startPos.current.y);
+                    if (dx > 8 || dy > 8) clearPress(); // è uno scroll: niente drag
+                  }
+                  return; // lo scroll resta libero
+                }
+                // Drag attivo: ora preveniamo lo scroll e troviamo il bersaglio.
+                e.preventDefault();
                 const t = e.touches[0];
                 if (!t) return;
                 const el = document.elementFromPoint(t.clientX, t.clientY);
@@ -360,15 +403,35 @@ function CategorySummary({
                 }
               }}
               onTouchEnd={() => {
-                if (touchIdx.current !== null && overIdx !== null && overIdx !== touchIdx.current) {
-                  mergeGroups(touchIdx.current, overIdx);
+                clearPress();
+                if (touchDragging.current) {
+                  if (touchIdx.current !== null && overIdx !== null && overIdx !== touchIdx.current) {
+                    mergeGroups(touchIdx.current, overIdx);
+                  }
+                } else {
+                  // Tap veloce senza trascinare → mostra il suggerimento
+                  setHint(true);
+                  if (hintTimer.current) clearTimeout(hintTimer.current);
+                  hintTimer.current = setTimeout(() => setHint(false), 2500);
                 }
                 touchIdx.current = null;
+                touchDragging.current = false;
+                startPos.current = null;
+                setArmedIdx(null);
                 setDragIdx(null);
                 setOverIdx(null);
               }}
-              className={`${lead.bg} rounded-lg px-3 py-2.5 select-none cursor-grab active:cursor-grabbing transition-all ${isCombined ? "col-span-2" : ""} ${dragIdx === idx ? "opacity-40" : ""} ${isOver ? "ring-2 ring-blue-400 ring-offset-1" : ""}`}
-              style={{ touchAction: "none" }}
+              onTouchCancel={() => {
+                clearPress();
+                touchIdx.current = null;
+                touchDragging.current = false;
+                startPos.current = null;
+                setArmedIdx(null);
+                setDragIdx(null);
+                setOverIdx(null);
+              }}
+              className={`${lead.bg} rounded-lg px-3 py-2.5 select-none cursor-grab active:cursor-grabbing transition-all ${isCombined ? "col-span-2" : ""} ${dragIdx === idx ? "opacity-50 scale-[0.97]" : ""} ${isArmed ? "ring-2 ring-violet-400 shadow-lg scale-[1.03] -rotate-1 z-10" : ""} ${isOver ? "ring-2 ring-blue-400 ring-offset-1" : ""}`}
+              style={isArmed ? { touchAction: "none" } : undefined}
             >
               {isOver ? (
                 <div className="flex items-center gap-1.5 mb-1">
@@ -388,7 +451,7 @@ function CategorySummary({
                       aria-label="Separa"
                       onClick={(e) => { e.stopPropagation(); splitGroup(idx); }}
                       onMouseDown={(e) => e.stopPropagation()}
-                      onTouchStart={(e) => { e.stopPropagation(); }}
+                      onTouchStart={(e) => { e.stopPropagation(); clearPress(); }}
                       className={`flex-shrink-0 ml-1 ${lead.label} hover:opacity-70`}
                     >
                       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
