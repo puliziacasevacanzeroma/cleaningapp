@@ -195,10 +195,10 @@ export default function ProprietarioDashboard() {
     activeCount: cur.stats?.propertyCount ?? trendHook.activeCount,
     pendingCount: trendHook.pendingCount,
     cur: cur.stats, prevTotal, summary: cur.summary,
-    debts: balance.debts, totalDebt: balance.totalDebt,
+    debts: balance.debts, totalDebt: balance.totalDebt, creditoTotale: balance.creditoTotale,
     countScaduti: balance.countScaduti, countWarning: balance.countWarning, countDaPagare: balance.countDaPagare,
     trend: trendHook.trend,
-  }), [now, firstName, cur.stats, prevTotal, cur.summary, balance.debts, balance.totalDebt, balance.countScaduti, balance.countWarning, balance.countDaPagare, trendHook.trend, trendHook.activeCount, trendHook.pendingCount]);
+  }), [now, firstName, cur.stats, prevTotal, cur.summary, balance.debts, balance.totalDebt, balance.creditoTotale, balance.countScaduti, balance.countWarning, balance.countDaPagare, trendHook.trend, trendHook.activeCount, trendHook.pendingCount]);
 
   // hero slider
   const [slide, setSlide] = useState(0);
@@ -251,7 +251,7 @@ export default function ProprietarioDashboard() {
               {/* slide 1 — pagamenti */}
               <div className="pd-slide"><div className={`pd-gcard${p.state === "danger" ? " danger" : p.state === "warning" ? " amber" : ""}`}>
                 <div className="pd-tag" style={{ color: payColor }}><Ico k={p.state === "ok" ? "check" : p.state === "danger" || p.state === "warning" ? "alert" : "clock"} /> {payState}</div>
-                <div className={`pd-big${p.totalDebt > 0 ? " shine" : ""}`}>{p.totalDebt > 0 ? <>€{fmtN(p.totalDebt)}</> : <span style={{ color: "#34d399" }}>€0<span className="pd-c">,00</span></span>}</div>
+                <div className={`pd-big${p.netDebt > 0 ? " shine" : ""}`}>{p.netDebt > 0 ? <>€{fmtN(p.netDebt)}</> : <span style={{ color: "#34d399" }}>€0<span className="pd-c">,00</span></span>}</div>
                 {p.state === "ok" ? (
                   <div className="pd-statusrow"><div className="pd-chip" style={{ background: "rgba(16,185,129,.18)", color: "#6ee7b7" }}><span className="pd-d" style={{ background: "#10b981" }} />Tutto saldato</div></div>
                 ) : (

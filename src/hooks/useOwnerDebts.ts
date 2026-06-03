@@ -51,6 +51,10 @@ export interface OwnerDebtsResult {
   countDaPagare: number;
   hasDebts: boolean;
   oldestDebtMonth?: string;
+  /** Credito accumulato da mesi pagati in eccesso (saldo negativo). */
+  creditoTotale: number;
+  /** Debito NETTO = max(0, totalDebt - creditoTotale). Verità per "quanto devo". */
+  totalDebtNet: number;
 }
 
 // ═══ MODULE-LEVEL CACHE ═══
@@ -277,7 +281,7 @@ export function useOwnerDebts(ownerId: string | undefined): OwnerDebtsResult {
   // ═══ CALCOLO DEBITI tramite computeMonthDebt condivisa ═══
   const result = useMemo((): OwnerDebtsResult => {
     const empty: OwnerDebtsResult = {
-      debts: [], totalDebt: 0, isLoading: true,
+      debts: [], totalDebt: 0, totalDebtNet: 0, creditoTotale: 0, isLoading: true,
       countScaduti: 0, countWarning: 0, countDaPagare: 0, hasDebts: false,
     };
 
@@ -291,6 +295,8 @@ export function useOwnerDebts(ownerId: string | undefined): OwnerDebtsResult {
 
     const monthsToCheck = getMonthsToCheck(new Date(), 24);
     const debts: MonthDebt[] = [];
+    const SALDO_THRESHOLD = 0.01;
+    let creditoTotale = 0; // somma dei saldi negativi (mesi pagati in eccesso)
 
     for (const { month, year } of monthsToCheck) {
       const calc = computeMonthDebt({
@@ -304,7 +310,9 @@ export function useOwnerDebts(ownerId: string | undefined): OwnerDebtsResult {
       });
 
       if (!calc) continue;
-      if (calc.saldo <= 0) continue;
+      // Mese pagato in eccesso → accumula credito (identico a computeOwnerDebt)
+      if (calc.saldo < -SALDO_THRESHOLD) creditoTotale += -calc.saldo;
+      if (calc.saldo <= SALDO_THRESHOLD) continue;
 
       debts.push({
         month, year,
@@ -333,6 +341,7 @@ export function useOwnerDebts(ownerId: string | undefined): OwnerDebtsResult {
     });
 
     const totalDebt = debts.reduce((s, d) => s + d.saldo, 0);
+    const totalDebtNet = Math.max(0, totalDebt - creditoTotale);
     const oldest = debts.length > 0
       ? debts.reduce((o, c) =>
           (c.year < o.year || (c.year === o.year && c.month < o.month) ? c : o))
@@ -341,6 +350,8 @@ export function useOwnerDebts(ownerId: string | undefined): OwnerDebtsResult {
     const res: OwnerDebtsResult = {
       debts,
       totalDebt,
+      totalDebtNet,
+      creditoTotale,
       isLoading: false,
       countScaduti: debts.filter(d => d.status === "SCADUTO").length,
       countWarning: debts.filter(d => d.status === "WARNING").length,

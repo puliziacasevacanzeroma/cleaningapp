@@ -53,6 +53,7 @@ export interface DashboardInput {
   summary: OwnerSummary | null;
   debts: MonthDebt[];
   totalDebt: number;
+  creditoTotale: number;
   countScaduti: number;
   countWarning: number;
   countDaPagare: number;
@@ -75,9 +76,10 @@ export interface DashboardVM {
   pendingCount: number;
   payments: {
     state: PayState;
-    totalDebt: number;
+    netDebt: number;      // debito NETTO (lordo - credito), verità mostrata nel banner
+    credito: number;      // credito disponibile da mesi pagati in eccesso
     paidPct: number;
-    remaining: number;
+    remaining: number;    // = netDebt
     counts: { scaduti: number; warning: number; daPagare: number };
     nearest: NearestVM | null;
   };
@@ -111,7 +113,7 @@ function servicesCountOf(s: OwnerStats | null): number {
 
 export function buildDashboardViewModel(input: DashboardInput): DashboardVM {
   const { now, firstName, activeCount, pendingCount, cur, prevTotal, summary,
-    debts, totalDebt, countScaduti, countWarning, countDaPagare, trend } = input;
+    debts, totalDebt, creditoTotale, countScaduti, countWarning, countDaPagare, trend } = input;
 
   const curMonth = now.getMonth() + 1;
   const curYear = now.getFullYear();
@@ -122,20 +124,27 @@ export function buildDashboardViewModel(input: DashboardInput): DashboardVM {
   const greeting = h < 12 ? "Buongiorno" : h < 18 ? "Buon pomeriggio" : "Buonasera";
   const monthLabel = `${MONTHS_IT[curMonth - 1]} ${curYear}`;
 
-  // ── PAGAMENTI (canonico: useOwnerDebts) ──
+  // ── PAGAMENTI (canonico: stesso calcolo NETTO di computeOwnerDebt) ──
+  // Debito netto = lordo - credito da mesi pagati in eccesso. Se il credito
+  // copre tutto, il proprietario è in regola (come per le email ufficiali).
+  const netDebt = Math.max(0, totalDebt - creditoTotale);
+  const hasNet = netDebt > 0.01;
+
   const state: PayState =
+    !hasNet ? "ok" :
     countScaduti > 0 ? "danger" :
-    countWarning > 0 ? "warning" :
-    (totalDebt > 0 || countDaPagare > 0) ? "normal" : "ok";
+    countWarning > 0 ? "warning" : "normal";
 
   const servSum = debts.reduce((s, d) => s + d.totaleServizi, 0);
   const paidSum = debts.reduce((s, d) => s + d.totalePagato, 0);
   const paidPct = servSum > 0 ? Math.max(0, Math.min(100, r0((paidSum / servSum) * 100))) : 100;
 
+  // Scadenza più imminente (mese più vecchio non saldato), mostrata SOLO se c'è
+  // davvero un debito netto. L'importo associato è il netto complessivo.
   let nearest: NearestVM | null = null;
-  if (debts.length > 0) {
+  if (hasNet && debts.length > 0) {
     const nd = debts.reduce((a, b) => (b.giorniAllaScadenza < a.giorniAllaScadenza ? b : a), debts[0]);
-    nearest = { days: nd.giorniAllaScadenza, saldo: nd.saldo, scadenza: nd.scadenza, dueLabel: fmtDateFull(nd.scadenza) };
+    nearest = { days: nd.giorniAllaScadenza, saldo: netDebt, scadenza: nd.scadenza, dueLabel: fmtDateFull(nd.scadenza) };
   }
 
   // ── SPESA mese (canonico: totaleCalcolato) ──
@@ -243,8 +252,12 @@ export function buildDashboardViewModel(input: DashboardInput): DashboardVM {
       lead: `Costo medio €${avgCost} `, rest: `a servizio questo mese.`,
     });
   }
-  // C. stato pagamenti
-  if (countScaduti > 0) {
+  // C. stato pagamenti (sempre sul debito NETTO)
+  if (!hasNet) {
+    insights.push(creditoTotale > 0.01
+      ? { accent: "#10b981", bg: "#ecfdf5", icon: "check", lead: `Sei in regola. `, rest: `Hai €${r0(creditoTotale)} di credito a copertura.` }
+      : { accent: "#10b981", bg: "#ecfdf5", icon: "check", lead: `Tutto saldato. `, rest: `Nessun pagamento in sospeso.` });
+  } else if (countScaduti > 0) {
     insights.push({
       accent: "#ef4444", bg: "#fef2f2", icon: "alert",
       lead: `${countScaduti} ${countScaduti === 1 ? "mese scaduto" : "mesi scaduti"}: `, rest: `salda al più presto per evitare il blocco.`,
@@ -256,16 +269,11 @@ export function buildDashboardViewModel(input: DashboardInput): DashboardVM {
       icon: "clock",
       lead: `Prossima scadenza tra ${Math.max(0, nearest.days)} giorni: `, rest: `€${r0(nearest.saldo)} entro il ${fmtDateShort(nearest.scadenza)}.`,
     });
-  } else {
-    insights.push({
-      accent: "#10b981", bg: "#ecfdf5", icon: "check",
-      lead: `Tutto saldato. `, rest: `Nessun pagamento in sospeso.`,
-    });
   }
 
   return {
     greeting, firstName, monthLabel, activeCount, pendingCount,
-    payments: { state, totalDebt, paidPct, remaining: totalDebt, counts: { scaduti: countScaduti, warning: countWarning, daPagare: countDaPagare }, nearest },
+    payments: { state, netDebt, credito: creditoTotale, paidPct, remaining: netDebt, counts: { scaduti: countScaduti, warning: countWarning, daPagare: countDaPagare }, nearest },
     countdown: nearest,
     spend: { total, prevTotal, deltaPct, deltaDir, prevMonthName: capit(prevMonthName) },
     spark,
