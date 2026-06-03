@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "~/lib/firebase/admin";
 import { Timestamp } from "firebase-admin/firestore";
+import { isCleaningProductItem } from "~/lib/payments/debtCalculator";
 
 export const dynamic = 'force-dynamic';
 // 🚀 IMPORTANTE: cron-job.org free tier ha timeout MASSIMO 30 secondi.
@@ -149,10 +150,23 @@ export async function GET(request: NextRequest) {
       let total = 0;
       if (data.items && Array.isArray(data.items)) {
         data.items.forEach((item: any) => {
+          // 🔧 ALLINEAMENTO PAGINA: escludi i prodotti-pulizia operatore dal
+          // totale addebitato al proprietario, ESATTAMENTE come fa la pagina
+          // (calculateOrderRawPrice salta isCleaningProductItem). Senza questo,
+          // il cron calcolava un totale più alto della pagina → falso debito
+          // residuo → blocco ingiusto di clienti che avevano saldato.
+          if (isCleaningProductItem(item)) return;
           const itemKey = item.itemId || item.id;
           const invSellPrice = itemKey ? inventoryById.get(itemKey) : undefined;
-          const unitPrice = item.priceOverride ?? item.unitPrice ?? item.price ?? invSellPrice ?? 0;
-          total += (item.totalPrice || (unitPrice * (item.quantity || 1)));
+          // Stessa cascata della pagina: un 0 salvato sull'item è dato sporco,
+          // si ricade sul listino (|| undefined tratta lo 0 come mancante).
+          const unitPrice =
+            item.priceOverride ??
+            (item.unitPrice || undefined) ??
+            (item.price || undefined) ??
+            invSellPrice ??
+            0;
+          total += ((item.totalPrice || undefined) ?? (unitPrice * (item.quantity || 1)));
         });
       }
       if (data.deliveryFee && data.deliveryFeeEnabled !== false) total += data.deliveryFee;
