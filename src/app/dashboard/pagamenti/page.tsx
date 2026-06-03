@@ -2530,8 +2530,8 @@ export default function PagamentiPage() {
             </button>
           </div>
         )}
-        {/* 🟢 ESENZIONE: badge verde + toggle, sempre visibile */}
-        {ownerExempt ? (
+        {/* 🟢 ESENZIONE: banner verde solo se esente (il toggle "Rendi esente" è nella riga azioni sotto) */}
+        {ownerExempt && (
           <div className="bg-gradient-to-r from-emerald-50 to-green-50 border-b border-emerald-200 px-4 py-2 flex items-center gap-2">
             <svg className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
               <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
@@ -2544,38 +2544,13 @@ export default function PagamentiPage() {
               Rimuovi esenzione
             </button>
           </div>
-        ) : (
-          <div className="px-4 py-1.5 flex items-center justify-end border-b border-slate-50">
-            <button
-              onClick={(e) => { e.stopPropagation(); handleToggleExempt(client.proprietarioId, client.proprietarioName, true); }}
-              className="text-[11px] font-semibold text-emerald-600 hover:text-emerald-700 flex items-center gap-1 active:scale-95 transition-transform"
-            >
-              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" />
-              </svg>
-              Rendi esente
-            </button>
-          </div>
         )}
 
-        <div className="p-4">
-          {/* Header: avatar + nome + badge stato + sottotitolo (Versione 2) */}
-          <div className="flex items-start gap-3">
-            <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${clientColors[index % clientColors.length]} flex items-center justify-center shadow-lg flex-shrink-0 ${ownerBlocked ? 'opacity-60' : ''}`}>
-              <span className="text-white text-xs font-bold">{initials}</span>
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="font-bold text-slate-900 text-[16px] truncate">{client.proprietarioName}</h3>
-                {client.saldoConCredito > 0.01 ? (
-                  <span className="text-[10px] font-semibold bg-red-50 text-red-700 px-2 py-0.5 rounded-full flex-shrink-0">Da incassare</span>
-                ) : (
-                  <span className="text-[10px] font-semibold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full flex items-center gap-1 flex-shrink-0">
-                    <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-                    Saldato
-                  </span>
-                )}
-              </div>
+        <div className="px-4 py-3">
+          {/* Riga 1: nome + sottotitolo a sinistra, totale a destra (Demo A) */}
+          <div className="flex items-start justify-between gap-2.5">
+            <div className="min-w-0 flex-1">
+              <h3 className="text-[15px] font-bold text-slate-900 truncate leading-tight">{client.proprietarioName}</h3>
               <p className="text-[11px] text-slate-500 font-medium mt-1 truncate">
                 {(() => {
                   const ordiniCount = client.ordersCount + client.kitCortesiaCount + client.serviziExtraCount;
@@ -2586,41 +2561,53 @@ export default function PagamentiPage() {
                 })()}
               </p>
             </div>
-          </div>
-
-          {/* Riga inferiore: totale grande + azioni (Dettagli + Incassa) */}
-          <div className="flex items-center justify-between gap-3 mt-3 pt-3 border-t border-slate-100">
             {client.saldoConCredito > 0.01 ? (
-              <div className="min-w-0">
-                <span className="text-xl font-bold text-red-700" style={{ letterSpacing: '-0.02em' }}>{formatCurrency(client.saldoConCredito)}</span>
+              <div className="text-right flex-shrink-0">
+                <div className="text-xl font-bold text-red-700 leading-tight" style={{ letterSpacing: '-0.02em' }}>{formatCurrency(client.saldoConCredito)}</div>
+                <div className="text-[9px] text-red-600 font-semibold uppercase tracking-[0.04em]">da incassare</div>
                 {client.creditoPrecedente > 0.01 && (
-                  <span className="text-[10px] text-emerald-700 font-medium ml-2 whitespace-nowrap">Acconto −{formatCurrency(client.creditoPrecedente)}</span>
+                  <div className="text-[9px] text-emerald-700 font-medium mt-0.5 whitespace-nowrap">Acconto −{formatCurrency(client.creditoPrecedente)}</div>
                 )}
               </div>
             ) : (
-              <span className="text-base font-bold text-slate-400">{formatCurrency(client.totaleEffettivo)}</span>
+              <div className="text-right flex-shrink-0">
+                <div className="text-base font-bold text-emerald-600 leading-tight">Saldato</div>
+                <div className="text-[9px] text-slate-400 font-semibold uppercase tracking-[0.04em]">{formatCurrency(client.totaleEffettivo)}</div>
+              </div>
             )}
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <button
-                onClick={handleExpand}
-                className="text-[13px] text-indigo-600 font-semibold flex items-center gap-1 active:scale-[0.98] transition-transform"
-              >
-                <span>{isExpanded ? "Nascondi" : "Dettagli"}</span>
-                <div className={`transition-transform ${isExpanded ? "rotate-180" : ""}`}>
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" /></svg>
-                </div>
-              </button>
-              {client.saldoConCredito > 0.01 && (
+          </div>
+          {/* Riga 2: azioni con linea divisoria (Rendi esente · Dettagli · Incassa) */}
+          <div className="flex items-center gap-2 mt-3 pt-2.5 border-t border-slate-100">
+            <div className="flex-1 min-w-0">
+              {!ownerExempt && (
                 <button
-                  onClick={(e) => { e.stopPropagation(); setQuickPayClient(client); }}
-                  className="flex items-center gap-1.5 px-3 py-2 bg-gradient-to-br from-emerald-400 to-teal-500 text-white rounded-xl shadow-md shadow-emerald-500/30 active:scale-95 transition-transform text-[13px] font-semibold flex-shrink-0"
-                  title="Incassa"
+                  onClick={(e) => { e.stopPropagation(); handleToggleExempt(client.proprietarioId, client.proprietarioName, true); }}
+                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 hover:text-emerald-700 active:scale-95 transition-transform"
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M5 6h14a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2z" /></svg>
-                  <span>Incassa</span>
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" /></svg>
+                  Rendi esente
                 </button>
               )}
             </div>
+            <button
+              onClick={handleExpand}
+              className="inline-flex items-center gap-1 text-[12px] font-semibold text-indigo-600 border border-slate-200 hover:bg-slate-50 px-3 py-1.5 rounded-lg active:scale-[0.98] transition-all flex-shrink-0"
+            >
+              {isExpanded ? "Nascondi" : "Dettagli"}
+              <span className={`transition-transform ${isExpanded ? "rotate-180" : ""}`}>
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" /></svg>
+              </span>
+            </button>
+            {client.saldoConCredito > 0.01 && (
+              <button
+                onClick={(e) => { e.stopPropagation(); setQuickPayClient(client); }}
+                className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-white bg-gradient-to-br from-emerald-400 to-teal-500 px-3 py-1.5 rounded-lg shadow-md shadow-emerald-500/30 active:scale-95 transition-transform flex-shrink-0"
+                title="Incassa"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M5 6h14a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2z" /></svg>
+                Incassa
+              </button>
+            )}
           </div>
         </div>
         
