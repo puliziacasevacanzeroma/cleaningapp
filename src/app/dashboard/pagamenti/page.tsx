@@ -2693,71 +2693,12 @@ export default function PagamentiPage() {
                 Visibile su mobile e desktop, ottimizzato per entrambi
                 ═══════════════════════════════════════════════════════════ */}
             <div className="px-3 sm:px-4 pt-3 sm:pt-4 pb-2">
-              <p className="text-[10px] sm:text-[11px] uppercase tracking-wider font-bold text-slate-500 mb-2 px-1">
-                Riepilogo per categoria
-              </p>
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
-                {/* Pulizie */}
-                {client.cleaningsCount > 0 && (
-                  <div className="bg-white rounded-xl border border-sky-100 p-2.5 sm:p-3 shadow-sm">
-                    <div className="flex items-center gap-2 mb-1.5">
-                      <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-gradient-to-br from-sky-400 to-blue-500 flex items-center justify-center text-white shadow flex-shrink-0">
-                        {getServiceIcon("PULIZIA")}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[10px] sm:text-[11px] font-semibold text-slate-500 uppercase tracking-wide truncate">Pulizie</p>
-                        <p className="text-[9px] sm:text-[10px] text-slate-400">{client.cleaningsCount} {client.cleaningsCount === 1 ? "servizio" : "servizi"}</p>
-                      </div>
-                    </div>
-                    <p className="text-base sm:text-lg font-bold text-sky-600 truncate">{formatCurrency(client.cleaningsTotal)}</p>
-                  </div>
-                )}
-                {/* Biancheria */}
-                {client.ordersCount > 0 && (
-                  <div className="bg-white rounded-xl border border-violet-100 p-2.5 sm:p-3 shadow-sm">
-                    <div className="flex items-center gap-2 mb-1.5">
-                      <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-gradient-to-br from-violet-400 to-purple-500 flex items-center justify-center text-white shadow flex-shrink-0">
-                        {getServiceIcon("BIANCHERIA")}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[10px] sm:text-[11px] font-semibold text-slate-500 uppercase tracking-wide truncate">Biancheria</p>
-                        <p className="text-[9px] sm:text-[10px] text-slate-400">{client.ordersCount} {client.ordersCount === 1 ? "ordine" : "ordini"}</p>
-                      </div>
-                    </div>
-                    <p className="text-base sm:text-lg font-bold text-violet-600 truncate">{formatCurrency(client.ordersTotal)}</p>
-                  </div>
-                )}
-                {/* Kit Cortesia */}
-                {client.kitCortesiaCount > 0 && (
-                  <div className="bg-white rounded-xl border border-amber-100 p-2.5 sm:p-3 shadow-sm">
-                    <div className="flex items-center gap-2 mb-1.5">
-                      <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-white shadow flex-shrink-0">
-                        {getServiceIcon("KIT_CORTESIA")}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[10px] sm:text-[11px] font-semibold text-slate-500 uppercase tracking-wide truncate">Kit cortesia</p>
-                        <p className="text-[9px] sm:text-[10px] text-slate-400">{client.kitCortesiaCount} {client.kitCortesiaCount === 1 ? "ordine" : "ordini"}</p>
-                      </div>
-                    </div>
-                    <p className="text-base sm:text-lg font-bold text-amber-600 truncate">{formatCurrency(client.kitCortesiaTotal)}</p>
-                  </div>
-                )}
-                {/* Servizi Extra */}
-                {client.serviziExtraCount > 0 && (
-                  <div className="bg-white rounded-xl border border-emerald-100 p-2.5 sm:p-3 shadow-sm">
-                    <div className="flex items-center gap-2 mb-1.5">
-                      <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center text-white shadow flex-shrink-0">
-                        {getServiceIcon("SERVIZI_EXTRA")}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[10px] sm:text-[11px] font-semibold text-slate-500 uppercase tracking-wide truncate">Servizi extra</p>
-                        <p className="text-[9px] sm:text-[10px] text-slate-400">{client.serviziExtraCount} {client.serviziExtraCount === 1 ? "ordine" : "ordini"}</p>
-                      </div>
-                    </div>
-                    <p className="text-base sm:text-lg font-bold text-emerald-600 truncate">{formatCurrency(client.serviziExtraTotal)}</p>
-                  </div>
-                )}
-              </div>
+              <CategorySummary
+                totPulizie={client.cleaningsTotal}
+                totBiancheria={client.ordersTotal}
+                totKit={client.kitCortesiaTotal}
+                totExtra={client.serviziExtraTotal}
+              />
               {/* Totale generale calcolato (info row sotto i box) */}
               <div className="mt-2 px-1 flex items-center justify-between text-[11px] sm:text-xs text-slate-500">
                 <span>Totale servizi</span>
