@@ -30,16 +30,28 @@ const CATEGORIES = [
 ];
 
 // 🔒 AUTO-REPAIR: Ricrea articoli di sistema mancanti o corrotti
+// 🚀 PERF: legge i 7 articoli di sistema IN PARALLELO (un solo getAll) invece
+// di 7 letture Firestore in sequenza. Prima questa funzione faceva 7 round-trip
+// uno dopo l'altro (~3-4 secondi) ad ogni cache-miss, ed era la causa principale
+// dei ~5 secondi di /api/inventory/list. Il comportamento è identico: controlla
+// e ripara gli stessi articoli, solo molto più veloce.
 async function ensureSystemItemsExist() {
   const recreated: string[] = [];
   const fixed: string[] = [];
 
-  for (const sysItem of SYSTEM_ITEMS) {
-    const docRef = adminDb.collection("inventory").doc(sysItem.id);
-    const docSnap = await docRef.get();
+  // Leggi TUTTI i doc di sistema in un colpo solo (parallelo, non sequenziale)
+  const docRefs = SYSTEM_ITEMS.map(s => adminDb.collection("inventory").doc(s.id));
+  const docSnaps = await adminDb.getAll(...docRefs);
+
+  // Prepara le scritture necessarie e falle in parallelo
+  const writes: Promise<any>[] = [];
+
+  SYSTEM_ITEMS.forEach((sysItem, i) => {
+    const docSnap = docSnaps[i];
+    const docRef = docRefs[i];
 
     if (!docSnap.exists) {
-      await docRef.set({
+      writes.push(docRef.set({
         id: sysItem.id,
         key: sysItem.key,
         name: sysItem.name,
@@ -52,7 +64,7 @@ async function ensureSystemItemsExist() {
         minQuantity: 10,
         createdAt: Timestamp.now(),
         updatedAt: Timestamp.now(),
-      });
+      }));
       recreated.push(sysItem.name);
     } else {
       const data = docSnap.data()!;
@@ -63,7 +75,7 @@ async function ensureSystemItemsExist() {
         data.name === 'Senza nome';
 
       if (needsFix) {
-        await docRef.set({
+        writes.push(docRef.set({
           ...data,
           id: sysItem.id,
           key: sysItem.key,
@@ -76,11 +88,14 @@ async function ensureSystemItemsExist() {
           quantity: data.quantity ?? 100,
           minQuantity: data.minQuantity ?? 10,
           updatedAt: Timestamp.now(),
-        }, { merge: false });
+        }, { merge: false }));
         fixed.push(sysItem.name);
       }
     }
-  }
+  });
+
+  // Esegui tutte le scritture in parallelo (di solito zero, raramente 1-2)
+  if (writes.length > 0) await Promise.all(writes);
 
   return { recreated, fixed };
 }
