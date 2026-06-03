@@ -8,7 +8,8 @@
  * - Spinner SOLO la primissima volta (cache completamente vuota)
  */
 
-import { collection, query, where, orderBy, onSnapshot, Timestamp } from "firebase/firestore";
+import { collection, query, where, orderBy, onSnapshot, getDocs, Timestamp } from "firebase/firestore";
+import { subscribeByPropertyChunks } from "~/lib/firebase/scopedSnapshot";
 import { db } from "~/lib/firebase/config";
 
 // ─── Types ───────────────────────────────────────────────────
@@ -212,113 +213,136 @@ class PulizieDataStore {
       })
     );
 
-    // ─── 2. Cleanings (ultimi 12 mesi) ───
-    // 🚀 PERF v3 (14/05/2026): prima caricava TUTTE le pulizie di sempre (1769 docs).
-    //    Era il vero collo di bottiglia della dashboard (~23 MB caricati ogni apertura).
-    //    Ora carichiamo solo gli ultimi 12 mesi: copre report mensili, calendario,
-    //    storico per dispute. Per analisi più vecchie ci sono i backup mensili.
-    const cleaningsRangeStart = new Date();
-    cleaningsRangeStart.setMonth(cleaningsRangeStart.getMonth() - 12);
-    cleaningsRangeStart.setHours(0, 0, 0, 0);
+    // ─── 2+3. Cleanings & Orders ───
+    // 🚀 PERF: per i PROPRIETARI le query sono SCOPATE alle loro proprietà
+    // (propertyId IN, a blocchi di 30). Prima scaricavano pulizie/ordini di
+    // TUTTI i proprietari (anche col limite 12 mesi: ~1000+ doc) → era la causa
+    // della lentezza di OGNI pagina proprietario, perché il layout fa partire
+    // questo store come prefetch. Per gli ADMIN resta la query ampia (devono
+    // vedere tutti) con il limite 12 mesi.
+    const mapCleaning = (doc: any): PulizieCleaning => {
+      const d = doc.data() as Record<string, any>;
+      return {
+        id: doc.id,
+        propertyId: d.propertyId || "",
+        propertyName: d.propertyName || "",
+        date: d.scheduledDate?.toDate?.() || new Date(),
+        scheduledTime: d.scheduledTime || "10:00",
+        status: d.status || "SCHEDULED",
+        operator: d.operatorId ? { id: d.operatorId, name: d.operatorName || "" } : null,
+        operators: d.operators || [],
+        guestName: d.guestName || "",
+        guestsCount: d.guestsCount || 2,
+        guestsConfirmed: d.guestsConfirmed || false,
+        adulti: d.adulti || 0,
+        neonati: d.neonati || 0,
+        bookingSource: d.bookingSource || "",
+        notes: d.notes || "",
+        price: d.price,
+        contractPrice: d.contractPrice || d.price,
+        customLinenConfig: d.customLinenConfig || null,
+        linenConfigModified: d.linenConfigModified || false,
+        hasLinenOrder: d.hasLinenOrder,
+        priceModified: d.priceModified || false,
+        serviceType: d.serviceType || "STANDARD",
+        serviceTypeName: d.serviceTypeName || "",
+        sgrossoReason: d.sgrossoReason || null,
+        sgrossoNotes: d.sgrossoNotes || null,
+        ratingScore: d.ratingScore || null,
+        ratingId: d.ratingId || null,
+        extraServices: d.extraServices || [],
+        photos: d.photos || [],
+        startedAt: d.startedAt || null,
+        completedAt: d.completedAt || null,
+        originalDate: d.originalDate?.toDate?.() || null,
+        dateModifiedAt: d.dateModifiedAt?.toDate?.() || null,
+        dateModifiedBy: d.dateModifiedBy || null,
+        dateModifiedByName: d.dateModifiedByName || null,
+        missedDeadline: d.missedDeadline || false,
+        missedDeadlineAt: d.missedDeadlineAt || null,
+        holidayFee: d.holidayFee || 0,
+        holidayName: d.holidayName || null,
+      };
+    };
+    const mapOrder = (doc: any): PulizieOrder => {
+      const d = doc.data() as Record<string, any>;
+      return {
+        id: doc.id,
+        cleaningId: d.cleaningId || null,
+        propertyId: d.propertyId,
+        propertyName: d.propertyName || "",
+        propertyAddress: d.propertyAddress || "",
+        scheduledDate: d.scheduledDate?.toDate?.() || new Date(),
+        scheduledTime: d.scheduledTime || "10:00",
+        items: d.items || [],
+        status: d.status || "PENDING",
+        riderName: d.riderName || null,
+        deliveryFee: d.deliveryFee || 0,
+        deliveryFeeEnabled: d.deliveryFeeEnabled !== false,
+        bedMaking: d.bedMaking || false,
+        bedMakingCount: d.bedMakingCount || 0,
+        bedMakingFee: d.bedMakingFee || 0,
+        bedMakingBeds: d.bedMakingBeds || [],
+      } as PulizieOrder;
+    };
+    const sortByDateAsc = (a: PulizieCleaning, b: PulizieCleaning) => a.date.getTime() - b.date.getTime();
+    const notCancelled = (o: PulizieOrder) => o.status !== "CANCELLED" && o.status !== "cancelled";
 
-    this._unsubscribers.push(
-      onSnapshot(
-        query(
-          collection(db, "cleanings"),
-          where("scheduledDate", ">=", Timestamp.fromDate(cleaningsRangeStart)),
-          orderBy("scheduledDate", "asc")
-        ),
-        (snapshot) => {
-          const cleans: PulizieCleaning[] = snapshot.docs.map(doc => {
-            const d = doc.data() as Record<string, any>;
-            return {
-              id: doc.id,
-              propertyId: d.propertyId || "",
-              propertyName: d.propertyName || "",
-              date: d.scheduledDate?.toDate?.() || new Date(),
-              scheduledTime: d.scheduledTime || "10:00",
-              status: d.status || "SCHEDULED",
-              operator: d.operatorId ? { id: d.operatorId, name: d.operatorName || "" } : null,
-              operators: d.operators || [],
-              guestName: d.guestName || "",
-              guestsCount: d.guestsCount || 2,
-              guestsConfirmed: d.guestsConfirmed || false,
-              adulti: d.adulti || 0,
-              neonati: d.neonati || 0,
-              bookingSource: d.bookingSource || "",
-              notes: d.notes || "",
-              price: d.price,
-              contractPrice: d.contractPrice || d.price,
-              customLinenConfig: d.customLinenConfig || null,
-              linenConfigModified: d.linenConfigModified || false,
-              hasLinenOrder: d.hasLinenOrder,
-              priceModified: d.priceModified || false,
-              serviceType: d.serviceType || "STANDARD",
-              serviceTypeName: d.serviceTypeName || "",
-              sgrossoReason: d.sgrossoReason || null,
-              sgrossoNotes: d.sgrossoNotes || null,
-              ratingScore: d.ratingScore || null,
-              ratingId: d.ratingId || null,
-              extraServices: d.extraServices || [],
-              photos: d.photos || [],
-              startedAt: d.startedAt || null,
-              completedAt: d.completedAt || null,
-              originalDate: d.originalDate?.toDate?.() || null,
-              dateModifiedAt: d.dateModifiedAt?.toDate?.() || null,
-              dateModifiedBy: d.dateModifiedBy || null,
-              dateModifiedByName: d.dateModifiedByName || null,
-              missedDeadline: d.missedDeadline || false,
-              missedDeadlineAt: d.missedDeadlineAt || null,
-              holidayFee: d.holidayFee || 0,
-              holidayName: d.holidayName || null,
-            };
-          });
-          this._patch({ cleanings: cleans });
+    if (isAdmin) {
+      // ADMIN: query ampia su tutti i proprietari, ultimi 12 mesi.
+      const cleaningsRangeStart = new Date();
+      cleaningsRangeStart.setMonth(cleaningsRangeStart.getMonth() - 12);
+      cleaningsRangeStart.setHours(0, 0, 0, 0);
+      this._unsubscribers.push(
+        onSnapshot(
+          query(
+            collection(db, "cleanings"),
+            where("scheduledDate", ">=", Timestamp.fromDate(cleaningsRangeStart)),
+            orderBy("scheduledDate", "asc")
+          ),
+          (snapshot) => { this._patch({ cleanings: snapshot.docs.map(mapCleaning) }); }
+        )
+      );
+      const ordersRangeStart = new Date();
+      ordersRangeStart.setMonth(ordersRangeStart.getMonth() - 12);
+      ordersRangeStart.setHours(0, 0, 0, 0);
+      this._unsubscribers.push(
+        onSnapshot(
+          query(
+            collection(db, "orders"),
+            where("scheduledDate", ">=", Timestamp.fromDate(ordersRangeStart))
+          ),
+          (snapshot) => { this._patch({ orders: snapshot.docs.map(mapOrder).filter(notCancelled) }); }
+        )
+      );
+    } else {
+      // PROPRIETARIO: scopa alle PROPRIE proprietà (propertyId IN, blocchi di 30).
+      // getDocs una tantum per gli id (stabili in sessione); pulizie/ordini
+      // restano in tempo reale via subscribeByPropertyChunks. Niente range su
+      // scheduledDate nella query → nessun indice composito richiesto.
+      void (async () => {
+        try {
+          const propsSnap = await getDocs(
+            query(collection(db, "properties"), where("ownerId", "==", userId))
+          );
+          if (this._activeUserId !== userId) return; // utente cambiato nel frattempo
+          const propIds = propsSnap.docs.map(d => d.id);
+          if (propIds.length === 0) { this._patch({ cleanings: [], orders: [] }); return; }
+          this._unsubscribers.push(
+            subscribeByPropertyChunks("cleanings", propIds, mapCleaning, (items) => {
+              this._patch({ cleanings: (items as PulizieCleaning[]).slice().sort(sortByDateAsc) });
+            })
+          );
+          this._unsubscribers.push(
+            subscribeByPropertyChunks("orders", propIds, mapOrder, (items) => {
+              this._patch({ orders: (items as PulizieOrder[]).filter(notCancelled) });
+            })
+          );
+        } catch (e) {
+          if (process.env.NODE_ENV !== "production") console.error("🔴 PulizieStore: errore caricamento scopato", e);
         }
-      )
-    );
-
-    // ─── 3. Orders (ultimi 12 mesi) ───
-    // 🚀 PERF v3 (14/05/2026): prima caricava TUTTI gli ordini di sempre (2758 docs).
-    //    Ora ultimi 12 mesi, allineato alle cleanings. Per ordini storici molto
-    //    vecchi servono API server-side dedicate (es. report annuale).
-    const ordersRangeStart = new Date();
-    ordersRangeStart.setMonth(ordersRangeStart.getMonth() - 12);
-    ordersRangeStart.setHours(0, 0, 0, 0);
-
-    this._unsubscribers.push(
-      onSnapshot(
-        query(
-          collection(db, "orders"),
-          where("scheduledDate", ">=", Timestamp.fromDate(ordersRangeStart))
-        ),
-        (snapshot) => {
-        const orders: PulizieOrder[] = snapshot.docs
-          .map(doc => {
-            const d = doc.data() as Record<string, any>;
-            return {
-              id: doc.id,
-              cleaningId: d.cleaningId || null,
-              propertyId: d.propertyId,
-              propertyName: d.propertyName || "",
-              propertyAddress: d.propertyAddress || "",
-              scheduledDate: d.scheduledDate?.toDate?.() || new Date(),
-              scheduledTime: d.scheduledTime || "10:00",
-              items: d.items || [],
-              status: d.status || "PENDING",
-              riderName: d.riderName || null,
-              deliveryFee: d.deliveryFee || 0,
-              deliveryFeeEnabled: d.deliveryFeeEnabled !== false,
-              bedMaking: d.bedMaking || false,
-              bedMakingCount: d.bedMakingCount || 0,
-              bedMakingFee: d.bedMakingFee || 0,
-              bedMakingBeds: d.bedMakingBeds || [],
-            } as PulizieOrder;
-          })
-          .filter(o => o.status !== "CANCELLED" && o.status !== "cancelled");
-        this._patch({ orders });
-      })
-    );
+      })();
+    }
 
     // ─── 4. Inventory ───
     this._unsubscribers.push(
