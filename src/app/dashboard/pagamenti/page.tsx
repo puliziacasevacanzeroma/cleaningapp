@@ -293,6 +293,7 @@ function CategorySummary({
   const [hint, setHint] = useState(false); // suggerimento "tieni premuto" dopo un tap veloce
   const touchIdx = useRef<number | null>(null);
   const touchDragging = useRef(false); // true solo quando il long-press ha attivato il drag
+  const movedRef = useRef(false); // true se il dito si è mosso (= scroll, non tap)
   const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const startPos = useRef<{ x: number; y: number } | null>(null);
   const hintTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -368,6 +369,7 @@ function CategorySummary({
                 const t = e.touches[0];
                 startPos.current = t ? { x: t.clientX, y: t.clientY } : null;
                 touchDragging.current = false;
+                movedRef.current = false;
                 clearPress();
                 pressTimer.current = setTimeout(() => {
                   touchIdx.current = idx;
@@ -385,7 +387,7 @@ function CategorySummary({
                   if (t && startPos.current) {
                     const dx = Math.abs(t.clientX - startPos.current.x);
                     const dy = Math.abs(t.clientY - startPos.current.y);
-                    if (dx > 8 || dy > 8) clearPress(); // è uno scroll: niente drag
+                    if (dx > 8 || dy > 8) { movedRef.current = true; clearPress(); } // è uno scroll: niente drag, niente avviso
                   }
                   return; // lo scroll resta libero
                 }
@@ -408,14 +410,16 @@ function CategorySummary({
                   if (touchIdx.current !== null && overIdx !== null && overIdx !== touchIdx.current) {
                     mergeGroups(touchIdx.current, overIdx);
                   }
-                } else {
-                  // Tap veloce senza trascinare → mostra il suggerimento
+                } else if (!movedRef.current) {
+                  // Tap vero (tocco e rilascio SENZA muoversi) → mostra il suggerimento.
+                  // Se invece il dito si è mosso era uno scroll → nessun avviso.
                   setHint(true);
                   if (hintTimer.current) clearTimeout(hintTimer.current);
                   hintTimer.current = setTimeout(() => setHint(false), 2500);
                 }
                 touchIdx.current = null;
                 touchDragging.current = false;
+                movedRef.current = false;
                 startPos.current = null;
                 setArmedIdx(null);
                 setDragIdx(null);
@@ -425,6 +429,7 @@ function CategorySummary({
                 clearPress();
                 touchIdx.current = null;
                 touchDragging.current = false;
+                movedRef.current = false;
                 startPos.current = null;
                 setArmedIdx(null);
                 setDragIdx(null);
