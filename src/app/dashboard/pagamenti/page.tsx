@@ -328,13 +328,17 @@ function CategorySummary({
 
   // 🆕 Durante il trascinamento touch: blocca lo scroll della pagina a livello
   // globale (listener NON passivo → preventDefault funziona davvero) e rileva la
-  // tessera più VICINA al dito (non serve centrare esattamente). Risolve scroll
-  // che parte durante il drag e difficoltà a unire le tessere.
+  // tessera più VICINA al dito. Lo sblocco è A PROVA DI ERRORE: il body viene
+  // SEMPRE riportato allo stato libero (non si ripristina uno stato salvato che
+  // poteva essere già bloccato), si sblocca subito alla fine del tocco, e c'è un
+  // timer di sicurezza che sblocca comunque se il drag non si chiude.
   useEffect(() => {
     if (!isDragging) return;
 
-    const prevOverflow = document.body.style.overflow;
-    const prevTouchAction = document.body.style.touchAction;
+    const unlock = () => {
+      document.body.style.overflow = "";
+      document.body.style.touchAction = "";
+    };
     document.body.style.overflow = "hidden";
     document.body.style.touchAction = "none";
 
@@ -370,6 +374,7 @@ function CategorySummary({
       if (touchIdx.current !== null && overIdxRef.current !== null && overIdxRef.current !== touchIdx.current) {
         mergeGroups(touchIdx.current, overIdxRef.current);
       }
+      unlock(); // 🔓 sblocco immediato: non dipende dal cleanup di React
       touchIdx.current = null;
       touchDragging.current = false;
       movedRef.current = false;
@@ -381,17 +386,29 @@ function CategorySummary({
       setIsDragging(false);
     };
 
+    // 🛟 rete di sicurezza: se il drag non si chiude per qualche motivo, sblocca
+    const safety = window.setTimeout(finish, 5000);
+
     document.addEventListener("touchmove", onMove, { passive: false });
     document.addEventListener("touchend", finish);
     document.addEventListener("touchcancel", finish);
     return () => {
-      document.body.style.overflow = prevOverflow;
-      document.body.style.touchAction = prevTouchAction;
+      window.clearTimeout(safety);
+      unlock(); // sblocco SEMPRE allo stato libero (mai ripristina "bloccato")
       document.removeEventListener("touchmove", onMove);
       document.removeEventListener("touchend", finish);
       document.removeEventListener("touchcancel", finish);
     };
   }, [isDragging, mergeGroups]);
+
+  // 🛟 Sicurezza extra: se il componente viene smontato (card chiusa) durante un
+  // drag rimasto appeso, sblocca comunque lo scroll della pagina.
+  useEffect(() => {
+    return () => {
+      document.body.style.overflow = "";
+      document.body.style.touchAction = "";
+    };
+  }, []);
 
   const grip = (
     <svg viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3 flex-shrink-0 opacity-50">
@@ -426,6 +443,8 @@ function CategorySummary({
               onDrop={(e) => { e.preventDefault(); if (dragIdx !== null) mergeGroups(dragIdx, idx); setDragIdx(null); setOverIdx(null); }}
               onDragEnd={() => { setDragIdx(null); setOverIdx(null); }}
               onTouchStart={(e) => {
+                // Se un drag è già in corso, ignora tocchi secondari (niente accavallamenti)
+                if (touchDragging.current) return;
                 // NON blocchiamo lo scroll qui: parte un timer. Solo se l'utente
                 // tiene premuto ~350ms senza muovere, "armiamo" il trascinamento
                 // (da lì i listener globali bloccano lo scroll e gestiscono il drag).
