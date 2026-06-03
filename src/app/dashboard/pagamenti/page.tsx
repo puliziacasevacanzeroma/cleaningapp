@@ -290,9 +290,12 @@ function CategorySummary({
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [overIdx, setOverIdx] = useState<number | null>(null);
   const [armedIdx, setArmedIdx] = useState<number | null>(null); // tessera "pronta" al trascinamento (dopo tieni-premuto)
+  const [isDragging, setIsDragging] = useState(false); // drag touch attivo → blocca scroll a livello pagina
+  const containerRef = useRef<HTMLDivElement>(null);
   const touchIdx = useRef<number | null>(null);
   const touchDragging = useRef(false); // true solo quando il long-press ha attivato il drag
   const movedRef = useRef(false); // true se il dito si è mosso (= scroll, non tap)
+  const overIdxRef = useRef<number | null>(null); // bersaglio corrente (per i listener nativi)
   const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const startPos = useRef<{ x: number; y: number } | null>(null);
 
@@ -323,6 +326,73 @@ function CategorySummary({
     });
   }, []);
 
+  // 🆕 Durante il trascinamento touch: blocca lo scroll della pagina a livello
+  // globale (listener NON passivo → preventDefault funziona davvero) e rileva la
+  // tessera più VICINA al dito (non serve centrare esattamente). Risolve scroll
+  // che parte durante il drag e difficoltà a unire le tessere.
+  useEffect(() => {
+    if (!isDragging) return;
+
+    const prevOverflow = document.body.style.overflow;
+    const prevTouchAction = document.body.style.touchAction;
+    document.body.style.overflow = "hidden";
+    document.body.style.touchAction = "none";
+
+    const findNearest = (x: number, y: number): number | null => {
+      const cont = containerRef.current;
+      if (!cont) return null;
+      const tiles = Array.from(cont.querySelectorAll("[data-idx]")) as HTMLElement[];
+      let nearest: number | null = null;
+      let nd = Infinity;
+      for (const tile of tiles) {
+        const i = Number(tile.getAttribute("data-idx"));
+        if (Number.isNaN(i)) continue;
+        const r = tile.getBoundingClientRect();
+        if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) return i; // dentro: vince subito
+        const cx = r.left + r.width / 2;
+        const cy = r.top + r.height / 2;
+        const d = (x - cx) * (x - cx) + (y - cy) * (y - cy);
+        if (d < nd) { nd = d; nearest = i; }
+      }
+      return nearest; // altrimenti la più vicina
+    };
+
+    const onMove = (ev: TouchEvent) => {
+      ev.preventDefault(); // non-passivo: blocca lo scroll durante il drag
+      const t = ev.touches[0];
+      if (!t) return;
+      const target = findNearest(t.clientX, t.clientY);
+      const val = (target !== null && target !== touchIdx.current) ? target : null;
+      if (overIdxRef.current !== val) { overIdxRef.current = val; setOverIdx(val); }
+    };
+
+    const finish = () => {
+      if (touchIdx.current !== null && overIdxRef.current !== null && overIdxRef.current !== touchIdx.current) {
+        mergeGroups(touchIdx.current, overIdxRef.current);
+      }
+      touchIdx.current = null;
+      touchDragging.current = false;
+      movedRef.current = false;
+      startPos.current = null;
+      overIdxRef.current = null;
+      setArmedIdx(null);
+      setDragIdx(null);
+      setOverIdx(null);
+      setIsDragging(false);
+    };
+
+    document.addEventListener("touchmove", onMove, { passive: false });
+    document.addEventListener("touchend", finish);
+    document.addEventListener("touchcancel", finish);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      document.body.style.touchAction = prevTouchAction;
+      document.removeEventListener("touchmove", onMove);
+      document.removeEventListener("touchend", finish);
+      document.removeEventListener("touchcancel", finish);
+    };
+  }, [isDragging, mergeGroups]);
+
   const grip = (
     <svg viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3 flex-shrink-0 opacity-50">
       <circle cx="5" cy="4" r="1.2" /><circle cx="5" cy="8" r="1.2" /><circle cx="5" cy="12" r="1.2" />
@@ -335,7 +405,7 @@ function CategorySummary({
       <p className="text-[10px] text-slate-400 uppercase tracking-wide mb-2.5">
         Totale per categoria <span className="text-slate-300 normal-case tracking-normal">· tieni premuto e trascina per unire</span>
       </p>
-      <div className="grid grid-cols-2 gap-2">
+      <div ref={containerRef} className="grid grid-cols-2 gap-2">
         {groups.map((group, idx) => {
           const sorted = sortGroup(group);
           const lead = cats[sorted[0]];
@@ -357,7 +427,8 @@ function CategorySummary({
               onDragEnd={() => { setDragIdx(null); setOverIdx(null); }}
               onTouchStart={(e) => {
                 // NON blocchiamo lo scroll qui: parte un timer. Solo se l'utente
-                // tiene premuto ~400ms senza muovere, "armiamo" il trascinamento.
+                // tiene premuto ~350ms senza muovere, "armiamo" il trascinamento
+                // (da lì i listener globali bloccano lo scroll e gestiscono il drag).
                 const t = e.touches[0];
                 startPos.current = t ? { x: t.clientX, y: t.clientY } : null;
                 touchDragging.current = false;
@@ -366,63 +437,38 @@ function CategorySummary({
                 pressTimer.current = setTimeout(() => {
                   touchIdx.current = idx;
                   touchDragging.current = true;
+                  overIdxRef.current = null;
                   setArmedIdx(idx);
                   setDragIdx(idx);
+                  setIsDragging(true); // attiva i listener globali (blocco scroll + rilevamento)
                   if (typeof navigator !== "undefined" && navigator.vibrate) { try { navigator.vibrate(15); } catch { /* noop */ } }
-                }, 400);
+                }, 350);
               }}
               onTouchMove={(e) => {
-                // Se non abbiamo ancora "armato" il drag, lasciamo scrollare:
-                // se il dito si muove troppo presto, annulliamo il long-press.
-                if (!touchDragging.current) {
-                  const t = e.touches[0];
-                  if (t && startPos.current) {
-                    const dx = Math.abs(t.clientX - startPos.current.x);
-                    const dy = Math.abs(t.clientY - startPos.current.y);
-                    if (dx > 8 || dy > 8) { movedRef.current = true; clearPress(); } // è uno scroll: niente drag, niente avviso
-                  }
-                  return; // lo scroll resta libero
-                }
-                // Drag attivo: ora preveniamo lo scroll e troviamo il bersaglio.
-                e.preventDefault();
+                // Prima che il drag sia attivo: se il dito si muove, è uno scroll
+                // → annulliamo il long-press e lasciamo scorrere liberamente.
+                if (touchDragging.current) return; // drag attivo: gestito dai listener globali
                 const t = e.touches[0];
-                if (!t) return;
-                const el = document.elementFromPoint(t.clientX, t.clientY);
-                const tile = el ? (el.closest("[data-idx]") as HTMLElement | null) : null;
-                if (tile) {
-                  const overI = Number(tile.getAttribute("data-idx"));
-                  if (!Number.isNaN(overI) && overI !== touchIdx.current) {
-                    if (overIdx !== overI) setOverIdx(overI);
-                  } else if (overIdx !== null) setOverIdx(null);
+                if (t && startPos.current) {
+                  const dx = Math.abs(t.clientX - startPos.current.x);
+                  const dy = Math.abs(t.clientY - startPos.current.y);
+                  if (dx > 8 || dy > 8) { movedRef.current = true; clearPress(); }
                 }
               }}
               onTouchEnd={() => {
-                clearPress();
-                if (touchDragging.current) {
-                  if (touchIdx.current !== null && overIdx !== null && overIdx !== touchIdx.current) {
-                    mergeGroups(touchIdx.current, overIdx);
-                  }
+                // Se il drag NON era attivo (tap o pressione breve): puliamo il timer.
+                // Se era attivo, ci pensa il listener globale (touchend) a unire e pulire.
+                if (!touchDragging.current) {
+                  clearPress();
+                  movedRef.current = false;
+                  startPos.current = null;
                 }
-                touchIdx.current = null;
-                touchDragging.current = false;
-                movedRef.current = false;
-                startPos.current = null;
-                setArmedIdx(null);
-                setDragIdx(null);
-                setOverIdx(null);
               }}
               onTouchCancel={() => {
-                clearPress();
-                touchIdx.current = null;
-                touchDragging.current = false;
-                movedRef.current = false;
-                startPos.current = null;
-                setArmedIdx(null);
-                setDragIdx(null);
-                setOverIdx(null);
+                if (!touchDragging.current) { clearPress(); movedRef.current = false; startPos.current = null; }
               }}
               className={`${lead.bg} rounded-lg px-3 py-2.5 select-none cursor-grab active:cursor-grabbing transition-all ${isCombined ? "col-span-2" : ""} ${dragIdx === idx ? "opacity-50 scale-[0.97]" : ""} ${isArmed ? "ring-2 ring-violet-400 shadow-lg scale-[1.03] -rotate-1 z-10" : ""} ${isOver ? "ring-2 ring-blue-400 ring-offset-1" : ""}`}
-              style={isArmed ? { touchAction: "none" } : undefined}
+              style={isArmed ? { touchAction: "none", position: "relative", zIndex: 20 } : undefined}
             >
               {isOver ? (
                 <div className="flex items-center gap-1.5 mb-1">
