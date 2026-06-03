@@ -21,6 +21,8 @@ import {
 } from "firebase/firestore";
 import type { Unsubscribe } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
+import { subscribeByPropertyChunks } from "~/lib/firebase/scopedSnapshot";
+
 import {
   type MonthDebt, type DebtStatus,
   MONTHS_IT, getDebtStatus, getScadenzaDate, getWarningDate,
@@ -167,60 +169,28 @@ export function useOwnerDebts(ownerId: string | undefined): OwnerDebtsResult {
       }
 
       // ─── Pulizie (range 24 mesi, filtrate per propertyId) ─
-      const unsubC = onSnapshot(
-        query(collection(db, "cleanings"), where("scheduledDate", ">=", startTs), where("scheduledDate", "<=", endTs)),
-        (snap) => {
-          if (!mounted) return;
-          const list: DebtCalcCleaning[] = [];
-          snap.docs.forEach(d => {
-            const raw = d.data() as Record<string, any>;
-            if (!propIds.has(raw.propertyId)) return;
-            list.push({
-              id: d.id,
-              propertyId: raw.propertyId,
-              status: raw.status,
-              scheduledDate: raw.scheduledDate,
-              price: raw.price,
-              priceOverride: raw.priceOverride,
-              holidayFee: raw.holidayFee,
-              excludedFromBilling: raw.excludedFromBilling,
-            });
-          });
-          setCleanings(list);
-          setCleaningsReady(true);
+      const unsubC = subscribeByPropertyChunks<DebtCalcCleaning>(
+        "cleanings",
+        Array.from(propIds),
+        (d) => {
+          const raw = d.data() as Record<string, any>;
+          return { id: d.id, propertyId: raw.propertyId, status: raw.status, scheduledDate: raw.scheduledDate, price: raw.price, priceOverride: raw.priceOverride, holidayFee: raw.holidayFee, excludedFromBilling: raw.excludedFromBilling };
         },
+        (list) => { if (mounted) { setCleanings(list); setCleaningsReady(true); } },
+        () => { if (mounted) setCleaningsReady(true); },
       );
       unsubsRef.current.push(unsubC);
 
       // ─── Ordini (range 24 mesi, filtrati per propertyId) ─
-      const unsubO = onSnapshot(
-        query(collection(db, "orders"), where("scheduledDate", ">=", startTs), where("scheduledDate", "<=", endTs)),
-        (snap) => {
-          if (!mounted) return;
-          const list: DebtCalcOrder[] = [];
-          snap.docs.forEach(d => {
-            const raw = d.data() as Record<string, any>;
-            if (!propIds.has(raw.propertyId)) return;
-            list.push({
-              id: d.id,
-              propertyId: raw.propertyId,
-              status: raw.status,
-              cleaningId: raw.cleaningId,
-              scheduledDate: raw.scheduledDate,
-              deliveredAt: raw.deliveredAt,
-              createdAt: raw.createdAt,
-              items: raw.items,
-              totalPriceOverride: raw.totalPriceOverride,
-              deliveryFee: raw.deliveryFee,
-              deliveryFeeEnabled: raw.deliveryFeeEnabled,
-              bedMaking: raw.bedMaking,
-              bedMakingFee: raw.bedMakingFee,
-              excludedFromBilling: raw.excludedFromBilling,
-            });
-          });
-          setOrders(list);
-          setOrdersReady(true);
+      const unsubO = subscribeByPropertyChunks<DebtCalcOrder>(
+        "orders",
+        Array.from(propIds),
+        (d) => {
+          const raw = d.data() as Record<string, any>;
+          return { id: d.id, propertyId: raw.propertyId, status: raw.status, cleaningId: raw.cleaningId, scheduledDate: raw.scheduledDate, deliveredAt: raw.deliveredAt, createdAt: raw.createdAt, items: raw.items, totalPriceOverride: raw.totalPriceOverride, calculatedTotal: raw.calculatedTotal, deliveryFee: raw.deliveryFee, deliveryFeeEnabled: raw.deliveryFeeEnabled, bedMaking: raw.bedMaking, bedMakingFee: raw.bedMakingFee, excludedFromBilling: raw.excludedFromBilling };
         },
+        (list) => { if (mounted) { setOrders(list); setOrdersReady(true); } },
+        () => { if (mounted) setOrdersReady(true); },
       );
       unsubsRef.current.push(unsubO);
 

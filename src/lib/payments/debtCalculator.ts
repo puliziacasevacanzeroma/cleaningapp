@@ -121,6 +121,14 @@ export interface DebtCalcOrder {
   createdAt?: DateLike;
   items?: DebtCalcOrderItem[];
   totalPriceOverride?: number;
+  /**
+   * Totale memorizzato sull'ordine (scritto da processOrder). È il valore
+   * mostrato nella pagina admin /dashboard/pagamenti. Quando presente è la
+   * fonte di verità; il ricalcolo da items resta come fallback per ordini
+   * legacy che ne sono privi. Passarlo SOLO dai consumer che devono
+   * combaciare con quella pagina (dashboard proprietario).
+   */
+  calculatedTotal?: number;
   deliveryFee?: number;
   deliveryFeeEnabled?: boolean;
   bedMaking?: boolean;
@@ -356,7 +364,12 @@ export function computeMonthDebt(args: {
     if (!isDateInMonth(orderDate, month, year)) continue;
 
     const rawPrice = calculateOrderRawPrice(o, inventoryById);
-    const effectivePrice = o.totalPriceOverride ?? rawPrice;
+    // Allineamento alla pagina Pagamenti: se l'ordine ha `calculatedTotal`
+    // memorizzato, quello è la verità (stesso numero dell'area admin). Il
+    // ricalcolo da items è il fallback per ordini legacy senza il campo.
+    // L'override manuale del totale ha sempre la precedenza.
+    const storedTotal = typeof o.calculatedTotal === "number" ? o.calculatedTotal : undefined;
+    const effectivePrice = o.totalPriceOverride ?? storedTotal ?? rawPrice;
 
     ordersTotal += effectivePrice;
     ordersCount += 1;

@@ -6,6 +6,7 @@ import {
   onSnapshot,
 } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
+import { subscribeByPropertyChunks } from "~/lib/firebase/scopedSnapshot";
 import type { Unsubscribe } from "firebase/firestore";
 import {
   computeMonthDebt,
@@ -653,31 +654,21 @@ export function useOwnerRealtimePayments(ownerId: string | undefined, month: num
       }
 
       // Cleanings
-      const unsubC = onSnapshot(
-        query(collection(db, "cleanings"), where("scheduledDate", ">=", startTs), where("scheduledDate", "<=", endTs)),
-        (snap) => {
-          if (!mounted) return;
-          const data = snap.docs
-            .map(d => ({ id: d.id, ...(d.data() as Record<string, any>) }))
-            .filter((c: any) => c.status === "COMPLETED" && propertyIds.includes(c.propertyId));
-          setAllCleanings(data);
-          setCleaningsLoaded(true);
-        },
+      const unsubC = subscribeByPropertyChunks<any>(
+        "cleanings",
+        propertyIds,
+        (d) => ({ id: d.id, ...(d.data() as Record<string, any>) }),
+        (items) => { if (!mounted) return; setAllCleanings(items.filter((c: any) => c.status === "COMPLETED")); setCleaningsLoaded(true); },
         () => { if (mounted) setError("Errore caricamento pulizie"); },
       );
       unsubscribesRef.current.push(unsubC);
 
       // Orders
-      const unsubO = onSnapshot(
-        query(collection(db, "orders"), where("scheduledDate", ">=", startTs), where("scheduledDate", "<=", endTs)),
-        (snap) => {
-          if (!mounted) return;
-          const data = snap.docs
-            .map(d => ({ id: d.id, ...(d.data() as Record<string, any>) }))
-            .filter((o: any) => propertyIds.includes(o.propertyId) && o.status !== "CANCELLED");
-          setAllOrders(data);
-          setOrdersLoaded(true);
-        },
+      const unsubO = subscribeByPropertyChunks<any>(
+        "orders",
+        propertyIds,
+        (d) => ({ id: d.id, ...(d.data() as Record<string, any>) }),
+        (items) => { if (!mounted) return; setAllOrders(items.filter((o: any) => o.status !== "CANCELLED")); setOrdersLoaded(true); },
         () => { if (mounted) setError("Errore caricamento ordini"); },
       );
       unsubscribesRef.current.push(unsubO);
@@ -764,6 +755,7 @@ export function useOwnerRealtimePayments(ownerId: string | undefined, month: num
       createdAt: o.createdAt,
       items: o.items,
       totalPriceOverride: o.totalPriceOverride,
+      calculatedTotal: o.calculatedTotal,
       deliveryFee: o.deliveryFee,
       deliveryFeeEnabled: o.deliveryFeeEnabled,
       bedMaking: o.bedMaking,
