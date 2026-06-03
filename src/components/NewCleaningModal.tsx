@@ -507,6 +507,18 @@ export default function NewCleaningModal({
   const [propertySearch, setPropertySearch] = useState("");
   const [showPropertyDropdown, setShowPropertyDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  // 🔝 Ref al contenitore scrollabile: serve a riportare la vista in cima
+  // quando si cambia step. Senza, passando da step 1 a step 2 la pagina
+  // restava nella posizione di scroll precedente (in basso) invece di
+  // mostrare il nuovo step dall'inizio.
+  const contentScrollRef = useRef<HTMLDivElement>(null);
+
+  // Quando cambia lo step, riporta lo scroll in cima
+  useEffect(() => {
+    if (contentScrollRef.current) {
+      contentScrollRef.current.scrollTop = 0;
+    }
+  }, [currentStep]);
 
   // 🔄 Helper: data corrente nel fuso orario di Roma
   const getRomeDate = () => {
@@ -1255,7 +1267,7 @@ export default function NewCleaningModal({
       </div>
 
       {/* ═══ CONTENT ═══ */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-slate-50">
+      <div ref={contentScrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-slate-50">
 
         {/* ═══════════════════════════════════════════════════════════════ */}
         {/* STEP 1: Proprietà e Servizio                                   */}
