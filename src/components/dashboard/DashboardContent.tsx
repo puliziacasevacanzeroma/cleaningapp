@@ -208,6 +208,14 @@ const mobileStyles = `
   .scale-in { animation: scaleIn 0.2s ease forwards; }
 `;
 
+// 🚀 CACHE PERSISTENTE (vive tra le navigazioni, stesso tipo dati della dashboard):
+// al rientro nella dashboard mostriamo subito l'ultimo dato del giorno dalla cache
+// (niente cerchio/flash) e il listener aggiorna in tempo reale. Chiave = giorno.
+const _dayKey = (d: Date) => d.toDateString();
+const _dashCleaningsCache = new Map<string, Cleaning[]>();
+const _dashOrdersCache = new Map<string, Order[]>();
+const _capCache = <T,>(m: Map<string, T>) => { if (m.size > 40) { const k = m.keys().next().value; if (k !== undefined) m.delete(k); } };
+
 export function DashboardContent({ userName, stats, cleanings: initialCleanings, operators, orders: initialOrders = [], riders = [] }: DashboardContentProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -239,8 +247,8 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
   const [selectedCleaning, setSelectedCleaning] = useState<Cleaning | null>(null);
   const [assigning, setAssigning] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [cleanings, setCleanings] = useState<Cleaning[]>(initialCleanings);
-  const [loadingCleanings, setLoadingCleanings] = useState(false);
+  const [cleanings, setCleanings] = useState<Cleaning[]>(() => _dashCleaningsCache.get(_dayKey(new Date())) ?? initialCleanings);
+  const [loadingCleanings, setLoadingCleanings] = useState(() => !_dashCleaningsCache.has(_dayKey(new Date())));
   
   // 🔧 FIX v2 — MAPPE AUSILIARIE: ognuna inizializzata dalla cache localStorage
   // per-utente. Previene il "flash" di card con dati mancanti al boot prima che
@@ -302,8 +310,8 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   
   // 🔴 NUOVO: Stato per ordini con listener realtime
-  const [orders, setOrders] = useState<Order[]>(initialOrders);
-  const [loadingOrders, setLoadingOrders] = useState(false);
+  const [orders, setOrders] = useState<Order[]>(() => _dashOrdersCache.get(_dayKey(new Date())) ?? initialOrders);
+  const [loadingOrders, setLoadingOrders] = useState(() => !_dashOrdersCache.has(_dayKey(new Date())));
   const [editingTimeId, setEditingTimeId] = useState<string | null>(null);
   const [editingTime, setEditingTime] = useState("");
   const [editingGuestsId, setEditingGuestsId] = useState<string | null>(null);
@@ -648,7 +656,14 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
 
   // 🔴 LISTENER REALTIME PER PULIZIE - Si aggiorna automaticamente
   useEffect(() => {
-    setLoadingCleanings(true); // 🆕 nasconde il fatturato finché non arrivano i dati del nuovo giorno
+    const dk = _dayKey(selectedDate);
+    const cached = _dashCleaningsCache.get(dk);
+    if (cached) {
+      setCleanings(cached);        // 🆕 mostra subito i dati di QUEL giorno dalla cache
+      setLoadingCleanings(false);  // niente cerchio se già in cache
+    } else {
+      setLoadingCleanings(true);   // primo caricamento di quel giorno → loading
+    }
     const startOfDay = new Date(selectedDate);
     startOfDay.setHours(0, 0, 0, 0);
     const endOfDay = new Date(selectedDate);
@@ -745,6 +760,8 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
         return true;
       });
       setCleanings(updatedCleanings);
+      _dashCleaningsCache.set(_dayKey(selectedDate), updatedCleanings); // 🆕 aggiorna cache
+      _capCache(_dashCleaningsCache);
       setLoadingCleanings(false);
     }, (error) => {
       console.error("❌ Errore listener pulizie:", error);
@@ -758,12 +775,18 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
 
   // 🔴 LISTENER REALTIME PER ORDINI - Si aggiorna automaticamente al cambio data
   useEffect(() => {
+    const dkO = _dayKey(selectedDate);
+    const cachedO = _dashOrdersCache.get(dkO);
+    if (cachedO) {
+      setOrders(cachedO);        // 🆕 subito dalla cache
+      setLoadingOrders(false);
+    } else {
+      setLoadingOrders(true);
+    }
     const startOfDay = new Date(selectedDate);
     startOfDay.setHours(0, 0, 0, 0);
     const endOfDay = new Date(selectedDate);
     endOfDay.setHours(23, 59, 59, 999);
-
-    setLoadingOrders(true);
 
     const ordersQuery = query(
       collection(db, "orders"),
@@ -823,6 +846,8 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
         return { ...o, cleaning: { scheduledTime: (linked as any).scheduledTime, status: (linked as any).status } };
       });
       setOrders(enrichedOrders);
+      _dashOrdersCache.set(_dayKey(selectedDate), enrichedOrders); // 🆕 aggiorna cache
+      _capCache(_dashOrdersCache);
       setLoadingOrders(false);
     }, (error) => {
       console.error("❌ Errore listener ordini:", error);
