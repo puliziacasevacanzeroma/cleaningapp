@@ -101,6 +101,36 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Dati mancanti" }, { status: 400 });
       }
 
+      // 🛡️ GUARDIA ANTI-DOPPIONE
+      // Se un pagamento IDENTICO (stesso proprietario, mese, anno, importo e
+      // tipo) è stato creato negli ultimi 60 secondi, è quasi certamente un
+      // doppio clic o un ri-clic su un saldo non ancora aggiornato a video
+      // (causa reale di sovrapagamenti, es. febbraio incassato 2× da 12,40).
+      // NON lo registriamo di nuovo. Query su singolo campo + filtro in memoria
+      // → nessun indice composito richiesto.
+      {
+        const amtCheck = parseFloat(String(amount));
+        const dupSnap = await adminDb.collection("payments")
+          .where("proprietarioId", "==", proprietarioId).get();
+        const nowMs = Date.now();
+        const dup = dupSnap.docs.find(d => {
+          const p = d.data();
+          const recentMs = p.createdAt?.toMillis ? nowMs - p.createdAt.toMillis() : Number.MAX_SAFE_INTEGER;
+          return Number(p.month) === Number(month)
+            && Number(p.year) === Number(year)
+            && p.type === type
+            && Math.abs((p.amount || 0) - amtCheck) < 0.01
+            && recentMs < 60_000;
+        });
+        if (dup) {
+          return NextResponse.json({
+            error: "Pagamento identico già registrato pochi secondi fa (possibile doppio clic): non l'ho registrato di nuovo per evitare un sovrapagamento.",
+            duplicate: true,
+            existingPaymentId: dup.id,
+          }, { status: 409 });
+        }
+      }
+
       const paymentId = await createPayment({
         // @ts-expect-error TODO-FIX: TS2322 Type 'string | undefined' is not assignable to type 'string'.
         proprietarioId, proprietarioName, month, year,
