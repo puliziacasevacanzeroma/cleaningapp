@@ -53,15 +53,34 @@ export function useToast() {
   return context;
 }
 
-// ==================== TRACCIAMENTO VISIBILITÀ ====================
-// Quando l'app torna in primo piano (da background/chiusa), i listener
-// Firestore ricevono in blocco le notifiche accumulate. Per non mostrarle
-// tutte come toast (devono restare solo push), registriamo l'istante in cui
-// l'app è tornata visibile e ignoriamo i toast nei primi istanti dopo.
+// ==================== TRACCIAMENTO VISIBILITÀ (anti-raffica) ====================
+// PROBLEMA: quando l'app va in background (o viene "chiusa" ma resta sospesa) e
+// poi la riapri, i listener Firestore consegnano IN BLOCCO tutte le notifiche
+// accumulate nel frattempo. Quelle le hai gia' ricevute come PUSH: NON devono
+// ricomparire come raffica di toast/modal all'apertura.
+//
+// SOLUZIONE ROBUSTA (non dipende dalla velocita' di riconnessione di Firestore):
+// registriamo l'istante in cui l'app e' tornata in primo piano e mostriamo come
+// toast SOLO le notifiche il cui createdAt e' SUCCESSIVO a quel momento. Il
+// backlog (creato mentre l'app era chiusa) e' sempre piu' vecchio -> solo push.
+// Cosi' non importa se la consegna del backlog arriva dopo 1s o dopo 30s: viene
+// giudicata in base alla SUA data di creazione, non al cronometro.
 let lastBecameVisibleAt = Date.now();
-// Periodo di grazia: i toast che arrivano entro questo tempo dal ritorno in
-// primo piano sono considerati "backlog" e NON mostrati.
+
+// Tolleranza per lo sfasamento tra orologio del client e timestamp del server
+// (createdAt e' ora-server). 60s: una notifica "vera" arriva pochi secondi dopo
+// l'apertura, il backlog e' quasi sempre vecchio di minuti/ore -> resta escluso.
+const CLOCK_SKEW_TOLERANCE_MS = 60_000;
+
+// Grazia breve usata SOLO come rete di sicurezza centrale (es. cambi stato
+// ordini che al risveglio possono ri-emettere diff in blocco).
 const VISIBILITY_GRACE_MS = 1500;
+
+function markForeground() {
+  if (typeof document === "undefined" || document.visibilityState === "visible") {
+    lastBecameVisibleAt = Date.now();
+  }
+}
 
 if (typeof document !== "undefined") {
   document.addEventListener("visibilitychange", () => {
@@ -69,6 +88,25 @@ if (typeof document !== "undefined") {
       lastBecameVisibleAt = Date.now();
     }
   });
+}
+if (typeof window !== "undefined") {
+  // Mobile/PWA: a volte al risveglio scatta focus/pageshow invece di
+  // visibilitychange. Aggiorniamo il riferimento anche in quei casi.
+  window.addEventListener("focus", markForeground);
+  window.addEventListener("pageshow", markForeground);
+}
+
+// Una notifica va mostrata come toast SOLO se e' stata creata DOPO l'ultimo
+// ritorno in primo piano (con tolleranza per lo sfasamento d'orologio). Tutto
+// cio' che e' piu' vecchio = backlog accumulato in background -> niente toast.
+// Se manca il createdAt siamo permissivi (mostriamo): non vogliamo perdere nulla.
+function isLiveNotification(createdAt: any): boolean {
+  try {
+    if (!createdAt || typeof createdAt.toMillis !== "function") return true;
+    return createdAt.toMillis() >= lastBecameVisibleAt - CLOCK_SKEW_TOLERANCE_MS;
+  } catch {
+    return true;
+  }
 }
 
 // ==================== SUONO DOLCE A DUE NOTE ====================
@@ -436,7 +474,14 @@ export function useAdminRealtimeNotifications() {
       snapshot.docChanges().forEach(change => {
         if (change.type === 'added' && !seenNotificationsRef.current.has(change.doc.id)) {
           const data = change.doc.data();
-          
+
+          // 🔇 ANTI-RAFFICA: se la notifica e' stata creata mentre l'app era in
+          // background (backlog), l'hai gia' avuta come push -> niente toast.
+          if (!isLiveNotification(data.createdAt)) {
+            seenNotificationsRef.current.add(change.doc.id);
+            return;
+          }
+
           // Determina tipo toast in base al tipo notifica
           let toastType: 'success' | 'info' | 'warning' | 'error' = 'info';
           if (data.type?.includes('COMPLETED') || data.type?.includes('APPROVED') || data.type === 'SUCCESS' || data.type === 'NEW_PROPERTY') {
@@ -645,6 +690,12 @@ export function useProprietarioRealtimeNotifications(userId: string, userPropert
           
           // Filtra solo notifiche per proprietario
           if (data.recipientRole !== 'PROPRIETARIO') return;
+
+          // 🔇 ANTI-RAFFICA: backlog creato in background -> solo push, niente toast
+          if (!isLiveNotification(data.createdAt)) {
+            seenNotificationsRef.current.add(change.doc.id);
+            return;
+          }
           
           
           // Determina tipo toast
@@ -724,6 +775,12 @@ export function useOperatoreRealtimeNotifications(userId: string) {
           
           // Filtra solo notifiche per operatore
           if (data.recipientRole !== 'OPERATORE_PULIZIE' && data.recipientRole !== 'OPERATORE') return;
+
+          // 🔇 ANTI-RAFFICA: backlog creato in background -> solo push, niente toast
+          if (!isLiveNotification(data.createdAt)) {
+            seenNotificationsRef.current.add(change.doc.id);
+            return;
+          }
           
           
           // Determina tipo toast
@@ -786,6 +843,12 @@ export function useRiderRealtimeNotifications(userId: string) {
         (data.recipientRole === 'RIDER' && !data.recipientId);
       
       if (!isForThisRider) return;
+
+      // 🔇 ANTI-RAFFICA: backlog creato in background -> solo push, niente toast
+      if (!isLiveNotification(data.createdAt)) {
+        seenNotificationsRef.current.add(docId);
+        return;
+      }
       
       
       // Determina tipo toast
