@@ -15,23 +15,28 @@ export default function HomePage() {
     }
 
     const role = user.role?.toUpperCase() || "";
-    
+
+    // Destinazione in base al ruolo
+    let destination = "/dashboard";
     if (role === "ADMIN") {
-      window.location.href = "/dashboard";
+      destination = "/dashboard";
     } else if (["PROPRIETARIO", "OWNER", "CLIENTE"].includes(role)) {
-      window.location.href = "/proprietario/calendario/pulizie";
+      destination = "/proprietario/calendario/pulizie";
     } else if (["OPERATORE_PULIZIE", "OPERATORE", "OPERATOR"].includes(role)) {
-      window.location.href = "/operatore";
+      destination = "/operatore";
     } else if (role === "RIDER") {
-      window.location.href = "/rider";
+      destination = "/rider";
     } else {
-      window.location.href = "/dashboard";
+      destination = "/dashboard";
     }
+
+    // 🚀 Passa dalla splash animata (la stessa del login) anche alla riapertura
+    window.location.href = `/welcome?to=${encodeURIComponent(destination)}`;
   }, [user, loading]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50">
-      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-sky-500"></div>
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-cyan-500 via-sky-600 to-blue-700">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white"></div>
     </div>
   );
 }
