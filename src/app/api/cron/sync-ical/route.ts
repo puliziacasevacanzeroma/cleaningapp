@@ -7,6 +7,7 @@ import { adminDb } from "~/lib/firebase/admin";
 import { Timestamp } from "firebase-admin/firestore";
 import { getItemName } from "~/lib/itemNames";
 import { auditLog } from "~/lib/services/auditService";
+import { buildExpectedItems } from "~/lib/linen/linenCore";
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
@@ -67,58 +68,11 @@ function calculateLinenItemsForProperty(prop: any, guestsCount: number): { id: s
   if (prop.serviceConfigs) {
     const config = prop.serviceConfigs[guestsCount] || prop.serviceConfigs[String(guestsCount)];
     if (config) {
-      if (config.bl) {
-        const blKeys = Object.keys(config.bl);
-        const hasAll = config.bl['all'] && typeof config.bl['all'] === 'object' && Object.keys(config.bl['all']).length > 0;
-        const bedGroupKeys = blKeys.filter(k => k !== 'all');
-        const hasBedGroups = bedGroupKeys.length > 0 && bedGroupKeys.some((k: string) => {
-          const items = config.bl[k];
-          return items && typeof items === 'object' && Object.keys(items).length > 0;
-        });
-        
-        if (hasAll && hasBedGroups) {
-          // 🔥 FIX: MERGE — bl['all'] può essere parziale (es. solo federe)
-          // Usa bl['all'] come base, poi integra articoli mancanti dai gruppi letto
-          const merged: Record<string, number> = {};
-          // Prima: raccogli totali dai gruppi letto
-          bedGroupKeys.forEach((k: string) => {
-            const items = config.bl[k];
-            if (items && typeof items === 'object') {
-              Object.entries(items).forEach(([itemId, qty]: [string, any]) => {
-                if (typeof qty === 'number' && qty > 0) {
-                  merged[itemId] = (merged[itemId] || 0) + qty;
-                }
-              });
-            }
-          });
-          // Poi: sovrascrivi con bl['all'] (ha priorità per gli articoli che contiene)
-          Object.entries(config.bl['all']).forEach(([itemId, qty]: [string, any]) => {
-            if (typeof qty === 'number' && qty > 0) {
-              merged[itemId] = qty;
-            }
-          });
-          // Aggiungi tutto ai linenItems
-          Object.entries(merged).forEach(([itemId, qty]) => {
-            if (qty > 0) linenItems.push({ id: itemId, name: getItemName(itemId), quantity: qty });
-          });
-        } else if (hasAll) {
-          Object.entries(config.bl['all']).forEach(([itemId, qty]: [string, any]) => { if (typeof qty === 'number' && qty > 0) linenItems.push({ id: itemId, name: getItemName(itemId), quantity: qty }); });
-        } else {
-          Object.entries(config.bl).forEach(([bedId, items]: [string, any]) => {
-            if (bedId !== 'all' && typeof items === 'object') {
-              Object.entries(items).forEach(([itemId, qty]: [string, any]) => {
-                if (typeof qty === 'number' && qty > 0) {
-                  const existing = linenItems.find(i => i.id === itemId);
-                  if (existing) existing.quantity += qty;
-                  else linenItems.push({ id: itemId, name: getItemName(itemId), quantity: qty });
-                }
-              });
-            }
-          });
-        }
-      }
-      if (config.ba) Object.entries(config.ba).forEach(([itemId, qty]: [string, any]) => { if (typeof qty === 'number' && qty > 0) linenItems.push({ id: itemId, name: getItemName(itemId), quantity: qty }); });
-      if (config.ki) Object.entries(config.ki).forEach(([itemId, qty]: [string, any]) => { if (typeof qty === 'number' && qty > 0) linenItems.push({ id: itemId, name: getItemName(itemId), quantity: qty }); });
+      // 🎯 CENTRALIZZATO: estrazione bl/ba/ki via linenCore (UNICA fonte di verità).
+      // Logica IDENTICA alla precedente — dimostrato da equivalence.syncical.test (11/11).
+      buildExpectedItems(config).forEach((e) => {
+        linenItems.push({ id: e.itemId, name: getItemName(e.itemId), quantity: e.quantity });
+      });
 
       // 🛡️ SAFETY NET: Verifica che la biancheria letto sia presente quando ha senso
       // Caso 1: Federe presenti ma lenzuola mancanti → config corrotta, bl['all'] incompleto
