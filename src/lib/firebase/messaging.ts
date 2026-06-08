@@ -454,11 +454,27 @@ export async function initializePushNotifications(userId: string): Promise<{
       };
     }
 
-    // 4. Aggiungi handler per mostrare notifiche anche in foreground
+    // 4. Handler FOREGROUND (app aperta/in primo piano)
+    //
+    // ⚠️ ANTI-POP ALL'APERTURA: NON mostriamo notifiche di sistema quando l'app
+    // e' VISIBILE. Motivo: quando l'app e' aperta, le notifiche le mostra gia' il
+    // toast in-app (ToastNotifications, via listener Firestore). Mostrare anche una
+    // notifica di sistema qui causava i "pop" all'apertura, perche' al risveglio
+    // FCM consegna a questo handler onMessage tutte le push rimaste in coda e in
+    // quel momento l'app e' VISIBILE -> raffica di pop. Quando invece l'app e'
+    // chiusa/in background ci pensa il service worker (onBackgroundMessage).
+    //
+    // Regola: se l'app e' visibile -> niente notifica di sistema (ci pensa il
+    // toast in-app). Solo nel raro caso in cui onMessage scatti mentre l'app non
+    // e' visibile mostriamo la notifica di sistema.
     if (!foregroundHandlerSet) {
       const messaging = getMessagingInstance();
       if (messaging) {
         onMessage(messaging, (payload) => {
+          // 🔇 App aperta/visibile: nessun pop di sistema, ci pensa il toast in-app.
+          if (typeof document !== "undefined" && document.visibilityState === "visible") {
+            return;
+          }
           const data = payload.data || {};
           navigator.serviceWorker.ready.then((reg) => {
             reg.showNotification(
