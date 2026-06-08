@@ -10,6 +10,7 @@ import { PhotoLightbox } from "~/components/ui/PhotoLightbox";
 import SmartImage from "~/components/ui/SmartImage";
 import CleaningRatingBadge from "~/components/cleaning/CleaningRatingBadge";
 import { getItemName } from "~/lib/itemNames";
+import { buildExpectedItems } from "~/lib/linen/linenCore";
 import { browserCacheGet, browserCacheSet } from "~/lib/browserCache";
 
 // @ts-expect-error TODO-FIX: TS2305 Module '"~/types/cleaning"' has no exported member 'SgrossoReasonCode'.
@@ -1899,61 +1900,27 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
               if (propConfig && propConfig.bl) {
                 const orderItems: Array<{itemId: string; id: string; name: string; quantity: number; unitPrice: number; totalPrice: number; categoryName: string}> = [];
                 
-                // Usa bl['all'] o somma da gruppi
-                const blAll = propConfig.bl['all'] || {};
-                Object.entries(blAll).forEach(([itemId, qty]) => {
-                  if (typeof qty === 'number' && qty > 0) {
-                    const invItem = invLinen.find(i => i.id === itemId);
-                    const unitPrice = invItem?.p || 0;
-                    orderItems.push({
-                      itemId: itemId,
-                      id: itemId,
-                      name: invItem?.n || getItemName(itemId),
-                      quantity: qty,
-                      unitPrice: unitPrice,
-                      totalPrice: qty * unitPrice,
-                      categoryName: "Biancheria Letto"
-                    });
-                  }
+                // 🎯 CENTRALIZZATO: estrazione bl/ba/ki via linenCore (UNICA fonte di verità).
+                // FIX: prima leggeva solo bl['all'] e PERDEVA le config a gruppi-letto.
+                const SECTION_META: Record<string, { cat: string; inv: typeof invLinen }> = {
+                  biancheria_letto: { cat: "Biancheria Letto", inv: invLinen },
+                  biancheria_bagno: { cat: "Biancheria Bagno", inv: invBath },
+                  kit_cortesia: { cat: "Kit Cortesia", inv: invKit },
+                };
+                buildExpectedItems(propConfig).forEach((e) => {
+                  const meta = SECTION_META[e.categoryId];
+                  const invItem = meta?.inv.find(i => i.id === e.itemId);
+                  const unitPrice = invItem?.p || 0;
+                  orderItems.push({
+                    itemId: e.itemId,
+                    id: e.itemId,
+                    name: invItem?.n || getItemName(e.itemId),
+                    quantity: e.quantity,
+                    unitPrice,
+                    totalPrice: e.quantity * unitPrice,
+                    categoryName: meta?.cat || "Biancheria Letto",
+                  });
                 });
-                
-                // Bagno
-                if (propConfig.ba) {
-                  Object.entries(propConfig.ba).forEach(([itemId, qty]) => {
-                    if (typeof qty === 'number' && qty > 0) {
-                      const invItem = invBath.find(i => i.id === itemId);
-                      const unitPrice = invItem?.p || 0;
-                      orderItems.push({
-                        itemId: itemId,
-                        id: itemId,
-                        name: invItem?.n || getItemName(itemId),
-                        quantity: qty,
-                        unitPrice: unitPrice,
-                        totalPrice: qty * unitPrice,
-                        categoryName: "Biancheria Bagno"
-                      });
-                    }
-                  });
-                }
-                
-                // Kit
-                if (propConfig.ki) {
-                  Object.entries(propConfig.ki).forEach(([itemId, qty]) => {
-                    if (typeof qty === 'number' && qty > 0) {
-                      const invItem = invKit.find(i => i.id === itemId);
-                      const unitPrice = invItem?.p || 0;
-                      orderItems.push({
-                        itemId: itemId,
-                        id: itemId,
-                        name: invItem?.n || getItemName(itemId),
-                        quantity: qty,
-                        unitPrice: unitPrice,
-                        totalPrice: qty * unitPrice,
-                        categoryName: "Kit Cortesia"
-                      });
-                    }
-                  });
-                }
                 
                 if (orderItems.length > 0) {
                   // 🔥 FIX ANTI-DUPLICATO: controlla se esiste già un ordine per questa pulizia
