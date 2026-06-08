@@ -152,6 +152,7 @@ export async function GET(req: NextRequest) {
           (typeof order.guestsCount === "number" && order.guestsCount) || 2,
         cleaningId: order.cleaningId || null,
         ownLinen: !shouldHaveLinen,
+        decision: { propertyUsesOwnLinen: propUsesOwn, cleaningHasLinenOrder: hlo ?? null },
         before: beforeT,
         after: afterT,
         applied: false,
