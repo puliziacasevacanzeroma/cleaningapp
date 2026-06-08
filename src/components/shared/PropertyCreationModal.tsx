@@ -128,6 +128,9 @@ function GuestSelector({ value, onChange, max = 10 }: { value: number; onChange:
 export default function PropertyCreationModal({ isOpen, onClose, onSuccess, mode, proprietari = [], currentUser }: PropertyCreationModalProps) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // 🆕 Ref del container scrollabile: serve per riportare lo scroll in cima
+  //    a ogni cambio di step del wizard (vedi useEffect più sotto).
+  const contentRef = useRef<HTMLDivElement>(null);
   
   // STEPS DIVERSI per admin e owner
   // Admin: Info, Capacità, Orari, Prezzo, Cliente, Stanze, Dotazioni, Foto (8 steps)
@@ -138,6 +141,15 @@ export default function PropertyCreationModal({ isOpen, onClose, onSuccess, mode
     : ['Info', 'Capacità', 'Orari', 'Stanze', 'Dotazioni', 'Foto'];
   
   const [step, setStep] = useState(1);
+
+  // 🆕 A ogni cambio di step (Avanti/Indietro del carosello) riporta il
+  //    contenuto della modal in cima, così la nuova pagina non parte scrollata
+  //    dove era rimasta la precedente.
+  useEffect(() => {
+    const el = contentRef.current;
+    if (el) el.scrollTop = 0;
+  }, [step]);
+
   const [saving, setSaving] = useState(false);
   const [manualEntry, setManualEntry] = useState(false);
   const [error, setError] = useState('');
@@ -676,7 +688,7 @@ export default function PropertyCreationModal({ isOpen, onClose, onSuccess, mode
         <input type="file" ref={fileInputRef} onChange={handleImageSelect} accept="image/*" className="hidden" />
         
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-5">
+        <div ref={contentRef} className="flex-1 overflow-y-auto p-5">
           {error && (
             <div className="mb-4 px-4 py-3 bg-red-50 border border-red-200 rounded-xl flex items-center gap-3">
               <svg className="w-5 h-5 text-red-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
