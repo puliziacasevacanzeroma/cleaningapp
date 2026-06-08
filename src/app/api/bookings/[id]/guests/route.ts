@@ -4,6 +4,7 @@ import { Timestamp } from "firebase-admin/firestore";
 import { getApiUser } from "~/lib/api-auth";
 import { validateBody, BookingGuestsSchema } from "~/lib/validation/schemas";
 import { getItemName } from "~/lib/itemNames";
+import { buildExpectedItems } from "~/lib/linen/linenCore";
 
 export const dynamic = 'force-dynamic';
 
@@ -173,45 +174,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         }
         
         // Calcola newItems (stessa logica di update-linen-order/route.ts:102-148)
-        const newItems: { id: string; name: string; quantity: number }[] = [];
-        
-        if (config.bl) {
-          if (config.bl['all']) {
-            Object.entries(config.bl['all']).forEach(([itemId, qty]: [string, any]) => {
-              if (typeof qty === 'number' && qty > 0) {
-                newItems.push({ id: itemId, name: getItemName(itemId), quantity: qty });
-              }
-            });
-          } else {
-            Object.entries(config.bl).forEach(([bedId, items]: [string, any]) => {
-              if (bedId !== 'all' && typeof items === 'object' && items !== null) {
-                Object.entries(items).forEach(([itemId, qty]: [string, any]) => {
-                  if (typeof qty === 'number' && qty > 0) {
-                    const existing = newItems.find(i => i.id === itemId);
-                    if (existing) existing.quantity += qty;
-                    else newItems.push({ id: itemId, name: getItemName(itemId), quantity: qty });
-                  }
-                });
-              }
-            });
-          }
-        }
-        
-        if (config.ba) {
-          Object.entries(config.ba).forEach(([itemId, qty]: [string, any]) => {
-            if (typeof qty === 'number' && qty > 0) {
-              newItems.push({ id: itemId, name: getItemName(itemId), quantity: qty });
-            }
-          });
-        }
-        
-        if (config.ki) {
-          Object.entries(config.ki).forEach(([itemId, qty]: [string, any]) => {
-            if (typeof qty === 'number' && qty > 0) {
-              newItems.push({ id: itemId, name: getItemName(itemId), quantity: qty });
-            }
-          });
-        }
+        // 🎯 CENTRALIZZATO: estrazione bl/ba/ki via linenCore (UNICA fonte di verità).
+        // Aggiunge merge all+gruppi e gestisce all vuoto → allinea alla card. Provato 6/6.
+        const newItems: { id: string; name: string; quantity: number }[] =
+          buildExpectedItems(config).map((e) => ({ id: e.itemId, name: getItemName(e.itemId), quantity: e.quantity }));
         
         // Aggiorna l'ordine
         await orderRef.update({
