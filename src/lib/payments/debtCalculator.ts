@@ -241,7 +241,7 @@ function isDateInMonth(d: Date | null, month: number, year: number): boolean {
  * questi sono prodotti richiesti dagli operatori che NON vanno addebitati
  * al proprietario (solo evasi insieme alla biancheria per comodità logistica).
  */
-function calculateOrderRawPrice(
+export function calculateOrderRawPrice(
   order: DebtCalcOrder,
   inventoryById: Map<string, DebtCalcInventoryItem>,
 ): number {
