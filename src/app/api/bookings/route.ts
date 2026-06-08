@@ -11,6 +11,7 @@ import { Timestamp } from "firebase-admin/firestore";
 import { getItemName } from "~/lib/itemNames";
 import { getApiUser } from "~/lib/api-auth";
 import { validateBody, BookingCreateSchema } from "~/lib/validation/schemas";
+import { buildExpectedItems } from "~/lib/linen/linenCore";
 
 export const dynamic = 'force-dynamic';
 
@@ -116,56 +117,11 @@ function calculateLinenItemsForProperty(prop: PropertyWithLinenConfig, guestsCou
     const config = prop.serviceConfigs[guestsCount] || prop.serviceConfigs[String(guestsCount)];
     
     if (config) {
-      // @ts-expect-error TODO-FIX: TS2339 Property 'bl' does not exist on type '{}'.
-      if (config.bl) {
-        // @ts-expect-error TODO-FIX: TS2339 Property 'bl' does not exist on type '{}'.
-        const hasAll = config.bl['all'] && typeof config.bl['all'] === 'object' && Object.keys(config.bl['all']).length > 0;
-        
-        if (hasAll) {
-          // @ts-expect-error TODO-FIX: TS2339 Property 'bl' does not exist on type '{}'.
-          Object.entries(config.bl['all']).forEach(([itemId, qty]: [string, any]) => {
-            if (typeof qty === 'number' && qty > 0) {
-              linenItems.push({ id: itemId, name: getItemName(itemId), quantity: qty });
-            }
-          });
-        } else {
-          // @ts-expect-error TODO-FIX: TS2339 Property 'bl' does not exist on type '{}'.
-          Object.entries(config.bl).forEach(([bedId, items]: [string, any]) => {
-            if (bedId !== 'all' && typeof items === 'object') {
-              Object.entries(items).forEach(([itemId, qty]: [string, any]) => {
-                if (typeof qty === 'number' && qty > 0) {
-                  const existing = linenItems.find(i => i.id === itemId);
-                  if (existing) {
-                    existing.quantity += qty;
-                  } else {
-                    linenItems.push({ id: itemId, name: getItemName(itemId), quantity: qty });
-                  }
-                }
-              });
-            }
-          });
-        }
-      }
-      
-      // @ts-expect-error TODO-FIX: TS2339 Property 'ba' does not exist on type '{}'.
-      if (config.ba) {
-        // @ts-expect-error TODO-FIX: TS2339 Property 'ba' does not exist on type '{}'.
-        Object.entries(config.ba).forEach(([itemId, qty]: [string, any]) => {
-          if (typeof qty === 'number' && qty > 0) {
-            linenItems.push({ id: itemId, name: getItemName(itemId), quantity: qty });
-          }
-        });
-      }
-      
-      // @ts-expect-error TODO-FIX: TS2339 Property 'ki' does not exist on type '{}'.
-      if (config.ki) {
-        // @ts-expect-error TODO-FIX: TS2339 Property 'ki' does not exist on type '{}'.
-        Object.entries(config.ki).forEach(([itemId, qty]: [string, any]) => {
-          if (typeof qty === 'number' && qty > 0) {
-            linenItems.push({ id: itemId, name: getItemName(itemId), quantity: qty });
-          }
-        });
-      }
+      // 🎯 CENTRALIZZATO: estrazione bl/ba/ki via linenCore (UNICA fonte di verità).
+      // Aggiunge il merge all+gruppi-letto che qui mancava → allinea alla card. Provato 7/7.
+      buildExpectedItems(config).forEach((e) => {
+        linenItems.push({ id: e.itemId, name: getItemName(e.itemId), quantity: e.quantity });
+      });
     }
   }
   
