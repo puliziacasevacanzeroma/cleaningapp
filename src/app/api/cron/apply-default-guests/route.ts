@@ -7,6 +7,7 @@ import { adminDb } from "~/lib/firebase/admin";
 import { Timestamp } from "firebase-admin/firestore";
 import { createNotification } from "~/lib/notifications/createNotification";
 import { getItemName } from "~/lib/itemNames";
+import { buildExpectedItems, reconcileOrderItems } from "~/lib/linen/linenCore";
 import { resend, FROM_EMAIL, APP_URL, logResendWarning } from "~/lib/email/config";
 
 export const dynamic = 'force-dynamic';
@@ -61,40 +62,10 @@ function calculateLinenItemsForProperty(prop: any, guestsCount: number): { id: s
   if (prop.serviceConfigs) {
     const config = prop.serviceConfigs[guestsCount] || prop.serviceConfigs[String(guestsCount)];
     if (config) {
-      if (config.bl) {
-        const hasAll = config.bl['all'] && typeof config.bl['all'] === 'object' && Object.keys(config.bl['all']).length > 0;
-        if (hasAll) {
-          // 🔥 FIX: usa 'all' come base + integra articoli mancanti dai gruppi letto
-          const mergedItems: Record<string, number> = {};
-          Object.entries(config.bl).forEach(([key, val]: [string, any]) => {
-            if (key !== 'all' && typeof val === 'object') {
-              Object.entries(val).forEach(([itemId, qty]: [string, any]) => {
-                if (typeof qty === 'number' && qty > 0) mergedItems[itemId] = (mergedItems[itemId] || 0) + qty;
-              });
-            }
-          });
-          Object.entries(config.bl['all']).forEach(([itemId, qty]: [string, any]) => {
-            if (typeof qty === 'number' && qty > 0) mergedItems[itemId] = qty;
-          });
-          Object.entries(mergedItems).forEach(([itemId, qty]) => {
-            if (qty > 0) linenItems.push({ id: itemId, name: getItemName(itemId), quantity: qty });
-          });
-        } else {
-          Object.entries(config.bl).forEach(([bedId, items]: [string, any]) => {
-            if (bedId !== 'all' && typeof items === 'object') {
-              Object.entries(items).forEach(([itemId, qty]: [string, any]) => {
-                if (typeof qty === 'number' && qty > 0) {
-                  const existing = linenItems.find(i => i.id === itemId);
-                  if (existing) existing.quantity += qty;
-                  else linenItems.push({ id: itemId, name: getItemName(itemId), quantity: qty });
-                }
-              });
-            }
-          });
-        }
-      }
-      if (config.ba) Object.entries(config.ba).forEach(([itemId, qty]: [string, any]) => { if (typeof qty === 'number' && qty > 0) linenItems.push({ id: itemId, name: getItemName(itemId), quantity: qty }); });
-      if (config.ki) Object.entries(config.ki).forEach(([itemId, qty]: [string, any]) => { if (typeof qty === 'number' && qty > 0) linenItems.push({ id: itemId, name: getItemName(itemId), quantity: qty }); });
+      // 🎯 CENTRALIZZATO: estrazione bl/ba/ki via linenCore (UNICA fonte di verità).
+      buildExpectedItems(config).forEach((e) => {
+        linenItems.push({ id: e.itemId, name: getItemName(e.itemId), quantity: e.quantity });
+      });
     }
   }
   if (linenItems.length === 0) linenItems = calculateFallbackLinen(guestsCount, prop.bedrooms || 1, prop.bathrooms || 1);
@@ -144,6 +115,13 @@ async function runApplyDefaults(): Promise<NextResponse> {
     ordersSnap.docs.forEach(d => {
       const data = d.data() as Record<string, any>;
       if (data.cleaningId) ordersMap.set(data.cleaningId, { id: d.id, ...data });
+    });
+
+    // Inventory una volta sola: per reconcileOrderItems (prezzo/categoria + preservazione).
+    const invSnap = await adminDb.collection('inventory').get();
+    const inventory = invSnap.docs.map((d) => {
+      const x = d.data() as any;
+      return { id: d.id, key: x.key ?? null, name: x.name, sellPrice: x.sellPrice, categoryId: x.categoryId ?? null };
     });
 
     const cleaningsSnap = await adminDb.collection('cleanings').get();
@@ -201,8 +179,16 @@ async function runApplyDefaults(): Promise<NextResponse> {
               updatedAt: Timestamp.now(),
             };
             if (!isCustom) {
-              // Solo se NON personalizzata, ricalcola items dalla config standard
-              orderUpdate.items = calculateLinenItemsForProperty(property, maxGuests);
+              // Solo se NON personalizzata: ricalcola biancheria/kit dalla config e
+              // PRESERVA prodotti pulizia/extra già sull'ordine (reconcile, opzione B).
+              const cfg = property.serviceConfigs?.[maxGuests] || property.serviceConfigs?.[String(maxGuests)];
+              if (cfg) {
+                const existingItems = Array.isArray(existingOrder.items) ? existingOrder.items : [];
+                orderUpdate.items = reconcileOrderItems(cfg, inventory, existingItems, getItemName).finalItems;
+              } else {
+                // Nessuna config → fallback bed-based (comportamento invariato)
+                orderUpdate.items = calculateLinenItemsForProperty(property, maxGuests);
+              }
             } else if (process.env.NODE_ENV !== "production") {
               console.log(`⏭️ Pulizia ${c.id} ha config personalizzata — items ordine NON modificati`);
             }
