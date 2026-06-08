@@ -284,25 +284,43 @@ export function findItemByKeywords<T extends InventoryItem | LinenItem>(
   // perché "Copripiumino Matrimoniale" contiene "matrimoniale" ma NON è una lenzuola
   const isSearchingSheets = keywordType === 'lenzuolaMatrimoniali' || keywordType === 'lenzuolaSingole';
   const COPRIPIUMINO_EXCLUDE = ['copripium', 'piumino', 'piumone', 'duvet', 'comforter'];
-  
-  return items.find(item => {
-    // Normalizza tutti i possibili campi nome
+
+  // 🛏️ Per il LENZUOLO MATRIMONIALE va SEMPRE preferito lo standard, MAI il
+  //    formato maggiorato (king/queen/maxi/super king). Lo de-prioritizziamo:
+  //    prima cerchiamo un match SENZA questi termini; il maggiorato resta solo
+  //    come fallback se in inventario non esiste l'alternativa standard (così un
+  //    letto non resta mai senza lenzuolo).
+  const OVERSIZED_TERMS = ['king', 'queen', 'maxi', 'super king', 'superking'];
+  const deprioritizeOversized = keywordType === 'lenzuolaMatrimoniali';
+
+  const fieldsOf = (item: T) => {
     const name = ((item as any).nome || (item as any).name || (item as any).n || '').toLowerCase();
     const id = (item.id || '').toLowerCase();
     const key = ((item as any).key || '').toLowerCase();
-    
+    return { name, id, key, combined: name + ' ' + id + ' ' + key };
+  };
+
+  const matchesKeyword = (item: T): boolean => {
+    const { name, id, key, combined } = fieldsOf(item);
     // Se stiamo cercando lenzuola, escludi copripiumini
-    if (isSearchingSheets) {
-      const combined = name + ' ' + id + ' ' + key;
-      if (COPRIPIUMINO_EXCLUDE.some(ex => combined.includes(ex))) return false;
-    }
-    
-    return keywords.some(kw => 
-      name.includes(kw.toLowerCase()) || 
-      id.includes(kw.toLowerCase()) || 
+    if (isSearchingSheets && COPRIPIUMINO_EXCLUDE.some(ex => combined.includes(ex))) return false;
+    return keywords.some(kw =>
+      name.includes(kw.toLowerCase()) ||
+      id.includes(kw.toLowerCase()) ||
       key.includes(kw.toLowerCase())
     );
-  });
+  };
+
+  // 1ª passata: preferisci lo standard (escludendo king/queen/maxi)
+  if (deprioritizeOversized) {
+    const standard = items.find(item =>
+      matchesKeyword(item) && !OVERSIZED_TERMS.some(t => fieldsOf(item).combined.includes(t))
+    );
+    if (standard) return standard;
+  }
+
+  // 2ª passata: qualsiasi match (fallback)
+  return items.find(matchesKeyword);
 }
 
 /**
