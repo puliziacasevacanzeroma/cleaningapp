@@ -3224,7 +3224,19 @@ export default function PagamentiPage() {
                                         {/* Kit Cortesia - dettaglio sempre visibile */}
                                         {service.type === "KIT_CORTESIA" && hasItems && (
                                           <div className="mx-2 sm:mx-3 mb-3 bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl p-2 sm:p-3 border border-amber-200">
-                                            <p className="text-[10px] uppercase font-bold text-amber-600 mb-2">🎁 Dettaglio kit</p>
+                                            <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
+                                              <p className="text-[10px] uppercase font-bold text-amber-600">🎁 Dettaglio kit</p>
+                                              <button
+                                                onClick={(e) => { e.stopPropagation(); openBiancheriaEditor(service); }}
+                                                className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white rounded-lg text-xs font-semibold transition-all shadow-md hover:shadow-lg"
+                                                title="Modifica articoli"
+                                              >
+                                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                                </svg>
+                                                Modifica
+                                              </button>
+                                            </div>
                                             <div className="grid gap-1.5">
                                               {service.items!.map((item, itemIdx) => (
                                                 <div key={itemIdx} className="flex items-center justify-between bg-white rounded-lg px-3 py-2 border border-amber-100 shadow-sm">
@@ -3246,7 +3258,19 @@ export default function PagamentiPage() {
                                         {/* Servizi Extra - dettaglio sempre visibile */}
                                         {service.type === "SERVIZI_EXTRA" && hasItems && (
                                           <div className="mx-2 sm:mx-3 mb-3 bg-gradient-to-r from-emerald-50 to-teal-50 rounded-xl p-2 sm:p-3 border border-emerald-200">
-                                            <p className="text-[10px] uppercase font-bold text-emerald-600 mb-2">✨ Dettaglio extra</p>
+                                            <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
+                                              <p className="text-[10px] uppercase font-bold text-emerald-600">✨ Dettaglio extra</p>
+                                              <button
+                                                onClick={(e) => { e.stopPropagation(); openBiancheriaEditor(service); }}
+                                                className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white rounded-lg text-xs font-semibold transition-all shadow-md hover:shadow-lg"
+                                                title="Modifica articoli"
+                                              >
+                                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                                </svg>
+                                                Modifica
+                                              </button>
+                                            </div>
                                             <div className="grid gap-1.5">
                                               {service.items!.map((item, itemIdx) => (
                                                 <div key={itemIdx} className="flex items-center justify-between bg-white rounded-lg px-3 py-2 border border-emerald-100 shadow-sm">
@@ -3682,6 +3706,11 @@ export default function PagamentiPage() {
     const newTotal = getBiancheriaTotal();
     const originalTotal = editingBiancheria.service.effectivePrice;
     const diff = newTotal - originalTotal;
+    // 🆕 Titolo dinamico: lo stesso editor serve biancheria, kit cortesia e servizi extra
+    const editorTitle =
+      editingBiancheria.service.type === "KIT_CORTESIA" ? "Modifica Kit Cortesia" :
+      editingBiancheria.service.type === "SERVIZI_EXTRA" ? "Modifica Servizi Extra" :
+      "Modifica Biancheria";
     
     return (
       <>
@@ -3707,7 +3736,7 @@ export default function PagamentiPage() {
                   </svg>
                 </div>
                 <div className="min-w-0">
-                  <h3 className="font-bold text-base sm:text-lg">Modifica Biancheria</h3>
+                  <h3 className="font-bold text-base sm:text-lg">{editorTitle}</h3>
                   <p className="text-white/70 text-xs sm:text-sm truncate">{editingBiancheria.service.propertyName}</p>
                 </div>
               </div>
