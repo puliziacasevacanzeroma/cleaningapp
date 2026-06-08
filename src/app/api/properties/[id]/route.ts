@@ -4,6 +4,7 @@ import { Timestamp } from "firebase-admin/firestore";
 import { getPropertyById, updateProperty, deletePropertyWithCascade } from "~/lib/firebase/firestore-data-admin";
 import { getApiUser } from "~/lib/api-auth";
 import { validateBody, GenericBodySchema } from "~/lib/validation/schemas";
+import { buildExpectedItems } from "~/lib/linen/linenCore";
 
 export const dynamic = 'force-dynamic';
 
@@ -613,49 +614,14 @@ export async function PATCH(
               continue;
             }
             
-            // Calcola items dalla config
-            const newItems: { id: string; name: string; quantity: number }[] = [];
-            
-            // Biancheria Letto (bl)
-            if (config.bl) {
-              if (config.bl['all']) {
-                Object.entries(config.bl['all']).forEach(([itemId, qty]) => {
-                  if (typeof qty === 'number' && qty > 0) {
-                    newItems.push({ id: itemId, name: ITEM_NAMES[itemId] || itemId, quantity: qty });
-                  }
-                });
-              } else {
-                Object.entries(config.bl).forEach(([bedId, items]) => {
-                  if (typeof items === 'object' && items !== null) {
-                    Object.entries(items as Record<string, number>).forEach(([itemId, qty]) => {
-                      if (typeof qty === 'number' && qty > 0) {
-                        const existing = newItems.find(i => i.id === itemId);
-                        if (existing) existing.quantity += qty;
-                        else newItems.push({ id: itemId, name: ITEM_NAMES[itemId] || itemId, quantity: qty });
-                      }
-                    });
-                  }
-                });
-              }
-            }
-            
-            // Biancheria Bagno (ba)
-            if (config.ba) {
-              Object.entries(config.ba).forEach(([itemId, qty]) => {
-                if (typeof qty === 'number' && qty > 0) {
-                  newItems.push({ id: itemId, name: ITEM_NAMES[itemId] || itemId, quantity: qty });
-                }
-              });
-            }
-            
-            // Kit Cortesia (ki)
-            if (config.ki) {
-              Object.entries(config.ki).forEach(([itemId, qty]) => {
-                if (typeof qty === 'number' && qty > 0) {
-                  newItems.push({ id: itemId, name: ITEM_NAMES[itemId] || itemId, quantity: qty });
-                }
-              });
-            }
+            // 🎯 CENTRALIZZATO: estrazione bl/ba/ki via linenCore (UNICA fonte di verità).
+            // Aggiunge merge all+gruppi e gestisce all vuoto → allinea alla card. Provato 6/6.
+            const newItems: { id: string; name: string; quantity: number }[] =
+              buildExpectedItems(config).map((e) => ({
+                id: e.itemId,
+                name: ITEM_NAMES[e.itemId] || e.itemId,
+                quantity: e.quantity,
+              }));
             
             if (newItems.length === 0) {
               continue;
