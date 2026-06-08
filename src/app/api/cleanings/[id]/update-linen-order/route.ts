@@ -4,6 +4,7 @@ import { Timestamp } from "firebase-admin/firestore";
 import { getItemName } from "~/lib/itemNames";
 import { getApiUser } from "~/lib/api-auth";
 import { auditLog } from "~/lib/services/auditService";
+import { buildOrderItems, reconcileOrderItems } from "~/lib/linen/linenCore";
 
 
 export const dynamic = 'force-dynamic';
@@ -118,54 +119,16 @@ export async function POST(
       if (process.env.NODE_ENV !== "production") console.log(`   📦 Usando ${configSource} dalla proprietà`);
     }
     
-    // 4. Calcola i nuovi items
-    const newItems: { id: string; name: string; quantity: number }[] = [];
-    
-    // Biancheria Letto (bl) - usa 'all' come fonte di verità
-    if (config.bl) {
-      if (config.bl['all']) {
-        // Usa direttamente 'all'
-        Object.entries(config.bl['all']).forEach(([itemId, qty]) => {
-          if (typeof qty === 'number' && qty > 0) {
-            newItems.push({ id: itemId, name: getItemName(itemId), quantity: qty });
-          }
-        });
-      } else {
-        // Somma da tutti i gruppi letto
-        Object.entries(config.bl).forEach(([bedId, items]) => {
-          if (typeof items === 'object' && items !== null) {
-            Object.entries(items as Record<string, number>).forEach(([itemId, qty]) => {
-              if (typeof qty === 'number' && qty > 0) {
-                const existing = newItems.find(i => i.id === itemId);
-                if (existing) {
-                  existing.quantity += qty;
-                } else {
-                  newItems.push({ id: itemId, name: getItemName(itemId), quantity: qty });
-                }
-              }
-            });
-          }
-        });
-      }
-    }
-    
-    // Biancheria Bagno (ba)
-    if (config.ba) {
-      Object.entries(config.ba).forEach(([itemId, qty]) => {
-        if (typeof qty === 'number' && qty > 0) {
-          newItems.push({ id: itemId, name: getItemName(itemId), quantity: qty });
-        }
-      });
-    }
-    
-    // Kit Cortesia (ki)
-    if (config.ki) {
-      Object.entries(config.ki).forEach(([itemId, qty]) => {
-        if (typeof qty === 'number' && qty > 0) {
-          newItems.push({ id: itemId, name: getItemName(itemId), quantity: qty });
-        }
-      });
-    }
+    // 4. Calcola i nuovi items — CENTRALIZZATO via linenCore (UNICA fonte di verità)
+    // Carica l'inventory: serve a risolvere prezzo/categoria e a classificare gli
+    // articoli esistenti dell'ordine (per preservare prodotti pulizia ed extra).
+    const invSnap = await adminDb.collection("inventory").get();
+    const inventory = invSnap.docs.map((d) => {
+      const x = d.data() as any;
+      return { id: d.id, key: x.key ?? null, name: x.name, sellPrice: x.sellPrice, categoryId: x.categoryId ?? null };
+    });
+    // newItems = SOLO il ricalcolo biancheria/kit dalla config (per log/audit).
+    const { items: newItems } = buildOrderItems(config, inventory, getItemName);
     
     if (process.env.NODE_ENV !== "production") console.log(`   📋 Calcolati ${newItems.length} items:`, newItems.map(i => `${i.name}:${i.quantity}`).join(', '));
     
@@ -178,8 +141,14 @@ export async function POST(
         ? orderDataBefore.items.map((it: any) => ({ id: String(it.id), quantity: Number(it.quantity) || 0 }))
         : [];
 
+      // 🎯 RICONCILIAZIONE: ricalcola biancheria/kit dalla config, ma PRESERVA
+      // prodotti pulizia, extra e orfani già presenti sull'ordine (stessa logica
+      // verificata sui 13 ordini Arya). Niente cancellazioni silenziose.
+      const existingItemsForReconcile = Array.isArray(orderDataBefore.items) ? orderDataBefore.items : [];
+      const { finalItems } = reconcileOrderItems(config, inventory, existingItemsForReconcile, getItemName);
+
       await adminDb.collection("orders").doc(orderDoc.id).update({
-        items: newItems,
+        items: finalItems,
         updatedAt: Timestamp.now(),
         itemsUpdatedFromConfig: true,
         configSource: configSource,
@@ -233,9 +202,9 @@ export async function POST(
           propertyMaxGuests,
           configSource,
           itemsCountBefore: itemsBefore.length,
-          itemsCountAfter: newItems.length,
+          itemsCountAfter: finalItems.length,
           itemsBefore,
-          itemsAfter: newItems.map((it) => ({ id: it.id, quantity: it.quantity })),
+          itemsAfter: finalItems.map((it) => ({ id: it.id, quantity: it.quantity })),
           callerUserId: _user.id || null,
           callerUserEmail: _user.email || null,
           callerUserRole: _user.role || null,
