@@ -10,6 +10,17 @@
 import type { Coordinates } from "./distance";
 
 // ═══════════════════════════════════════════════════════════════
+// 📍 BIAS PREDEFINITO SU ROMA
+// L'attività è interamente romana: le ricerche puntano SUBITO su Roma.
+// È una PREFERENZA, non una restrizione (bounded=0 / bias scale): un
+// indirizzo fuori Roma resta cercabile se digitato per esteso con la città.
+// ═══════════════════════════════════════════════════════════════
+const ROME_CENTER = { lat: "41.8933", lon: "12.4829" };
+// viewbox Nominatim = lon_min, lat_max, lon_max, lat_min (area metropolitana Roma)
+const ROME_VIEWBOX = "12.20,42.05,12.75,41.70";
+const DEFAULT_CITY = "Roma";
+
+// ═══════════════════════════════════════════════════════════════
 // TIPI
 // ═══════════════════════════════════════════════════════════════
 
@@ -65,9 +76,10 @@ export async function searchPhoton(
     url.searchParams.set("q", query);
     url.searchParams.set("limit", String(limit + 3));
     url.searchParams.set("lang", lang);
-    // Bias geografico verso centro Italia (Roma)
-    url.searchParams.set("lat", "41.9");
-    url.searchParams.set("lon", "12.5");
+    // 📍 Bias forte su Roma (preferenza, non filtro)
+    url.searchParams.set("lat", ROME_CENTER.lat);
+    url.searchParams.set("lon", ROME_CENTER.lon);
+    url.searchParams.set("location_bias_scale", "0.6");
     // NESSUN filtro osm_tag — prima usava place:house che escludeva quasi tutto
 
     const controller = new AbortController();
@@ -165,8 +177,9 @@ export async function searchNominatim(
     url.searchParams.set("limit", String(limit + 2));
     url.searchParams.set("countrycodes", countryCode);
     url.searchParams.set("addressdetails", "1");
-    // Viewbox centrato sull'Italia per risultati più rilevanti
-    url.searchParams.set("viewbox", "6.6,47.1,18.5,36.6");
+    // 📍 viewbox centrato su ROMA per risultati subito pertinenti.
+    //    bounded=0 → preferenza, non restrizione (Italia resta cercabile).
+    url.searchParams.set("viewbox", ROME_VIEWBOX);
     url.searchParams.set("bounded", "0");
 
     const controller = new AbortController();
@@ -247,7 +260,8 @@ async function searchNominatimStructured(
     const url = new URL("https://nominatim.openstreetmap.org/search");
     // Nominatim vuole il formato "numero via nome" per il parametro street
     url.searchParams.set("street", `${number} ${streetType} ${streetName}`);
-    if (cityPart) url.searchParams.set("city", cityPart);
+    // 📍 Se l'utente non scrive la città, puntiamo a ROMA di default.
+    url.searchParams.set("city", cityPart || DEFAULT_CITY);
     url.searchParams.set("country", "Italy");
     url.searchParams.set("format", "json");
     url.searchParams.set("limit", String(limit));
