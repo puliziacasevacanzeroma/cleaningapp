@@ -12,6 +12,7 @@ import { Timestamp } from "firebase-admin/firestore";
 import { getItemName } from "~/lib/itemNames";
 import { getApiUser } from "~/lib/api-auth";
 import { validateBody, GenericBodySchema } from "~/lib/validation/schemas";
+import { buildExpectedItems } from "~/lib/linen/linenCore";
 
 export const dynamic = 'force-dynamic';
 
@@ -44,48 +45,11 @@ function calculateLinenItemsForProperty(prop: any, guestsCount: number): { id: s
     const config = prop.serviceConfigs[guestsCount] || prop.serviceConfigs[String(guestsCount)];
     
     if (config) {
-      if (config.bl) {
-        const hasAll = config.bl['all'] && typeof config.bl['all'] === 'object' && Object.keys(config.bl['all']).length > 0;
-        
-        if (hasAll) {
-          Object.entries(config.bl['all']).forEach(([itemId, qty]: [string, any]) => {
-            if (typeof qty === 'number' && qty > 0) {
-              linenItems.push({ id: itemId, name: getItemName(itemId), quantity: qty });
-            }
-          });
-        } else {
-          Object.entries(config.bl).forEach(([bedId, items]: [string, any]) => {
-            if (bedId !== 'all' && typeof items === 'object') {
-              Object.entries(items).forEach(([itemId, qty]: [string, any]) => {
-                if (typeof qty === 'number' && qty > 0) {
-                  const existing = linenItems.find(i => i.id === itemId);
-                  if (existing) {
-                    existing.quantity += qty;
-                  } else {
-                    linenItems.push({ id: itemId, name: getItemName(itemId), quantity: qty });
-                  }
-                }
-              });
-            }
-          });
-        }
-      }
-      
-      if (config.ba) {
-        Object.entries(config.ba).forEach(([itemId, qty]: [string, any]) => {
-          if (typeof qty === 'number' && qty > 0) {
-            linenItems.push({ id: itemId, name: getItemName(itemId), quantity: qty });
-          }
-        });
-      }
-      
-      if (config.ki) {
-        Object.entries(config.ki).forEach(([itemId, qty]: [string, any]) => {
-          if (typeof qty === 'number' && qty > 0) {
-            linenItems.push({ id: itemId, name: getItemName(itemId), quantity: qty });
-          }
-        });
-      }
+      // 🎯 CENTRALIZZATO: estrazione bl/ba/ki via linenCore (UNICA fonte di verità).
+      // Aggiunge il merge all+gruppi-letto che qui mancava → allinea alla card. Provato 7/7.
+      buildExpectedItems(config).forEach((e) => {
+        linenItems.push({ id: e.itemId, name: getItemName(e.itemId), quantity: e.quantity });
+      });
     }
   }
   
