@@ -5,7 +5,6 @@ import { createNotification } from "~/lib/firebase/notifications-admin";
 import { getApiUser } from "~/lib/api-auth";
 import { resend, FROM_EMAIL, APP_URL } from "~/lib/email/config";
 import { cleaningStartedEmail } from "~/lib/email/templates";
-import { getItemName } from "~/lib/itemNames";
 import { checkActiveShift } from "~/lib/shifts/checkActiveShift";
 
 export const dynamic = 'force-dynamic';
@@ -316,28 +315,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           }
 
           // ═══════════════════════════════════════════════════════════
-          // STEP B — Biancheria (solo se autoGenerateLaundry e non usa biancheria propria)
-          // ═══════════════════════════════════════════════════════════
-          const usesLaundryService = property.autoGenerateLaundry === true && property.usesOwnLinen !== true;
-          const linenConfig: Array<{ itemId: string; itemName: string; quantity: number }> = (property.linenConfig as Array<{ itemId: string; itemName: string; quantity: number }>) ?? [];
-
+          // STEP B — Biancheria
+          // RIMOSSO il vecchio percorso legacy: leggeva property.linenConfig
+          // (array piatto) ed era gated da autoGenerateLaundry. Entrambi non sono
+          // più usati (0 proprietà su 80) e producevano comunque 0 articoli.
+          // La biancheria è gestita altrove via serviceConfigs/linenCore
+          // (sync-ical, creazione manuale, update). start NON genera più biancheria
+          // da fonti legacy: gestisce solo i prodotti pulizia (STEP A/C).
           const linenItems: Array<{ id: string; itemId: string; name: string; quantity: number; type: string; categoryId: string }> = [];
-          if (usesLaundryService) {
-            linenConfig.forEach(item => {
-              const resolvedName =
-                getItemName(item.itemId) !== item.itemId ? getItemName(item.itemId) :
-                getItemName(item.itemName) !== item.itemName ? getItemName(item.itemName) :
-                item.itemName;
-              linenItems.push({
-                id:         item.itemId,   // ← campo "id" per compatibilità rider UI
-                itemId:     item.itemId,
-                name:       resolvedName,
-                quantity:   item.quantity,
-                type:       "linen",
-                categoryId: "biancheria_letto",
-              });
-            });
-          }
 
           // ═══════════════════════════════════════════════════════════
           // STEP C — Crea / aggiorna ordine
