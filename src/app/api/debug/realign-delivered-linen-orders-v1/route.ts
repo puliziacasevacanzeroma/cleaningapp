@@ -351,18 +351,38 @@ export async function GET(request: NextRequest) {
         };
       });
 
-      // Preserva voci di servizio / prodotti pulizia già presenti nell'ordine
-      const preserved = (Array.isArray(order.items) ? order.items : []).filter((it: any) => {
+      // ── PRESERVAZIONE CONSERVATIVA ──────────────────────────────
+      // Tocchiamo SOLO gli articoli di biancheria/bagno/kit (quelli che il
+      // ricalcolo dalla config gestisce). TUTTO il resto (prodotti pulizia,
+      // servizi extra, fee, articoli orfani/non risolvibili) viene LASCIATO
+      // INTATTO così com'è nell'ordine. Niente cancellazioni silenziose.
+      const MANAGED_CATS = new Set(["biancheria_letto", "biancheria_bagno", "kit_cortesia"]);
+      const isManagedByRecompute = (it: any): boolean => {
         const id = it.itemId || it.id;
-        return id === "_delivery_fee" || id === "_bed_making_fee" || it.type === "cleaning_product";
-      });
+        if (!id) return false; // niente id → preserva per sicurezza
+        if (id === "_delivery_fee" || id === "_bed_making_fee") return false; // preserva
+        if (it.type === "cleaning_product") return false; // preserva prodotti pulizia
+        const inv = resolveInv(id);
+        const cat = String(it.categoryId || it.category || inv?.categoryId || "").toLowerCase();
+        // Gestito dal ricalcolo SOLO se è chiaramente biancheria/bagno/kit.
+        // Categoria sconosciuta / non risolvibile → NON gestito → preserva.
+        return MANAGED_CATS.has(cat);
+      };
+
+      const preserved = (Array.isArray(order.items) ? order.items : []).filter(
+        (it: any) => !isManagedByRecompute(it),
+      );
       const finalItems = [...newItems, ...preserved];
 
       const itemsBeforeSummary = (Array.isArray(order.items) ? order.items : []).map((it: any) => ({
         id: it.itemId || it.id,
         quantity: Number(it.quantity) || 0,
       }));
-      const itemsAfterSummary = newItems.map((it) => ({ id: it.id, quantity: it.quantity }));
+      const itemsAfterSummary = finalItems.map((it: any) => ({
+        id: it.itemId || it.id,
+        quantity: it.quantity,
+      }));
+      const preservedSummary = preserved.map((it: any) => it.itemId || it.id);
 
       const resultEntry: any = {
         cleaningId: c.id,
@@ -374,6 +394,7 @@ export async function GET(request: NextRequest) {
         configSource,
         itemsBefore: itemsBeforeSummary,
         itemsAfter: itemsAfterSummary,
+        preserved: preservedSummary,
         applied: false,
       };
 
