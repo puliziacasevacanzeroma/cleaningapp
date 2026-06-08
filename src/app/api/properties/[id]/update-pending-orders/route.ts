@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "~/lib/firebase/admin";
 import { Timestamp } from "firebase-admin/firestore";
 import { getApiUser } from "~/lib/api-auth";
+import { reconcileOrderItems } from "~/lib/linen/linenCore";
 
 
 export const dynamic = 'force-dynamic';
@@ -57,6 +58,14 @@ export async function POST(
     
     const ordersSnapshot = await ordersQuery.get();
     
+    // Inventory caricato una volta: serve a reconcileOrderItems per risolvere
+    // prezzo/categoria e per classificare/preservare gli articoli non-biancheria.
+    const invSnap = await adminDb.collection("inventory").get();
+    const inventory = invSnap.docs.map((d) => {
+      const x = d.data() as any;
+      return { id: d.id, key: x.key ?? null, name: x.name, sellPrice: x.sellPrice, categoryId: x.categoryId ?? null };
+    });
+    
     let updated = 0;
     let skipped = 0;
     const errors: string[] = [];
@@ -96,88 +105,19 @@ export async function POST(
           continue;
         }
         
-        // Ricalcola gli items
-        const newItems: { id: string; name: string; quantity: number }[] = [];
-        
-        // Biancheria Letto (bl) - 🔥 FIX: MERGE bl['all'] con gruppi letto
-        if (config.bl) {
-          const blKeys = Object.keys(config.bl);
-          const hasAll = config.bl['all'] && typeof config.bl['all'] === 'object' && Object.keys(config.bl['all']).length > 0;
-          const bedGroupKeys = blKeys.filter(k => k !== 'all');
-          const hasBedGroups = bedGroupKeys.length > 0 && bedGroupKeys.some((k: string) => {
-            const grpItems = config.bl[k];
-            return grpItems && typeof grpItems === 'object' && Object.keys(grpItems).length > 0;
-          });
+        // 🎯 CENTRALIZZATO + RICONCILIAZIONE: ricalcola biancheria/kit via linenCore
+        // e PRESERVA prodotti pulizia/extra già presenti sull'ordine. Provato (TEST 7).
+        const existingItems = Array.isArray(orderData.items) ? orderData.items : [];
+        const { finalItems } = reconcileOrderItems(config, inventory, existingItems, getItemName);
 
-          if (hasAll && hasBedGroups) {
-            // MERGE: gruppi come base, all sovrascrive
-            const merged: Record<string, number> = {};
-            bedGroupKeys.forEach((k: string) => {
-              const grpItems = config.bl[k];
-              if (grpItems && typeof grpItems === 'object') {
-                Object.entries(grpItems as Record<string, number>).forEach(([itemId, qty]) => {
-                  if (typeof qty === 'number' && qty > 0) merged[itemId] = (merged[itemId] || 0) + qty;
-                });
-              }
-            });
-            Object.entries(config.bl['all']).forEach(([itemId, qty]) => {
-              if (typeof qty === 'number' && qty > 0) merged[itemId] = qty as number;
-            });
-            Object.entries(merged).forEach(([itemId, qty]) => {
-              if (qty > 0) newItems.push({ id: itemId, name: getItemName(itemId), quantity: qty });
-            });
-          } else if (hasAll) {
-            Object.entries(config.bl['all']).forEach(([itemId, qty]) => {
-              if (typeof qty === 'number' && qty > 0) {
-                newItems.push({ id: itemId, name: getItemName(itemId), quantity: qty as number });
-              }
-            });
-          } else {
-            // Somma da tutti i gruppi letto
-            Object.entries(config.bl).forEach(([bedId, items]) => {
-              if (typeof items === 'object' && items !== null) {
-                Object.entries(items as Record<string, number>).forEach(([itemId, qty]) => {
-                  if (typeof qty === 'number' && qty > 0) {
-                    const existing = newItems.find(i => i.id === itemId);
-                    if (existing) {
-                      existing.quantity += qty;
-                    } else {
-                      newItems.push({ id: itemId, name: getItemName(itemId), quantity: qty });
-                    }
-                  }
-                });
-              }
-            });
-          }
-        }
-        
-        // Biancheria Bagno (ba)
-        if (config.ba) {
-          Object.entries(config.ba).forEach(([itemId, qty]) => {
-            if (typeof qty === 'number' && qty > 0) {
-              newItems.push({ id: itemId, name: getItemName(itemId), quantity: qty });
-            }
-          });
-        }
-        
-        // Kit Cortesia (ki)
-        if (config.ki) {
-          Object.entries(config.ki).forEach(([itemId, qty]) => {
-            if (typeof qty === 'number' && qty > 0) {
-              newItems.push({ id: itemId, name: getItemName(itemId), quantity: qty });
-            }
-          });
-        }
-        
-        // Aggiorna l'ordine
-        await adminDb.collection("orders").doc(orderDoc.id).update( {
-          items: newItems,
+        await adminDb.collection("orders").doc(orderDoc.id).update({
+          items: finalItems,
           updatedAt: Timestamp.now(),
           itemsUpdatedFromConfig: true,
           guestsCount: guestsCount, // 🔧 Bug #4 fix: sync order.guestsCount con cleaning.guestsCount
         });
         
-        if (process.env.NODE_ENV !== "production") console.log(`   ✅ Ordine ${orderDoc.id} aggiornato: ${newItems.length} items per ${guestsCount} ospiti`);
+        if (process.env.NODE_ENV !== "production") console.log(`   ✅ Ordine ${orderDoc.id} aggiornato: ${finalItems.length} items per ${guestsCount} ospiti`);
         updated++;
         
       } catch (orderError) {
