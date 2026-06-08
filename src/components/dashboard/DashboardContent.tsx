@@ -11,6 +11,64 @@ import CleaningCardAdmin from "~/components/cleaning/CleaningCardAdmin";
 import { db } from "~/lib/firebase/config";
 import { collection, query, where, onSnapshot, orderBy, Timestamp, getDocs, doc, updateDoc, deleteField } from "firebase/firestore";
 import { calculateDotazioni } from "~/lib/calculateDotazioni";
+
+/**
+ * 🎯 Deriva le dotazioni (letto/bagno/kit/extra) da un ORDINE — identico a
+ * PulizieAdminView. Quando esiste un ordine, la card mostra esattamente quello
+ * (= ciò che si paga) e si aggiorna in realtime (es. al cambio ospiti).
+ * Robusto sugli ordini vecchi: risolve categoria/prezzo via inventory.
+ */
+function deriveDotazioniFromOrder(
+  order: any,
+  inventory: any[]
+): { bedItems: any[]; bathItems: any[]; kitItems: any[]; extraItems: any[]; dotazioniPrice: number } {
+  const bedItems: any[] = [];
+  const bathItems: any[] = [];
+  const kitItems: any[] = [];
+  const extraItems: any[] = [];
+  let dotazioniPrice = 0;
+
+  const invMap = new Map<string, any>();
+  (inventory || []).forEach((it: any) => {
+    if (it?.id) invMap.set(it.id, it);
+    if (it?.key) invMap.set(it.key, it);
+  });
+
+  const resolveCat = (item: any, inv: any): string | null => {
+    if (item?.categoryId) return item.categoryId;
+    const cn = String(item?.categoryName || "").toLowerCase();
+    if (cn.includes("letto")) return "biancheria_letto";
+    if (cn.includes("bagno")) return "biancheria_bagno";
+    if (cn.includes("kit") || cn.includes("cortesia")) return "kit_cortesia";
+    if (cn.includes("extra")) return "servizi_extra";
+    return inv?.categoryId || null;
+  };
+
+  (order?.items || []).forEach((item: any) => {
+    const qty = typeof item?.quantity === "number" ? item.quantity : 0;
+    if (qty <= 0) return;
+    const inv = invMap.get(item?.itemId) || invMap.get(item?.id);
+    const cat = resolveCat(item, inv);
+
+    let bucket: any[] | null = null;
+    if (cat === "biancheria_letto") bucket = bedItems;
+    else if (cat === "biancheria_bagno") bucket = bathItems;
+    else if (cat === "kit_cortesia") bucket = kitItems;
+    else if (cat === "servizi_extra") bucket = extraItems;
+    if (!bucket) return;
+
+    const price =
+      typeof item?.unitPrice === "number"
+        ? item.unitPrice
+        : inv?.sellPrice ?? inv?.price ?? 0;
+    const name = item?.name || inv?.name || item?.itemId || item?.id || "Articolo";
+
+    bucket.push({ name, quantity: qty, price });
+    dotazioniPrice += price * qty;
+  });
+
+  return { bedItems, bathItems, kitItems, extraItems, dotazioniPrice };
+}
 import { useAuth } from "~/lib/firebase/AuthContext";
 import { prefetchModalCaches } from "~/lib/prefetchModalCaches";
 
@@ -2272,13 +2330,26 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
               usesOwnLinen: propertiesUsesOwnLinen[propId] || false,
             };
             
-            // 🔥 CALCOLA BIANCHERIA usando calculateDotazioni
-            const { cleaningPrice, dotazioniPrice, totalPrice, bedItems, bathItems, kitItems, extraItems } = calculateDotazioni(
+            // 🔥 CALCOLA BIANCHERIA (fallback + prezzo pulizia)
+            const _calc = calculateDotazioni(
               // @ts-expect-error TODO-FIX: TS2345 Argument of type '{ operator: Operator | null; operators: Operator[]; id: string...
               cleaningForCard,
               propertyForCard,
               inventory
             );
+            const { cleaningPrice } = _calc;
+            let { dotazioniPrice, totalPrice, bedItems, bathItems, kitItems, extraItems } = _calc;
+            // 🎯 Se esiste un ordine con items, mostra ESATTAMENTE quelli (= ciò che si
+            // paga, come nel calendario; si aggiorna in realtime al cambio ospiti).
+            const _linenOrder: any = orders.find(o => o.cleaningId === cleaning.id || (o.propertyId === propId && !o.cleaningId));
+            if (_linenOrder && Array.isArray(_linenOrder.items) && _linenOrder.items.length > 0) {
+              const _d = deriveDotazioniFromOrder(_linenOrder, inventory);
+              if (_d.bedItems.length || _d.bathItems.length || _d.kitItems.length || _d.extraItems.length) {
+                bedItems = _d.bedItems; bathItems = _d.bathItems; kitItems = _d.kitItems; extraItems = _d.extraItems;
+                dotazioniPrice = _d.dotazioniPrice;
+                totalPrice = (cleaningPrice || 0) + _d.dotazioniPrice;
+              }
+            }
 
             return (
               <div key={cleaning.id}>
@@ -3142,13 +3213,25 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
                 usesOwnLinen: propertiesUsesOwnLinen[propId] || false,
               };
               
-              // 🔥 CALCOLA BIANCHERIA usando calculateDotazioni
-              const { cleaningPrice, dotazioniPrice, totalPrice, bedItems, bathItems, kitItems, extraItems } = calculateDotazioni(
+              // 🔥 CALCOLA BIANCHERIA (fallback + prezzo pulizia)
+              const _calc = calculateDotazioni(
                 // @ts-expect-error TODO-FIX: TS2345 Argument of type '{ operator: Operator | null; operators: Operator[]; id: string...
                 cleaningForCard,
                 propertyForCard,
                 inventory
               );
+              const { cleaningPrice } = _calc;
+              let { dotazioniPrice, totalPrice, bedItems, bathItems, kitItems, extraItems } = _calc;
+              // 🎯 Se esiste un ordine con items, mostra ESATTAMENTE quelli (realtime).
+              const _linenOrder: any = orders.find(o => o.cleaningId === cleaning.id || (o.propertyId === propId && !o.cleaningId));
+              if (_linenOrder && Array.isArray(_linenOrder.items) && _linenOrder.items.length > 0) {
+                const _d = deriveDotazioniFromOrder(_linenOrder, inventory);
+                if (_d.bedItems.length || _d.bathItems.length || _d.kitItems.length || _d.extraItems.length) {
+                  bedItems = _d.bedItems; bathItems = _d.bathItems; kitItems = _d.kitItems; extraItems = _d.extraItems;
+                  dotazioniPrice = _d.dotazioniPrice;
+                  totalPrice = (cleaningPrice || 0) + _d.dotazioniPrice;
+                }
+              }
 
               return (
                 <CleaningCardAdmin
