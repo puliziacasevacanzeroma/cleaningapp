@@ -77,6 +77,20 @@ export async function POST(
     const propertyName = propertyDataForAudit?.name || "(unknown)";
     const propertyMaxGuests = (propertyDataForAudit?.maxGuests as number) ?? null;
 
+    // 🔒 GUARDIA BIANCHERIA (stessa regola di calculateDotazioni / la card):
+    // se la pulizia non deve avere biancheria (hasLinenOrder===false, oppure
+    // assente e proprietà a biancheria propria), NON ricalcolare gli items.
+    const _hlo = cleaningData.hasLinenOrder;
+    const _usesOwn = propertyDataForAudit?.usesOwnLinen === true;
+    if (_hlo === false || (_hlo === undefined && _usesOwn)) {
+      return NextResponse.json({
+        success: true,
+        updated: 0,
+        skipped: true,
+        reason: "Pulizia senza biancheria (hasLinenOrder=false o biancheria propria) — items NON modificati",
+      });
+    }
+
     // 3. Determina la fonte degli items
     let config: any = null;
     let configSource = "";

@@ -91,6 +91,17 @@ export async function POST(
               skipped++;
               continue;
             }
+
+            // 🔒 GUARDIA BIANCHERIA (stessa regola di calculateDotazioni / la card):
+            // niente biancheria se hasLinenOrder===false, oppure hasLinenOrder assente
+            // e proprietà a biancheria propria. In quel caso NON ricalcolare l'ordine.
+            // @ts-expect-error TODO-FIX: cleaningData possibly undefined
+            const hlo = cleaningData.hasLinenOrder;
+            if (hlo === false || (hlo === undefined && propertyData.usesOwnLinen === true)) {
+              if (process.env.NODE_ENV !== "production") console.log(`   ⏭️ Ordine ${orderDoc.id} skippato (pulizia senza biancheria / biancheria propria)`);
+              skipped++;
+              continue;
+            }
             
             // @ts-expect-error TODO-FIX: TS18048 'cleaningData' is possibly 'undefined'.
             guestsCount = cleaningData.guestsCount || 2;
