@@ -6,8 +6,9 @@ import { searchAddress, type AddressResult } from "~/lib/geo";
 interface AddressAutocompleteProps {
   /** Callback quando l'utente seleziona un indirizzo */
   onSelect: (result: AddressResult) => void;
-  /** Callback quando l'utente vuole inserire manualmente */
-  onManualEntry?: () => void;
+  /** Callback quando l'utente vuole inserire manualmente. Riceve l'eventuale
+   *  testo già digitato, così il campo manuale può partire pre-compilato. */
+  onManualEntry?: (prefill?: string) => void;
   /** Valore iniziale del campo */
   defaultValue?: string;
   /** Placeholder del campo */
@@ -53,31 +54,54 @@ export default function AddressAutocomplete({
 
   // Debounced search
   const performSearch = useCallback(async (searchQuery: string) => {
-    if (searchQuery.length < 3) {
+    const q = searchQuery.trim();
+    if (q.length < 3) {
       setResults([]);
       setIsOpen(false);
       return;
     }
 
+    // Apri subito la tendina: anche durante il caricamento l'utente vede
+    // l'opzione "inserisci manualmente" e non resta mai bloccato.
+    setIsOpen(true);
     setIsLoading(true);
     try {
-      const searchResults = await searchAddress(searchQuery, {
-        limit: 6,
-        countryCode: "it",
-        lang: "it",
-      });
+      let searchResults: AddressResult[] = [];
+
+      // 1) Proxy server-side (User-Agent corretto + cache → più risultati).
+      try {
+        const res = await fetch(
+          `/api/geocode?q=${encodeURIComponent(q)}&limit=8`,
+          { headers: { Accept: "application/json" } }
+        );
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data?.results)) searchResults = data.results;
+        } else {
+          throw new Error(`geocode ${res.status}`);
+        }
+      } catch {
+        // 2) Fallback: ricerca diretta dal client (comportamento storico).
+        searchResults = await searchAddress(q, {
+          limit: 8,
+          countryCode: "it",
+          lang: "it",
+        });
+      }
+
       setResults(searchResults);
-      setIsOpen(searchResults.length > 0 || searchQuery.length >= 3);
+      setIsOpen(true);
       setSelectedIndex(-1);
       if (searchResults.length === 0) {
-        setFailedSearches(prev => prev + 1);
+        setFailedSearches((prev) => prev + 1);
       } else {
         setFailedSearches(0);
       }
     } catch (error) {
       console.error("Errore ricerca indirizzo:", error);
       setResults([]);
-      setFailedSearches(prev => prev + 1);
+      setIsOpen(true);
+      setFailedSearches((prev) => prev + 1);
     } finally {
       setIsLoading(false);
     }
@@ -327,95 +351,119 @@ export default function AddressAutocomplete({
         </p>
       )}
 
-      {/* Dropdown Results */}
-      {isOpen && results.length > 0 && (
+      {/* Dropdown unificato: risultati / caricamento / nessun risultato,
+          con SEMPRE in fondo il pulsante "Inserisci manualmente". */}
+      {isOpen && query.trim().length >= 3 && (
         <div
           ref={dropdownRef}
           className="absolute z-50 w-full mt-2 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden"
         >
-          <div className="p-2 bg-slate-50 border-b border-slate-100">
-            <p className="text-xs text-slate-500 flex items-center gap-1">
-              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-              </svg>
-              Seleziona un indirizzo per verificarlo
-            </p>
-          </div>
-          
-          <ul className="max-h-64 overflow-y-auto">
-            {results.map((result, index) => (
-              <li key={index}>
-                <button
-                  type="button"
-                  onClick={() => handleSelect(result)}
-                  className={`
-                    w-full px-4 py-3 text-left flex items-start gap-3 transition-colors
-                    ${selectedIndex === index ? "bg-blue-50" : "hover:bg-slate-50"}
-                  `}
-                >
-                  <div className="flex-shrink-0 mt-0.5">
-                    <div className={`
-                      w-8 h-8 rounded-lg flex items-center justify-center
-                      ${result.confidence === "high" ? "bg-emerald-100 text-emerald-600" : 
-                        result.confidence === "medium" ? "bg-amber-100 text-amber-600" : 
-                        "bg-slate-100 text-slate-500"}
-                    `}>
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                      </svg>
-                    </div>
-                  </div>
-                  
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-slate-800 truncate">
-                      {result.street} {result.houseNumber}
-                    </p>
-                    <p className="text-sm text-slate-500 truncate">
-                      {result.postalCode} {result.city}
-                    </p>
-                  </div>
-                  
-                  <div className="flex-shrink-0">
-                    {getConfidenceBadge(result.confidence)}
-                  </div>
-                </button>
-              </li>
-            ))}
-          </ul>
-
-          {/* Footer hint */}
-          <div className="p-2 bg-slate-50 border-t border-slate-100">
-            <p className="text-xs text-slate-400 text-center">
-              ↑↓ per navigare • Enter per selezionare • Esc per chiudere
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* No results message */}
-      {isOpen && results.length === 0 && !isLoading && query.length >= 3 && (
-        <div className="absolute z-50 w-full mt-2 bg-white border border-slate-200 rounded-xl shadow-lg p-4">
-          <div className="text-center">
-            <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-2">
-              <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
+          {/* Intestazione (solo se ci sono risultati) */}
+          {results.length > 0 && (
+            <div className="p-2 bg-slate-50 border-b border-slate-100">
+              <p className="text-xs text-slate-500 flex items-center gap-1">
+                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                </svg>
+                Seleziona un indirizzo per verificarlo
+              </p>
             </div>
-            <p className="text-sm font-medium text-slate-700">Nessun risultato trovato</p>
-            <p className="text-xs text-slate-500 mt-1">
-              Prova con un indirizzo più specifico (via, numero civico, città)
-            </p>
-            {onManualEntry && (
+          )}
+
+          {/* Caricamento (mentre non ci sono ancora risultati) */}
+          {isLoading && results.length === 0 && (
+            <div className="px-4 py-4 flex items-center justify-center gap-2 text-sm text-slate-500">
+              <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+              Ricerca in corso…
+            </div>
+          )}
+
+          {/* Lista risultati */}
+          {results.length > 0 && (
+            <ul className="max-h-64 overflow-y-auto">
+              {results.map((result, index) => (
+                <li key={index}>
+                  <button
+                    type="button"
+                    onClick={() => handleSelect(result)}
+                    className={`
+                      w-full px-4 py-3 text-left flex items-start gap-3 transition-colors
+                      ${selectedIndex === index ? "bg-blue-50" : "hover:bg-slate-50"}
+                    `}
+                  >
+                    <div className="flex-shrink-0 mt-0.5">
+                      <div className={`
+                        w-8 h-8 rounded-lg flex items-center justify-center
+                        ${result.confidence === "high" ? "bg-emerald-100 text-emerald-600" :
+                          result.confidence === "medium" ? "bg-amber-100 text-amber-600" :
+                          "bg-slate-100 text-slate-500"}
+                      `}>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                      </div>
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-slate-800 truncate">
+                        {result.street} {result.houseNumber}
+                      </p>
+                      <p className="text-sm text-slate-500 truncate">
+                        {result.postalCode} {result.city}
+                      </p>
+                    </div>
+
+                    <div className="flex-shrink-0">
+                      {getConfidenceBadge(result.confidence)}
+                    </div>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {/* Nessun risultato (ma NON in caricamento) */}
+          {!isLoading && results.length === 0 && (
+            <div className="px-4 py-4 text-center">
+              <div className="w-11 h-11 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-2">
+                <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <p className="text-sm font-medium text-slate-700">Nessun indirizzo trovato</p>
+              <p className="text-xs text-slate-500 mt-1">
+                Nessun problema: inseriscilo manualmente qui sotto.
+              </p>
+            </div>
+          )}
+
+          {/* 🆕 FOOTER SEMPRE PRESENTE: inserimento manuale.
+              Porta con sé il testo già digitato, così non lo si riscrive. */}
+          {onManualEntry && (
+            <div className="p-2 bg-slate-50 border-t border-slate-100">
               <button
                 type="button"
-                onClick={() => { setIsOpen(false); onManualEntry(); }}
-                className="mt-3 px-4 py-2 bg-slate-800 text-white text-xs font-semibold rounded-lg hover:bg-slate-700 active:scale-[0.98] transition-all"
+                onClick={() => { setIsOpen(false); onManualEntry(query.trim()); }}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-800 text-white text-sm font-semibold rounded-lg hover:bg-slate-700 active:scale-[0.99] transition-all"
               >
-                Inserisci manualmente
+                <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                </svg>
+                <span className="truncate">
+                  Inserisci manualmente{query.trim() ? `: «${query.trim()}»` : ""}
+                </span>
               </button>
-            )}
-          </div>
+              {results.length > 0 && (
+                <p className="text-[10px] text-slate-400 text-center mt-1.5">
+                  ↑↓ naviga • Invio seleziona • Esc chiudi
+                </p>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>

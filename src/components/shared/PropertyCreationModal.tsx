@@ -727,7 +727,7 @@ export default function PropertyCreationModal({ isOpen, onClose, onSuccess, mode
                       defaultValue={formData.indirizzo} 
                       required 
                       showVerifiedIcon={true}
-                      onManualEntry={() => { setManualEntry(true); setFormData(prev => ({ ...prev, addressVerified: true, indirizzo: '' })); }}
+                      onManualEntry={(prefill?: string) => { setManualEntry(true); setFormData(prev => ({ ...prev, addressVerified: true, indirizzo: prefill || '' })); }}
                       onSelect={async (r: AddressResult) => {
                         setFormData(prev => ({ 
                           ...prev, 
