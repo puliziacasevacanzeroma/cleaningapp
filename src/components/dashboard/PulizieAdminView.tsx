@@ -8,6 +8,71 @@ import EditCleaningModal from "~/components/proprietario/EditCleaningModal";
 import CleaningCardAdmin from "~/components/cleaning/CleaningCardAdmin";
 import { calculateDotazioni } from "~/lib/calculateDotazioni";
 
+/**
+ * 🎯 PASSO FINALE — Deriva le dotazioni (letto/bagno/kit/extra) da un ORDINE.
+ *
+ * La card storicamente RICALCOLA con calculateDotazioni; ma la pagina pagamenti
+ * legge order.items. Per garantire card === pagamenti, quando esiste un ordine
+ * con items la card mostra esattamente quelli (= ciò che si paga).
+ *
+ * Robusto sugli ordini vecchi: se manca categoryId/categoryName o il prezzo,
+ * risolve via inventory (per id/key/nome). Le voci non-dotazione (prodotti
+ * pulizia, fee, orfani) NON entrano nelle dotazioni.
+ *
+ * Forma voce restituita: { name, quantity, price } — identica a calculateDotazioni.
+ */
+function deriveDotazioniFromOrder(
+  order: any,
+  inventory: any[]
+): { bedItems: any[]; bathItems: any[]; kitItems: any[]; extraItems: any[]; dotazioniPrice: number } {
+  const bedItems: any[] = [];
+  const bathItems: any[] = [];
+  const kitItems: any[] = [];
+  const extraItems: any[] = [];
+  let dotazioniPrice = 0;
+
+  const invMap = new Map<string, any>();
+  (inventory || []).forEach((it: any) => {
+    if (it?.id) invMap.set(it.id, it);
+    if (it?.key) invMap.set(it.key, it);
+  });
+
+  const resolveCat = (item: any, inv: any): string | null => {
+    if (item?.categoryId) return item.categoryId;
+    const cn = String(item?.categoryName || "").toLowerCase();
+    if (cn.includes("letto")) return "biancheria_letto";
+    if (cn.includes("bagno")) return "biancheria_bagno";
+    if (cn.includes("kit") || cn.includes("cortesia")) return "kit_cortesia";
+    if (cn.includes("extra")) return "servizi_extra";
+    return inv?.categoryId || null;
+  };
+
+  (order?.items || []).forEach((item: any) => {
+    const qty = typeof item?.quantity === "number" ? item.quantity : 0;
+    if (qty <= 0) return;
+    const inv = invMap.get(item?.itemId) || invMap.get(item?.id);
+    const cat = resolveCat(item, inv);
+
+    let bucket: any[] | null = null;
+    if (cat === "biancheria_letto") bucket = bedItems;
+    else if (cat === "biancheria_bagno") bucket = bathItems;
+    else if (cat === "kit_cortesia") bucket = kitItems;
+    else if (cat === "servizi_extra") bucket = extraItems;
+    if (!bucket) return; // prodotti pulizia / fee / orfani: fuori dalle dotazioni
+
+    const price =
+      typeof item?.unitPrice === "number"
+        ? item.unitPrice
+        : inv?.sellPrice ?? inv?.price ?? 0;
+    const name = item?.name || inv?.name || item?.itemId || item?.id || "Articolo";
+
+    bucket.push({ name, quantity: qty, price });
+    dotazioniPrice += price * qty;
+  });
+
+  return { bedItems, bathItems, kitItems, extraItems, dotazioniPrice };
+}
+
 interface BedConfig {
   id: string;
   type: string;
@@ -854,12 +919,37 @@ export function PulizieAdminView({ properties, cleanings, operators = [] }: Puli
                             usesOwnLinen: (property as any).usesOwnLinen || false,
                           } : { id: '', bedrooms: 1, bathrooms: 1, maxGuests: 2, cleaningPrice: 0 };
                           
-                          const { cleaningPrice, dotazioniPrice, totalPrice, bedItems, bathItems, kitItems, extraItems } = calculateDotazioni(
+                          const { cleaningPrice, dotazioniPrice: calcDotazioniPrice, totalPrice: calcTotalPrice, bedItems: calcBed, bathItems: calcBath, kitItems: calcKit, extraItems: calcExtra } = calculateDotazioni(
                             cleaning,
                             // @ts-expect-error TODO-FIX: TS2345 Argument of type '{ id: string; name: string; bedrooms: number; bathrooms: numbe...
                             propertyForCalc,
                             inventory
                           );
+
+                          // 🎯 PASSO FINALE: se esiste un ordine con items, la card mostra
+                          // ESATTAMENTE le dotazioni dell'ordine (= ciò che si paga). Così
+                          // card === pagamenti per costruzione. Fallback al calcolo se non
+                          // c'è ordine o se l'ordine non ha voci di dotazione riconoscibili.
+                          let dotazioniPrice = calcDotazioniPrice;
+                          let totalPrice = calcTotalPrice;
+                          let bedItems = calcBed;
+                          let bathItems = calcBath;
+                          let kitItems = calcKit;
+                          let extraItems = calcExtra;
+
+                          const linenOrder: any = getLinenOrderForCleaning(cleaning.id, cleaning.propertyId);
+                          if (linenOrder && Array.isArray(linenOrder.items) && linenOrder.items.length > 0) {
+                            const d = deriveDotazioniFromOrder(linenOrder, inventory);
+                            const hasAny = d.bedItems.length || d.bathItems.length || d.kitItems.length || d.extraItems.length;
+                            if (hasAny) {
+                              bedItems = d.bedItems;
+                              bathItems = d.bathItems;
+                              kitItems = d.kitItems;
+                              extraItems = d.extraItems;
+                              dotazioniPrice = d.dotazioniPrice;
+                              totalPrice = (cleaningPrice || 0) + d.dotazioniPrice;
+                            }
+                          }
                           
                           return (
                             <CleaningCardAdmin
