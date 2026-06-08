@@ -1036,16 +1036,29 @@ export default function PagamentiPage() {
     try {
       // Debug: mostra cosa c'è negli items
       
-      // Filtra items con quantità > 0 E sanitizza i dati
+      // 🔒 SICUREZZA CALCOLI — non persistere mai voci derivate/non fatturate:
+      //  • _delivery_fee / _bed_making_fee sono SOLO voci di display. Il costo reale
+      //    vive in order.deliveryFee / order.bedMakingFee: se le salvassimo come
+      //    articoli verrebbero contate DUE volte (item + campo).
+      //  • i cleaning_product (prodotti operatore, NON fatturati) NON vengono inviati
+      //    qui: li ri-preserva il server dall'ordine esistente, con i loro flag
+      //    originali (type/categoryId), così restano correttamente esclusi.
+      // Mantengo categoryGroup così il ricalcolo riconosce la categoria.
       const validItems = editingBiancheria.items
         .filter(item => item.quantity > 0)
+        .filter(item =>
+          item.itemId !== "_delivery_fee" &&
+          item.itemId !== "_bed_making_fee" &&
+          item.categoryGroup !== "cleaning_product"
+        )
         .map(item => ({
           itemId: item.itemId || "",
           name: item.name || "Articolo",
           quantity: Number(item.quantity) || 0,
           unitPrice: Number(item.unitPrice) || 0,
           totalPrice: Number(item.totalPrice) || 0,
-          categoryName: item.categoryName || "Altro"
+          categoryName: item.categoryName || "Altro",
+          ...(item.categoryGroup ? { categoryGroup: item.categoryGroup } : {}),
         }));
       
       
@@ -1082,7 +1095,16 @@ export default function PagamentiPage() {
 
   const getBiancheriaTotal = () => {
     if (!editingBiancheria) return 0;
-    return editingBiancheria.items.reduce((sum, item) => sum + item.totalPrice, 0);
+    // 🔒 Solo articoli realmente fatturabili: escludo le voci sintetiche del
+    //    display (_delivery_fee/_bed_making_fee) e i prodotti pulizia operatore
+    //    (non fatturati). Le fee reali le riaggiungo dai campi dell'ordine, così
+    //    il "Nuovo totale" coincide con ciò che verrà effettivamente addebitato.
+    const itemsSum = editingBiancheria.items
+      .filter(i => i.itemId !== "_delivery_fee" && i.itemId !== "_bed_making_fee" && i.categoryGroup !== "cleaning_product")
+      .reduce((sum, item) => sum + item.totalPrice, 0);
+    const svc = editingBiancheria.service as ServiceDetail & { deliveryFee?: number; bedMakingFee?: number };
+    const fees = (svc.deliveryFee || 0) + (svc.bedMakingFee || 0);
+    return itemsSum + fees;
   };
 
   const fetchInventoryForAdd = async () => {
@@ -3711,6 +3733,17 @@ export default function PagamentiPage() {
       editingBiancheria.service.type === "KIT_CORTESIA" ? "Modifica Kit Cortesia" :
       editingBiancheria.service.type === "SERVIZI_EXTRA" ? "Modifica Servizi Extra" :
       "Modifica Biancheria";
+    // 🔒 Mostro/modifico SOLO gli articoli fatturabili. Le voci sintetiche
+    //    (consegna/preparazione letti) e i prodotti pulizia operatore restano
+    //    fuori dall'editor: non sono editabili qui e non devono essere persistiti.
+    const isEditableItem = (it: OrderItemDetail) =>
+      it.itemId !== "_delivery_fee" && it.itemId !== "_bed_making_fee" && it.categoryGroup !== "cleaning_product";
+    const editableItems = editingBiancheria.items.filter(isEditableItem);
+    const svcMeta = editingBiancheria.service as ServiceDetail & { deliveryFee?: number; bedMakingFee?: number };
+    const deliveryFeeVal = svcMeta.deliveryFee || 0;
+    const bedMakingFeeVal = svcMeta.bedMakingFee || 0;
+    // L'ordine ha un prezzo manuale (override): modificando gli articoli verrà rimosso.
+    const willResetOverride = editingBiancheria.service.hasOverride === true;
     
     return (
       <>
@@ -3753,7 +3786,19 @@ export default function PagamentiPage() {
           
           {/* Lista articoli scrollabile - CONTENUTO PRINCIPALE */}
           <div className="flex-1 overflow-y-auto p-3 sm:p-4 min-h-0" style={{ WebkitOverflowScrolling: 'touch' }}>
-            {editingBiancheria.items.length === 0 ? (
+            {/* ⚠️ Avviso: questo ordine ha un prezzo manuale (override). Salvando
+                gli articoli, il prezzo tornerà a essere calcolato dagli articoli. */}
+            {willResetOverride && (
+              <div className="mb-3 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5">
+                <svg className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <p className="text-[11px] sm:text-xs text-amber-700 leading-snug">
+                  Questo servizio ha un <strong>prezzo manuale</strong>. Salvando le modifiche il totale verrà ricalcolato dagli articoli e il prezzo manuale sarà rimosso.
+                </p>
+              </div>
+            )}
+            {editableItems.length === 0 ? (
               <div className="text-center py-8">
                 <div className="w-14 h-14 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-3">
                   <svg className="w-7 h-7 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -3765,7 +3810,7 @@ export default function PagamentiPage() {
               </div>
             ) : (
               <div className="space-y-2 sm:space-y-3">
-                {editingBiancheria.items.map((item, idx) => {
+                {editableItems.map((item, idx) => {
                   const isDeleting = deletingItemId === item.itemId;
                   const isZero = item.quantity === 0;
                   
@@ -4018,6 +4063,23 @@ export default function PagamentiPage() {
           
           {/* Footer con totale e azioni - FISSO */}
           <div className="flex-shrink-0 border-t border-slate-200 bg-gradient-to-b from-white to-slate-50 p-3 sm:p-4 rounded-b-2xl lg:rounded-b-3xl">
+            {/* Voci incluse nel totale ma non modificabili qui (fee reali dell'ordine) */}
+            {(deliveryFeeVal > 0 || bedMakingFeeVal > 0) && (
+              <div className="mb-2 px-1 space-y-0.5">
+                {deliveryFeeVal > 0 && (
+                  <div className="flex items-center justify-between text-[11px] text-slate-500">
+                    <span>Costo consegna (incluso)</span>
+                    <span className="font-medium">€{deliveryFeeVal.toFixed(2)}</span>
+                  </div>
+                )}
+                {bedMakingFeeVal > 0 && (
+                  <div className="flex items-center justify-between text-[11px] text-slate-500">
+                    <span>Preparazione letti (incluso)</span>
+                    <span className="font-medium">€{bedMakingFeeVal.toFixed(2)}</span>
+                  </div>
+                )}
+              </div>
+            )}
             {/* Riepilogo prezzi */}
             <div className="flex items-center justify-between mb-3 px-1">
               <div>
@@ -4536,7 +4598,11 @@ export default function PagamentiPage() {
       {mounted && <ConfirmModal />}
       {mounted && <ServiceEditModal />}
       {mounted && <DangerousActionConfirmModal />}
-      {mounted && <BiancheriaEditModal />}
+      {/* ⚠️ Renderizzato come CHIAMATA di funzione (non <Component />) di proposito:
+          essendo definito dentro PaymentsPage, come elemento JSX verrebbe RIMONTATO
+          a ogni re-render (es. click +/-), azzerando lo scroll del modal. La chiamata
+          inline preserva il DOM e quindi la posizione di scroll. Non usa hook. */}
+      {mounted && BiancheriaEditModal()}
     </div>
   );
 }
