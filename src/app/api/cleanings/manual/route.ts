@@ -6,6 +6,7 @@ import { createNotification } from "~/lib/firebase/notifications-admin";
 import { requireProprietario } from "~/lib/api-auth";
 import { validateBody, GenericBodySchema } from "~/lib/validation/schemas";
 import { resolveItemDisplayName } from "~/lib/itemNames";
+import { buildExpectedItems } from "~/lib/linen/linenCore";
 
 // ── Tipi locali ──────────────────────────────────────────────────────────────
 type LinenItem = {
@@ -435,120 +436,18 @@ export async function POST(request: Request) {
           };
         };
         
-        // 🔧 FIX: Biancheria letto - MERGE bl['all'] con gruppi letto se entrambi presenti
-        if (config.bl) {
-          const blKeys = Object.keys(config.bl);
-          const hasAll = config.bl['all'] && typeof config.bl['all'] === 'object' && Object.keys(config.bl['all']).length > 0;
-          const bedGroupKeys = blKeys.filter(k => k !== 'all');
-          const hasBedGroups = bedGroupKeys.length > 0 && bedGroupKeys.some((k: string) => {
-            const items = config.bl[k];
-            return items && typeof items === 'object' && Object.keys(items).length > 0;
+        // 🎯 CENTRALIZZATO: estrazione bl/ba/ki via linenCore (UNICA fonte di verità).
+        // Stesso merge di prima; nome/prezzo/categoria risolti da getItemData (invariato).
+        buildExpectedItems(config).forEach((e) => {
+          const itemData = getItemData(e.itemId);
+          linenItems.push({
+            id: e.itemId,
+            name: itemData.name,
+            quantity: e.quantity,
+            price: itemData.sellPrice,
+            categoryId: itemData.categoryId || e.categoryId,
           });
-          
-          if (hasAll && hasBedGroups) {
-            // 🔥 FIX: MERGE — bl['all'] può essere parziale (es. solo federe)
-            const merged: Record<string, number> = {};
-            // Prima: raccogli totali dai gruppi letto
-            bedGroupKeys.forEach((k: string) => {
-              const items = config.bl[k];
-              if (items && typeof items === 'object') {
-                Object.entries(items as Record<string, number>).forEach(([itemId, qty]) => {
-                  if (typeof qty === 'number' && qty > 0) {
-                    merged[itemId] = (merged[itemId] || 0) + qty;
-                  }
-                });
-              }
-            });
-            // Poi: sovrascrivi con bl['all'] (ha priorità per gli articoli che contiene)
-            Object.entries(config.bl['all'] as Record<string, number>).forEach(([itemId, qty]) => {
-              if (typeof qty === 'number' && qty > 0) {
-                merged[itemId] = qty;
-              }
-            });
-            // Aggiungi tutto ai linenItems
-            Object.entries(merged).forEach(([itemId, qty]) => {
-              if (qty > 0) {
-                const itemData = getItemData(itemId);
-                linenItems.push({ 
-                  id: itemId, 
-                  name: itemData.name, 
-                  quantity: qty,
-                  price: itemData.sellPrice,
-                  categoryId: itemData.categoryId || "biancheria_letto"
-                });
-              }
-            });
-          } else if (hasAll) {
-            Object.entries(config.bl['all'] as Record<string, number>).forEach(([itemId, qty]) => {
-              if (qty > 0) {
-                const itemData = getItemData(itemId);
-                linenItems.push({ 
-                  id: itemId, 
-                  name: itemData.name, 
-                  quantity: qty,
-                  price: itemData.sellPrice,
-                  categoryId: itemData.categoryId || "biancheria_letto"
-                });
-              }
-            });
-          } else {
-            // Fallback: somma da gruppi letto (escludendo 'all')
-            Object.entries(config.bl).forEach(([bedId, items]) => {
-              if (bedId !== 'all' && typeof items === 'object') {
-                Object.entries(items as Record<string, number>).forEach(([itemId, qty]) => {
-                  if (qty > 0) {
-                    // Evita duplicati sommando quantità
-                    const existing = linenItems.find(i => i.id === itemId);
-                    if (existing) {
-                      existing.quantity += qty;
-                    } else {
-                      const itemData = getItemData(itemId);
-                      linenItems.push({ 
-                        id: itemId, 
-                        name: itemData.name, 
-                        quantity: qty,
-                        price: itemData.sellPrice,
-                        categoryId: itemData.categoryId || "biancheria_letto"
-                      });
-                    }
-                  }
-                });
-              }
-            });
-          }
-        }
-        
-        // Biancheria bagno
-        if (config.ba) {
-          Object.entries(config.ba).forEach(([itemId, qty]) => {
-            if ((qty as number) > 0) {
-              const itemData = getItemData(itemId);
-              linenItems.push({ 
-                id: itemId, 
-                name: itemData.name, 
-                quantity: qty as number,
-                price: itemData.sellPrice,  // 🔥 AGGIUNTO: prezzo
-                categoryId: itemData.categoryId || "biancheria_bagno"
-              });
-            }
-          });
-        }
-        
-        // Kit cortesia
-        if (config.ki) {
-          Object.entries(config.ki).forEach(([itemId, qty]) => {
-            if ((qty as number) > 0) {
-              const itemData = getItemData(itemId);
-              linenItems.push({ 
-                id: itemId, 
-                name: itemData.name, 
-                quantity: qty as number,
-                price: itemData.sellPrice,  // 🔥 AGGIUNTO: prezzo
-                categoryId: itemData.categoryId || "kit_cortesia"
-              });
-            }
-          });
-        }
+        });
 
         // 🛡️ SAFETY NET: Verifica biancheria letto presente quando ha senso
         const LENZ_MATR_IDS = ['doubleSheets', 'item_doubleSheets', 'lenzuola_matrimoniale'];
