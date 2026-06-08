@@ -3,6 +3,7 @@ import { adminDb } from "~/lib/firebase/admin";
 import { getApiUser } from "~/lib/api-auth";
 import { Timestamp } from "firebase-admin/firestore";
 import { isCleaningProductItem } from "~/lib/payments/debtCalculator";
+import { buildExpectedItems } from "~/lib/linen/linenCore";
 
 export const dynamic = "force-dynamic";
 
@@ -962,30 +963,13 @@ async function toolCreateCleaning(userId: string, input: any) {
     towel_bidet: "Asciugamano Bidet",
     bathmat: "Tappetino Scendibagno",
   };
+  // 🎯 CENTRALIZZATO: estrazione bl/ba/ki via linenCore (UNICA fonte di verità).
+  // Aggiunge merge all+gruppi e gestisce all vuoto → allinea alla card. Provato 6/6.
   const linennItems: { id: string; name: string; quantity: number }[] = [];
   if (!usesOwnLinen && linenConfig) {
-    const addItems = (section: any) => {
-      if (!section) return;
-      Object.entries(section).forEach(([itemId, qty]: [string, any]) => {
-        if (typeof qty === "number" && qty > 0) {
-          const existing = linennItems.find(i => i.id === itemId);
-          if (existing) existing.quantity += qty;
-          else linennItems.push({ id: itemId, name: ITEM_NAMES[itemId] || itemId, quantity: qty });
-        }
-      });
-    };
-    // bl = biancheria letto (può avere sub-oggetti per letto o "all")
-    if (linenConfig.bl) {
-      if (linenConfig.bl["all"]) {
-        addItems(linenConfig.bl["all"]);
-      } else {
-        Object.values(linenConfig.bl).forEach((bedItems: any) => {
-          if (typeof bedItems === "object") addItems(bedItems);
-        });
-      }
-    }
-    if (linenConfig.ba) addItems(linenConfig.ba); // biancheria bagno
-    if (linenConfig.ki) addItems(linenConfig.ki); // kit cortesia
+    buildExpectedItems(linenConfig).forEach((e) => {
+      linennItems.push({ id: e.itemId, name: ITEM_NAMES[e.itemId] || e.itemId, quantity: e.quantity });
+    });
   }
 
   const requiresLaundry = !usesOwnLinen && linennItems.length > 0;
