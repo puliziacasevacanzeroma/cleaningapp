@@ -97,20 +97,47 @@ export async function GET(req: NextRequest) {
       const cleaning = order.cleaningId ? cleanMap.get(order.cleaningId) : null;
       if (cleaning && cleaning.linenConfigModified === true) { skippedCustom++; continue; }
 
-      const guests =
-        (cleaning && typeof cleaning.guestsCount === "number" && cleaning.guestsCount) ||
-        (typeof order.guestsCount === "number" && order.guestsCount) || 2;
-
-      let config: any = null;
-      if (cleaning && cleaning.linenConfigModified === true && cleaning.customLinenConfig) {
-        config = cleaning.customLinenConfig;
-      } else if (property?.serviceConfigs) {
-        config = property.serviceConfigs[guests] || property.serviceConfigs[String(guests)];
-      }
-      if (!config) { skippedNoConfig++; continue; }
-
       const existingItems = Array.isArray(order.items) ? order.items : [];
-      const { finalItems } = reconcileOrderItems(config, inventory, existingItems, getItemName);
+
+      // 🎯 GUARDIA BIANCHERIA (stessa regola di calculateDotazioni / la card):
+      // niente biancheria se hasLinenOrder===false, oppure hasLinenOrder assente
+      // e la proprietà usa biancheria propria.
+      const propUsesOwn = property?.usesOwnLinen === true;
+      const hlo = cleaning ? cleaning.hasLinenOrder : undefined;
+      const shouldHaveLinen = !(hlo === false || (hlo === undefined && propUsesOwn));
+
+      let finalItems: any[];
+
+      if (!shouldHaveLinen) {
+        // L'ordine NON deve avere biancheria: rimuovi le categorie gestite
+        // (letto/bagno/kit), preserva prodotti pulizia / extra / fee / orfani.
+        finalItems = existingItems.filter((it: any) => {
+          const inv = resolveInv(it?.itemId || it?.id, invMap);
+          let cat: string | null = it?.categoryId || null;
+          if (!cat && it?.categoryName) {
+            const cn = String(it.categoryName).toLowerCase();
+            if (cn.includes("letto")) cat = "biancheria_letto";
+            else if (cn.includes("bagno")) cat = "biancheria_bagno";
+            else if (cn.includes("kit") || cn.includes("cortesia")) cat = "kit_cortesia";
+          }
+          if (!cat) cat = inv?.categoryId ?? null;
+          return !(cat && MANAGED_CATS.has(cat)); // tieni SOLO il non-gestito
+        });
+      } else {
+        const guests =
+          (cleaning && typeof cleaning.guestsCount === "number" && cleaning.guestsCount) ||
+          (typeof order.guestsCount === "number" && order.guestsCount) || 2;
+
+        let config: any = null;
+        if (cleaning && cleaning.linenConfigModified === true && cleaning.customLinenConfig) {
+          config = cleaning.customLinenConfig;
+        } else if (property?.serviceConfigs) {
+          config = property.serviceConfigs[guests] || property.serviceConfigs[String(guests)];
+        }
+        if (!config) { skippedNoConfig++; continue; }
+
+        finalItems = reconcileOrderItems(config, inventory, existingItems, getItemName).finalItems;
+      }
 
       const beforeT = managedTotals(existingItems, invMap);
       const afterT = managedTotals(finalItems, invMap);
@@ -120,8 +147,11 @@ export async function GET(req: NextRequest) {
       const change: any = {
         orderId: od.id,
         propertyName,
-        guests,
+        guests:
+          (cleaning && typeof cleaning.guestsCount === "number" && cleaning.guestsCount) ||
+          (typeof order.guestsCount === "number" && order.guestsCount) || 2,
         cleaningId: order.cleaningId || null,
+        ownLinen: !shouldHaveLinen,
         before: beforeT,
         after: afterT,
         applied: false,
