@@ -21,6 +21,23 @@ const ROME_VIEWBOX = "12.20,42.05,12.75,41.70";
 const DEFAULT_CITY = "Roma";
 
 // ═══════════════════════════════════════════════════════════════
+// 🔑 PROVIDER NOMINATIM
+// Default: Nominatim pubblico OSM (gratis, ma limite 1 req/s → 429 sotto
+// carico). Se è impostata la env LOCATIONIQ_KEY, usa LocationIQ: hosted,
+// ~5.000 richieste/giorno gratis, nessun throttle aggressivo, STESSO formato
+// di risposta di Nominatim (drop-in). La ricerca passa dal proxy /api/geocode
+// lato server, quindi la chiave NON è esposta al client.
+// ═══════════════════════════════════════════════════════════════
+function getNominatimBase(kind: "search" | "reverse"): { url: string; key?: string } {
+  const key =
+    typeof process !== "undefined" && process.env ? process.env.LOCATIONIQ_KEY : undefined;
+  if (key) {
+    return { url: `https://us1.locationiq.com/v1/${kind}`, key };
+  }
+  return { url: `https://nominatim.openstreetmap.org/${kind}` };
+}
+
+// ═══════════════════════════════════════════════════════════════
 // TIPI
 // ═══════════════════════════════════════════════════════════════
 
@@ -75,7 +92,11 @@ export async function searchPhoton(
     const url = new URL("https://photon.komoot.io/api/");
     url.searchParams.set("q", query);
     url.searchParams.set("limit", String(limit + 3));
-    url.searchParams.set("lang", lang);
+    // ⚠️ Photon supporta SOLO: default, de, en, fr. Con "it" rispondeva con un
+    //    errore e tornava ZERO risultati (era il vero motivo dei "pochi risultati").
+    //    "default" restituisce comunque i nomi in lingua locale (italiano).
+    const photonLang = ["de", "en", "fr"].includes(lang) ? lang : "default";
+    url.searchParams.set("lang", photonLang);
     // 📍 Bias forte su Roma (preferenza, non filtro)
     url.searchParams.set("lat", ROME_CENTER.lat);
     url.searchParams.set("lon", ROME_CENTER.lon);
@@ -171,12 +192,14 @@ export async function searchNominatim(
   const { limit = 5, countryCode = "it" } = options;
 
   try {
-    const url = new URL("https://nominatim.openstreetmap.org/search");
+    const provider = getNominatimBase("search");
+    const url = new URL(provider.url);
     url.searchParams.set("q", query);
     url.searchParams.set("format", "json");
     url.searchParams.set("limit", String(limit + 2));
     url.searchParams.set("countrycodes", countryCode);
     url.searchParams.set("addressdetails", "1");
+    if (provider.key) url.searchParams.set("key", provider.key);
     // 📍 viewbox centrato su ROMA per risultati subito pertinenti.
     //    bounded=0 → preferenza, non restrizione (Italia resta cercabile).
     url.searchParams.set("viewbox", ROME_VIEWBOX);
@@ -257,7 +280,8 @@ async function searchNominatimStructured(
   const cityPart = match[4]?.replace(/[,.]\s*$/, "").trim() || "";
 
   try {
-    const url = new URL("https://nominatim.openstreetmap.org/search");
+    const provider = getNominatimBase("search");
+    const url = new URL(provider.url);
     // Nominatim vuole il formato "numero via nome" per il parametro street
     url.searchParams.set("street", `${number} ${streetType} ${streetName}`);
     // 📍 Se l'utente non scrive la città, puntiamo a ROMA di default.
@@ -267,6 +291,7 @@ async function searchNominatimStructured(
     url.searchParams.set("limit", String(limit));
     url.searchParams.set("countrycodes", countryCode);
     url.searchParams.set("addressdetails", "1");
+    if (provider.key) url.searchParams.set("key", provider.key);
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000);
@@ -358,11 +383,23 @@ export async function searchAddress(
 
   const cleanQuery = query.trim();
 
-  // Lancia TUTTE le ricerche in parallelo — nessuna attesa sequenziale
+  // 📍 Se l'utente scrive solo la via SENZA città (nessuna virgola e nessun
+  //    riferimento a Roma), cerchiamo esplicitamente "..., Roma". Questo fa
+  //    trovare molte più vie romane (es. "via del corso" → "via del corso, Roma").
+  //    Se c'è già una virgola (città indicata) o cita Roma, non tocchiamo nulla.
+  const lower = cleanQuery.toLowerCase();
+  const hasComma = cleanQuery.includes(",");
+  const mentionsRome = /\broma\b|\brome\b/.test(lower);
+  const romeQuery = hasComma || mentionsRome ? cleanQuery : `${cleanQuery}, Roma`;
+
+  // Lancia TUTTE le ricerche in parallelo — nessuna attesa sequenziale.
+  // Strutturata: usa la query originale (parsa via/numero/città da sé, e se la
+  // città manca usa già Roma di default). Libera + Photon: usano la query
+  // arricchita con Roma per non disperdersi su altre città.
   const [structuredResults, nominatimResults, photonResults] = await Promise.all([
     searchNominatimStructured(cleanQuery, options).catch(() => [] as AddressResult[]),
-    searchNominatim(cleanQuery, options).catch(() => [] as AddressResult[]),
-    searchPhoton(cleanQuery, options).catch(() => [] as AddressResult[]),
+    searchNominatim(romeQuery, options).catch(() => [] as AddressResult[]),
+    searchPhoton(romeQuery, options).catch(() => [] as AddressResult[]),
   ]);
 
   // Merge: strutturata ha priorità, poi Nominatim, poi Photon
@@ -407,11 +444,13 @@ export async function reverseGeocode(
   coordinates: Coordinates
 ): Promise<AddressResult | null> {
   try {
-    const url = new URL("https://nominatim.openstreetmap.org/reverse");
+    const provider = getNominatimBase("reverse");
+    const url = new URL(provider.url);
     url.searchParams.set("lat", coordinates.lat.toString());
     url.searchParams.set("lon", coordinates.lng.toString());
     url.searchParams.set("format", "json");
     url.searchParams.set("addressdetails", "1");
+    if (provider.key) url.searchParams.set("key", provider.key);
 
     const response = await fetch(url.toString(), {
       headers: { "User-Agent": "CleaningApp/2.0" },
