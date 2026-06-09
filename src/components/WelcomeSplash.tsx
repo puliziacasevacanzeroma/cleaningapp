@@ -312,7 +312,7 @@ export function WelcomeSplash({ userName, userId, destination, onComplete }: Wel
               boxShadow: '0 0 20px rgba(34,211,238,0.6)'
             }}></div>
           </div>
-          <p className="text-right text-white/40 text-xs mt-1">{progress}%</p>
+          <p className="text-right text-white/40 text-xs mt-1">{Math.round(progress)}%</p>
         </div>
 
         <p className="text-white/50 text-sm">{loadingText}</p>
