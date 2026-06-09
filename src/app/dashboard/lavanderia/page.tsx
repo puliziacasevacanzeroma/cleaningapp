@@ -210,30 +210,45 @@ export default function AdminLavanderiaPage() {
     return () => unsubscribe();
   }, []);
 
-  // Deliveries — sempre attivo (serve anche in tab Gestione per card completate)
+  // Deliveries — listener realtime SEMPRE attivo (serve anche in tab Gestione per card completate).
+  // ⚠️ FIX: prima l'effect aveva `[storicoLoaded]` come dipendenza + `if (storicoLoaded) return`
+  // e chiamava `setStoricoLoaded(true)` dentro lo snapshot. Effetto collaterale: dopo il PRIMO
+  // snapshot il cambio di stato ri-eseguiva l'effect, il cleanup disiscriveva il listener, e la
+  // guardia impediva di ricrearlo → le consegne restavano CONGELATE al primo dato ricevuto
+  // (spesso quello servito dalla cache locale IndexedDB, quindi vecchio) e non si aggiornavano
+  // più in realtime. Ora il listener si monta UNA volta e resta vivo per tutta la pagina.
   useEffect(() => {
-    if (storicoLoaded) return;
     setLoadingStorico(true);
-    const unsubscribe = onSnapshot(collection(db, "laundryDeliveries"), (snapshot) => {
-      const list: LaundryDelivery[] = [];
-      snapshot.docs.forEach((docSnap) => {
-        const data = docSnap.data() as Record<string, any>;
-        list.push({
-          id: docSnap.id, dateKey: data.dateKey || docSnap.id,
-          status: data.status || "PENDING",
-          requestedItems: data.requestedItems || {}, deliveredItems: data.deliveredItems || {},
-          completedByName: data.completedByName || null, startedByName: data.startedByName || null,
-          startedAt: data.startedAt?.toDate?.() || null, completedAt: data.completedAt?.toDate?.() || null,
-          inventoryApplied: data.inventoryApplied || false,
+    const unsubscribe = onSnapshot(
+      collection(db, "laundryDeliveries"),
+      (snapshot) => {
+        const list: LaundryDelivery[] = [];
+        snapshot.docs.forEach((docSnap) => {
+          const data = docSnap.data() as Record<string, any>;
+          list.push({
+            id: docSnap.id, dateKey: data.dateKey || docSnap.id,
+            status: data.status || "PENDING",
+            requestedItems: data.requestedItems || {}, deliveredItems: data.deliveredItems || {},
+            completedByName: data.completedByName || null, startedByName: data.startedByName || null,
+            startedAt: data.startedAt?.toDate?.() || null, completedAt: data.completedAt?.toDate?.() || null,
+            inventoryApplied: data.inventoryApplied || false,
+          });
         });
-      });
-      list.sort((a, b) => b.dateKey.localeCompare(a.dateKey));
-      setDeliveries(list);
-      setLoadingStorico(false);
-      setStoricoLoaded(true);
-    });
+        list.sort((a, b) => b.dateKey.localeCompare(a.dateKey));
+        setDeliveries(list);
+        setLoadingStorico(false);
+        setStoricoLoaded(true);
+      },
+      (err) => {
+        // Prima mancava il callback d'errore: se il listener falliva, lo spinner restava all'infinito.
+        console.error("❌ laundryDeliveries listener error:", err);
+        setLoadingStorico(false);
+        setStoricoLoaded(true);
+      }
+    );
     return () => unsubscribe();
-  }, [storicoLoaded]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ═══════════════════════════════════════
   // LOGICA GESTIONE
