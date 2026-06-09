@@ -42,12 +42,13 @@ export function WelcomeSplash({ userName, userId, destination, onComplete }: Wel
   onCompleteRef.current = onComplete;
   const doneRef = useRef(false);
   const watchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const progressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const firstName = userName.split(" ")[0];
   const isProprietario = destination.includes("proprietario");
 
   useEffect(() => {
-    // Chiusura sicura: fade + onComplete, garantito una sola volta.
+    // Chiusura sicura: completa la barra a 100%, fade, onComplete. Garantito una sola volta.
     const finish = () => {
       if (doneRef.current) return;
       doneRef.current = true;
@@ -55,9 +56,29 @@ export function WelcomeSplash({ userName, userId, destination, onComplete }: Wel
         clearTimeout(watchdogRef.current);
         watchdogRef.current = null;
       }
-      setFadeOut(true);
-      setTimeout(() => onCompleteRef.current(), 600);
+      if (progressTimerRef.current) {
+        clearInterval(progressTimerRef.current);
+        progressTimerRef.current = null;
+      }
+      // Porta la barra a 100% (la transizione CSS la anima dal valore corrente),
+      // breve pausa per mostrare il riempimento, poi fade. Niente attesa extra sui dati.
+      setProgress(100);
+      setTimeout(() => {
+        setFadeOut(true);
+        setTimeout(() => onCompleteRef.current(), 500);
+      }, 350);
     };
+
+    // 🎞️ Animazione barra INDIPENDENTE dai dati: sale fluida verso ~90% e rallenta,
+    // così non resta MAI inchiodata a un valore intermedio (es. 15%) se una query stalla.
+    // Quando il prefetch finisce o va in timeout, finish() la porta a 100%.
+    progressTimerRef.current = setInterval(() => {
+      setProgress(prev => {
+        if (prev >= 90) return prev;
+        const next = prev + Math.max(0.5, (90 - prev) * 0.06);
+        return Math.min(90, next);
+      });
+    }, 120);
 
     // 🛡️ RETE DI SICUREZZA ULTIMA: qualunque cosa accada, non si resta bloccati.
     watchdogRef.current = setTimeout(() => {
@@ -69,7 +90,6 @@ export function WelcomeSplash({ userName, userId, destination, onComplete }: Wel
       try {
         // STEP 1: CARICA PROPRIETÀ
         setLoadingText("Caricamento proprietà...");
-        setProgress(15);
 
         const propertiesSnapshot = await withTimeout(
           getDocs(query(collection(db, "properties"), orderBy("name", "asc"))),
@@ -95,7 +115,6 @@ export function WelcomeSplash({ userName, userId, destination, onComplete }: Wel
         // STEP 2: SE PROPRIETARIO
         if (isProprietario && userId) {
           setLoadingText("Caricamento tue proprietà...");
-          setProgress(30);
 
           const ownerProperties = allProperties.filter((p: any) => p.ownerId === userId);
           const propertyIds = ownerProperties.map((p: any) => p.id);
@@ -107,7 +126,6 @@ export function WelcomeSplash({ userName, userId, destination, onComplete }: Wel
 
           // STEP 3: DASHBOARD PROPRIETARIO
           setLoadingText("Caricamento dashboard...");
-          setProgress(50);
 
           const todayStart = new Date();
           todayStart.setHours(0, 0, 0, 0);
@@ -169,12 +187,10 @@ export function WelcomeSplash({ userName, userId, destination, onComplete }: Wel
 
           queryClient.setQueryData(dashboardQueryKey, dashboardData);
 
-          setProgress(80);
 
         } else {
           // ADMIN DASHBOARD
           setLoadingText("Caricamento dashboard...");
-          setProgress(50);
 
           const today = new Date();
           today.setHours(0, 0, 0, 0);
@@ -231,13 +247,9 @@ export function WelcomeSplash({ userName, userId, destination, onComplete }: Wel
             operators: operatorsSnapshot.docs.map(doc => ({ id: doc.id, name: (doc.data() as Record<string, any>).name || "Operatore" })),
           });
 
-          setProgress(80);
         }
 
         setLoadingText("Tutto pronto!");
-        setProgress(100);
-
-        await new Promise(r => setTimeout(r, 400));
         finish();
 
       } catch (error) {
@@ -255,6 +267,10 @@ export function WelcomeSplash({ userName, userId, destination, onComplete }: Wel
       if (watchdogRef.current) {
         clearTimeout(watchdogRef.current);
         watchdogRef.current = null;
+      }
+      if (progressTimerRef.current) {
+        clearInterval(progressTimerRef.current);
+        progressTimerRef.current = null;
       }
     };
     // Mount-once: lo splash gira una sola volta per sessione.
