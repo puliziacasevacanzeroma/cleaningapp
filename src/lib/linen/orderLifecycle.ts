@@ -85,3 +85,17 @@ export function configRecomputeSkipReason(input: ConfigRecomputeInput): string |
 export function shouldRecomputeOrderFromConfig(input: ConfigRecomputeInput): boolean {
   return configRecomputeSkipReason(input) === null;
 }
+
+/**
+ * true quando una pulizia PASSA a uno stato concluso (COMPLETED/VERIFIED)
+ * partendo da uno stato NON concluso. Serve a triggerare la conferma consegna
+ * biancheria SOLO sulla transizione (non a ogni salvataggio di una pulizia
+ * già conclusa → evita ri-esecuzioni inutili; l'azione è comunque idempotente).
+ */
+export function isTransitionToDone(
+  oldStatus: string | null | undefined,
+  newStatus: string | null | undefined,
+): boolean {
+  if (!newStatus) return false; // lo status non è tra i campi aggiornati
+  return isCleaningDone(newStatus) && !isCleaningDone(oldStatus);
+}

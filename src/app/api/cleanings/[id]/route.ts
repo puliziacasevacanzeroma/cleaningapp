@@ -6,6 +6,8 @@ import { getItemName } from "~/lib/itemNames";
 import { getApiUser } from "~/lib/api-auth";
 import { validateBody, CleaningUpdateSchema } from "~/lib/validation/schemas";
 import { transferCreditToNextMonth, checkIfServiceMonthIsPaid } from "~/lib/payments/creditTransfer";
+import { confirmLinenDelivery } from "~/lib/cleanings/confirmLinenDelivery";
+import { isTransitionToDone } from "~/lib/linen/orderLifecycle";
 
 // ── Tipi locali ──────────────────────────────────────────────────────────────
 type AuthUser = { id: string; role: string; status?: string };
@@ -495,6 +497,25 @@ export async function PATCH(
 
     // Aggiorna
     await cleaningRef.update(updateData);
+
+    // ─── 🧺 FIX BUG B: se la pulizia PASSA a COMPLETED/VERIFIED, conferma la consegna biancheria ───
+    // Centralizza la stessa logica del flusso operatore /complete (DELIVERED + scarico magazzino),
+    // così completare/verificare una pulizia da QUALSIASI percorso (incluso questo PUT generico,
+    // es. modifica da calendario / EditCleaningModal) non lascia ordini orfani in PENDING — causa
+    // storica degli acconti fantasma — e scala correttamente il magazzino. Idempotente e non bloccante.
+    try {
+      // @ts-expect-error TODO-FIX: 'cleaning' possibly undefined
+      const _oldStatus = cleaning?.status;
+      if (isTransitionToDone(_oldStatus, status)) {
+        // dati pulizia aggiornati = vecchi + patch appena scritta (laundryOrderId/propertyId/scheduledDate)
+        // @ts-expect-error TODO-FIX: 'cleaning' possibly undefined
+        const _freshCleaning = { ...(cleaning as Record<string, unknown>), ...updateData };
+        const _res = await confirmLinenDelivery(id, _freshCleaning, now);
+        if (process.env.NODE_ENV !== "production") console.log(`🧺 [cleaning PUT] confirmLinenDelivery(${id}) →`, _res);
+      }
+    } catch (e) {
+      console.error("🧺 [cleaning PUT] Errore confirmLinenDelivery (non bloccante):", e);
+    }
 
     // ─── AGGIORNA ORDINE COLLEGATO SE CAMBIA ORARIO ───
     if (scheduledTime !== undefined || scheduledDate !== undefined) {
