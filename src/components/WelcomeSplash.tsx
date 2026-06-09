@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQueryClient } from "@tanstack/react-query";
 import { collection, getDocs, query, orderBy, where, Timestamp } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
@@ -12,29 +12,70 @@ interface WelcomeSplashProps {
   onComplete: () => void;
 }
 
+// ⏱️ WATCHDOG: tempo massimo assoluto sullo splash. Oltre questo, si prosegue
+// comunque (la dashboard/operatore carica i dati da sé via onSnapshot/cache).
+const GLOBAL_WATCHDOG_MS = 8000;
+// Timeout per singola query Firestore. Se una getDocs si impianta (es. lease
+// IndexedDB bloccato su iOS PWA, rete che stalla), invece di restare pending
+// all'infinito rigetta e si prosegue.
+const QUERY_TIMEOUT_MS = 6000;
+
+// Rende interrompibile una Promise: se non risolve entro `ms`, rigetta.
+// Serve perché una getDocs che resta *pending* non finisce MAI nel catch.
+function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    p,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`timeout:${label}`)), ms)
+    ),
+  ]);
+}
+
 export function WelcomeSplash({ userName, userId, destination, onComplete }: WelcomeSplashProps) {
   const [progress, setProgress] = useState(0);
   const [loadingText, setLoadingText] = useState("Preparazione...");
   const [fadeOut, setFadeOut] = useState(false);
   const queryClient = useQueryClient();
 
+  // Riferimenti stabili: onComplete chiamato UNA SOLA volta, watchdog cancellabile.
+  const onCompleteRef = useRef(onComplete);
+  onCompleteRef.current = onComplete;
+  const doneRef = useRef(false);
+  const watchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const firstName = userName.split(" ")[0];
   const isProprietario = destination.includes("proprietario");
 
   useEffect(() => {
+    // Chiusura sicura: fade + onComplete, garantito una sola volta.
+    const finish = () => {
+      if (doneRef.current) return;
+      doneRef.current = true;
+      if (watchdogRef.current) {
+        clearTimeout(watchdogRef.current);
+        watchdogRef.current = null;
+      }
+      setFadeOut(true);
+      setTimeout(() => onCompleteRef.current(), 600);
+    };
+
+    // 🛡️ RETE DI SICUREZZA ULTIMA: qualunque cosa accada, non si resta bloccati.
+    watchdogRef.current = setTimeout(() => {
+      console.warn("⏱️ SPLASH: watchdog scattato, proseguo comunque");
+      finish();
+    }, GLOBAL_WATCHDOG_MS);
+
     const prefetchData = async () => {
       try {
-        
-        const startTime = Date.now();
-        
         // STEP 1: CARICA PROPRIETÀ
         setLoadingText("Caricamento proprietà...");
         setProgress(15);
 
-        const propertiesSnapshot = await getDocs(query(
-          collection(db, "properties"),
-          orderBy("name", "asc")
-        ));
+        const propertiesSnapshot = await withTimeout(
+          getDocs(query(collection(db, "properties"), orderBy("name", "asc"))),
+          QUERY_TIMEOUT_MS,
+          "properties"
+        );
 
         const allProperties = propertiesSnapshot.docs.map(doc => ({
           id: doc.id,
@@ -51,7 +92,6 @@ export function WelcomeSplash({ userName, userId, destination, onComplete }: Wel
           activeProperties, pendingProperties, suspendedProperties, proprietari: [],
         });
 
-
         // STEP 2: SE PROPRIETARIO
         if (isProprietario && userId) {
           setLoadingText("Caricamento tue proprietà...");
@@ -59,7 +99,6 @@ export function WelcomeSplash({ userName, userId, destination, onComplete }: Wel
 
           const ownerProperties = allProperties.filter((p: any) => p.ownerId === userId);
           const propertyIds = ownerProperties.map((p: any) => p.id);
-
 
           queryClient.setQueryData(["proprietario-properties"], {
             activeProperties: ownerProperties.filter((p: any) => p.status === "ACTIVE"),
@@ -75,13 +114,17 @@ export function WelcomeSplash({ userName, userId, destination, onComplete }: Wel
           const nextWeek = new Date();
           nextWeek.setDate(nextWeek.getDate() + 7);
 
-          const [cleaningsSnapshot, bookingsSnapshot] = await Promise.all([
-            getDocs(query(collection(db, "cleanings"),
-              where("scheduledDate", ">=", Timestamp.fromDate(todayStart)),
-              where("scheduledDate", "<=", Timestamp.fromDate(nextWeek))
-            )),
-            getDocs(collection(db, "bookings")),
-          ]);
+          const [cleaningsSnapshot, bookingsSnapshot] = await withTimeout(
+            Promise.all([
+              getDocs(query(collection(db, "cleanings"),
+                where("scheduledDate", ">=", Timestamp.fromDate(todayStart)),
+                where("scheduledDate", "<=", Timestamp.fromDate(nextWeek))
+              )),
+              getDocs(collection(db, "bookings")),
+            ]),
+            QUERY_TIMEOUT_MS,
+            "proprietario-dashboard"
+          );
 
           const myCleanings = cleaningsSnapshot.docs
             .map(doc => ({ id: doc.id, ...(doc.data() as Record<string, any>) }))
@@ -93,7 +136,7 @@ export function WelcomeSplash({ userName, userId, destination, onComplete }: Wel
 
           const today = new Date();
           const todayStr = today.toISOString().split('T')[0];
-          
+
           const cleaningsToday = myCleanings.filter((c: any) => {
             const d = c.scheduledDate?.toDate?.();
             return d && d.toISOString().split('T')[0] === todayStr;
@@ -123,12 +166,8 @@ export function WelcomeSplash({ userName, userId, destination, onComplete }: Wel
             },
             upcomingCleanings
           };
-          
+
           queryClient.setQueryData(dashboardQueryKey, dashboardData);
-          
-          
-          // Verifica
-          const verify = queryClient.getQueryData(dashboardQueryKey);
 
           setProgress(80);
 
@@ -142,13 +181,17 @@ export function WelcomeSplash({ userName, userId, destination, onComplete }: Wel
           const tomorrow = new Date(today);
           tomorrow.setDate(tomorrow.getDate() + 1);
 
-          const [cleaningsSnapshot, operatorsSnapshot] = await Promise.all([
-            getDocs(query(collection(db, "cleanings"),
-              where("scheduledDate", ">=", Timestamp.fromDate(today)),
-              where("scheduledDate", "<", Timestamp.fromDate(tomorrow))
-            )),
-            getDocs(query(collection(db, "users"), where("role", "==", "OPERATORE_PULIZIE"))),
-          ]);
+          const [cleaningsSnapshot, operatorsSnapshot] = await withTimeout(
+            Promise.all([
+              getDocs(query(collection(db, "cleanings"),
+                where("scheduledDate", ">=", Timestamp.fromDate(today)),
+                where("scheduledDate", "<", Timestamp.fromDate(tomorrow))
+              )),
+              getDocs(query(collection(db, "users"), where("role", "==", "OPERATORE_PULIZIE"))),
+            ]),
+            QUERY_TIMEOUT_MS,
+            "admin-dashboard"
+          );
 
           const propertiesMap = new Map();
           propertiesSnapshot.docs.forEach(doc => propertiesMap.set(doc.id, { id: doc.id, ...(doc.data() as Record<string, any>) }));
@@ -156,18 +199,18 @@ export function WelcomeSplash({ userName, userId, destination, onComplete }: Wel
           const cleanings = cleaningsSnapshot.docs.map(doc => {
             const data = doc.data() as Record<string, any>;
             const property = propertiesMap.get(data.propertyId);
-            
+
             // 🔥 LEGGI l'array operators dal database
             let operatorsArray: Array<{id: string, name: string}> = data.operators || [];
-            
+
             // Migra vecchio formato singolo se l'array è vuoto
             if (operatorsArray.length === 0 && data.operatorId) {
               operatorsArray = [{ id: data.operatorId, name: data.operatorName || "Operatore" }];
             }
-            
+
             // Filtra operatori undefined
             operatorsArray = operatorsArray.filter(op => op && op.id);
-            
+
             return {
               id: doc.id,
               date: data.scheduledDate?.toDate?.() || new Date(),
@@ -195,19 +238,28 @@ export function WelcomeSplash({ userName, userId, destination, onComplete }: Wel
         setProgress(100);
 
         await new Promise(r => setTimeout(r, 400));
-        setFadeOut(true);
-        await new Promise(r => setTimeout(r, 600));
-        onComplete();
+        finish();
 
       } catch (error) {
-        console.error("❌ SPLASH: Errore:", error);
-        setFadeOut(true);
-        setTimeout(onComplete, 500);
+        // Copre sia gli errori reali sia i timeout delle query (withTimeout):
+        // in ogni caso si prosegue, NON si resta bloccati sullo splash.
+        console.error("❌ SPLASH: prefetch interrotto, proseguo:", error);
+        finish();
       }
     };
 
     prefetchData();
-  }, [queryClient, userId, destination, isProprietario, onComplete]);
+
+    // Cleanup: se il componente si smonta prima, niente timer orfani.
+    return () => {
+      if (watchdogRef.current) {
+        clearTimeout(watchdogRef.current);
+        watchdogRef.current = null;
+      }
+    };
+    // Mount-once: lo splash gira una sola volta per sessione.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className={`fixed inset-0 z-[9999] flex items-center justify-center bg-gradient-to-br from-cyan-500 via-sky-600 to-blue-700 transition-opacity duration-700 ${fadeOut ? "opacity-0" : "opacity-100"}`}>
@@ -238,7 +290,7 @@ export function WelcomeSplash({ userName, userId, destination, onComplete }: Wel
 
         <div className="w-72 mx-auto mb-5">
           <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
-            <div className="h-full rounded-full transition-all duration-500" style={{ 
+            <div className="h-full rounded-full transition-all duration-500" style={{
               width: `${progress}%`,
               background: 'linear-gradient(90deg, rgba(34,211,238,0.8), white)',
               boxShadow: '0 0 20px rgba(34,211,238,0.6)'
