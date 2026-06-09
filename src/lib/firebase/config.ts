@@ -3,7 +3,7 @@ import {
   getFirestore,
   initializeFirestore,
   persistentLocalCache,
-  persistentMultipleTabManager,
+  persistentSingleTabManager,
 } from "firebase/firestore";
 import { getAuth, setPersistence, browserLocalPersistence } from "firebase/auth";
 import { getStorage } from "firebase/storage";
@@ -20,20 +20,29 @@ const firebaseConfig = {
 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0]!;
 
-// ⚡ PERF: initializeFirestore con due ottimizzazioni chiave.
+// ⚡ PERF + STABILITÀ PWA: initializeFirestore con cache persistente.
 //
 // 1) experimentalAutoDetectLongPolling — con un service worker attivo (notifiche
-//    push) e certe reti/proxy, la connessione WebSocket di Firestore può fallire
-//    e ricadere su long-polling solo DOPO un timeout di ~10-15s → attesa all'avvio.
-//    L'autodetect sceglie subito il tipo di connessione giusto.
+//    push) e certe reti/proxy, la connessione di Firestore può ricadere su
+//    long-polling solo DOPO un timeout → attesa all'avvio. L'autodetect sceglie
+//    subito il tipo di connessione giusto. (Invariato.)
 //
-// 2) persistentLocalCache (IndexedDB) — QUESTA è la chiave della latenza alla
-//    RIAPERTURA. Senza cache persistente, ad ogni apertura dell'app TUTTI i
-//    listener onSnapshot riscaricano i dati dal server da zero (~10s). Con la
-//    cache persistente, onSnapshot serve ISTANTANEAMENTE l'ultimo stato noto dal
-//    disco e poi sincronizza in background solo i delta. Risultato: dati reali
-//    visibili in pochi ms, non in 10 secondi. persistentMultipleTabManager evita
-//    conflitti quando l'app è aperta in più schede contemporaneamente.
+// 2) persistentLocalCache (IndexedDB) — cache su disco: alla riapertura i listener
+//    onSnapshot servono ISTANTANEAMENTE l'ultimo stato noto e poi sincronizzano
+//    solo i delta in background. Dati reali in pochi ms, non in ~10s. (Invariato.)
+//
+// 3) ⚠️ tabManager: persistentSingleTabManager (PRIMA: persistentMultipleTabManager).
+//    Il multi-tab manager condivide la cache IndexedDB tra più schede usando un
+//    "primary lease" (lock). Su PWA INSTALLATA in standalone (soprattutto iOS) quel
+//    lock può restare bloccato quando l'app va in background/ripresa o resta
+//    un'istanza zombie → la prima operazione Firestore (getDocs/onSnapshot) resta
+//    appesa all'infinito = splash bloccato e dati fermi. Su mobile/PWA non esistono
+//    di fatto più schede, quindi il multi-tab non serve ma porta solo il rischio di
+//    deadlock. Il single-tab manager mantiene la cache persistente SENZA la
+//    negoziazione del lease, eliminando la causa di stallo.
+//    Trade-off: su DESKTOP con più schede aperte contemporaneamente, solo una scheda
+//    usa la cache su disco; le altre funzionano comunque (Firestore opera regolare)
+//    ma senza cache condivisa. Nessun blocco — solo meno ottimizzazione su schede extra.
 //
 // Se Firestore è già inizializzato (hot reload / doppio import) o IndexedDB non è
 // disponibile (es. modalità privata su alcuni browser), ricade su getFirestore.
@@ -42,7 +51,7 @@ export const db = (() => {
     return initializeFirestore(app, {
       experimentalAutoDetectLongPolling: true,
       localCache: persistentLocalCache({
-        tabManager: persistentMultipleTabManager(),
+        tabManager: persistentSingleTabManager(undefined),
       }),
     });
   } catch {
