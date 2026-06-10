@@ -1203,15 +1203,25 @@ export const PulizieContent = React.memo(function PulizieContent({
     return days;
   }, [currentDate]);
 
+  // 🚀 CACHE TAB CALENDARIO: dopo la prima apertura resta MONTATO (nascosto con
+  // display:none) → i cambi tab successivi sono istantanei e lo store realtime
+  // continua ad aggiornarlo anche in background.
+  const [calendarEverOpened, setCalendarEverOpened] = useState(false);
+  useEffect(() => {
+    if (viewMode === "calendar" && !calendarEverOpened) setCalendarEverOpened(true);
+  }, [viewMode, calendarEverOpened]);
+
   // 🚀 PERF CALENDARIO: pre-indice O(N) del mese visibile.
   // PRIMA: per OGNI proprietà si filtrava l'INTERO store pulizie (12 mesi) e per
   // ogni pulizia si faceva new Date() + ganttDays.findIndex(isSameDay) — anche per
   // pulizie di mesi non visibili, scartate DOPO aver pagato il calcolo.
   // ORA: un solo passaggio su cleanings → mappa propertyId → [{cleaning, dayIndex}]
   // del SOLO mese visibile, con dayIndex risolto via lookup O(1).
+  // ⛔ GATE: finché il calendario non è MAI stato aperto, ritorna mappa vuota
+  // senza iterare nulla → il tab Lista non paga alcun costo aggiuntivo.
   const monthCleaningsByProp = useMemo(() => {
     const map = new Map<string, { cleaning: any; dayIndex: number }[]>();
-    if (ganttDays.length === 0) return map;
+    if (!calendarEverOpened || ganttDays.length === 0) return map;
     const year = ganttDays[0]!.date.getFullYear();
     const month = ganttDays[0]!.date.getMonth();
     for (const cleaning of cleanings) {
@@ -1224,15 +1234,7 @@ export const PulizieContent = React.memo(function PulizieContent({
       arr.push({ cleaning, dayIndex });
     }
     return map;
-  }, [cleanings, ganttDays]);
-
-  // 🚀 CACHE TAB CALENDARIO: dopo la prima apertura resta MONTATO (nascosto con
-  // display:none) → i cambi tab successivi sono istantanei e lo store realtime
-  // continua ad aggiornarlo anche in background.
-  const [calendarEverOpened, setCalendarEverOpened] = useState(false);
-  useEffect(() => {
-    if (viewMode === "calendar" && !calendarEverOpened) setCalendarEverOpened(true);
-  }, [viewMode, calendarEverOpened]);
+  }, [cleanings, ganttDays, calendarEverOpened]);
 
   // Auto-scroll al giorno corrente quando si apre il calendario
   useEffect(() => {
