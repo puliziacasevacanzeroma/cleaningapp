@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import Link from "next/link";
-import { collection, query, where, onSnapshot } from "firebase/firestore";
+import { collection, query, where, onSnapshot, doc, getDoc } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 import { useRealtimePayments, useRealtimePaymentsTimeline } from "~/hooks/useRealtimePayments";
 
@@ -595,6 +595,19 @@ export default function PagamentiPage() {
   const [mainTab, setMainTab] = useState<"lista" | "timeline">("lista"); // Default lista
   
   const [quickPayClient, setQuickPayClient] = useState<ClientStats | null>(null);
+  // 🧾 DATI FATTURAZIONE: modal info cliente (users/{id}.billingInfo, scritto dall'onboarding)
+  const [billingClient, setBillingClient] = useState<{ proprietarioId: string; proprietarioName: string } | null>(null);
+  const [billingData, setBillingData] = useState<any | null>(null);
+  const [billingLoading, setBillingLoading] = useState(false);
+  const openBillingModal = (proprietarioId: string, proprietarioName: string) => {
+    setBillingClient({ proprietarioId, proprietarioName });
+    setBillingData(null);
+    setBillingLoading(true);
+    getDoc(doc(db, "users", proprietarioId))
+      .then((snap) => setBillingData(snap.exists() ? ((snap.data() as any).billingInfo ?? null) : null))
+      .catch((e) => { console.error("Errore lettura billingInfo:", e); setBillingData(null); })
+      .finally(() => setBillingLoading(false));
+  };
   useEffect(() => { setMethodError(false); }, [quickPayClient]); // 🆕 reset avviso metodo all'apertura del modal
   const [editingService, setEditingService] = useState<ServiceDetail | null>(null);
   const [confirmSaldoModal, setConfirmSaldoModal] = useState<{ client: ClientStats; amount: number } | null>(null);
@@ -2228,6 +2241,137 @@ export default function PagamentiPage() {
   };
 
   // ==================== QUICK PAY MODAL ====================
+  // ═══════════════ 🧾 MODAL DATI DI FATTURAZIONE ═══════════════
+  // Mostra users/{id}.billingInfo (persona_fisica | azienda) nello stile delle
+  // altre modal della pagina. Sola lettura; se mancano i dati, lo dice.
+  const BillingInfoModal = () => {
+    if (!billingClient) return null;
+
+    const close = () => { setBillingClient(null); setBillingData(null); };
+    const b = billingData;
+    const isAzienda = b?.type === "azienda";
+
+    const Row = ({ label, value, mono }: { label: string; value?: string | null; mono?: boolean }) => (
+      <div className="flex items-start justify-between gap-3 py-2 border-b border-slate-100 last:border-b-0">
+        <span className="text-xs text-slate-500 font-semibold uppercase tracking-[0.04em] flex-shrink-0 pt-0.5">{label}</span>
+        <span className={`text-sm text-slate-800 text-right break-words min-w-0 ${mono ? "font-mono tracking-wide" : "font-semibold"}`}>
+          {value && String(value).trim() ? value : <span className="text-slate-300 font-normal">—</span>}
+        </span>
+      </div>
+    );
+
+    const addr = b?.address;
+    const addressLine = addr
+      ? [addr.street, [addr.postalCode, addr.city].filter(Boolean).join(" "), addr.province ? `(${addr.province})` : "", addr.country]
+          .filter((s: string) => s && String(s).trim()).join(", ")
+      : null;
+
+    return (
+      <>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100]" onClick={close} />
+        <div
+          className={`fixed z-[100] bg-white shadow-2xl flex flex-col ${
+            isDesktop
+              ? "inset-0 m-auto max-w-md max-h-[85vh] rounded-2xl"
+              : "inset-x-2 bottom-2 top-auto max-h-[85vh] rounded-2xl"
+          }`}
+        >
+          {/* Header */}
+          <div className="flex-shrink-0 p-3 sm:p-4 border-b border-slate-200">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white shadow-lg flex-shrink-0">
+                  <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                </div>
+                <div className="min-w-0">
+                  <h3 className="font-bold text-slate-800 text-base sm:text-lg">Dati di Fatturazione</h3>
+                  <p className="text-xs sm:text-sm text-slate-500 truncate">{billingClient.proprietarioName}</p>
+                </div>
+              </div>
+              <button onClick={close} className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl hover:bg-slate-100 flex items-center justify-center text-slate-400 flex-shrink-0">{Icons.x}</button>
+            </div>
+          </div>
+
+          {/* Body */}
+          <div className="flex-1 overflow-y-auto overscroll-contain p-3 sm:p-4 min-h-0" style={{ WebkitOverflowScrolling: "touch" }}>
+            {billingLoading ? (
+              <div className="flex flex-col items-center justify-center py-10 gap-3 text-slate-400">
+                <div className="w-8 h-8 border-[3px] border-slate-200 border-t-indigo-500 rounded-full animate-spin" />
+                <p className="text-sm font-semibold">Caricamento…</p>
+              </div>
+            ) : !b ? (
+              <div className="flex flex-col items-center justify-center py-10 gap-3 text-center">
+                <div className="w-12 h-12 rounded-full bg-amber-50 flex items-center justify-center text-amber-500">
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" /></svg>
+                </div>
+                <p className="text-sm font-semibold text-slate-600">Dati di fatturazione non presenti</p>
+                <p className="text-xs text-slate-400 max-w-[260px]">Questo cliente non ha ancora compilato i dati di fatturazione nell'onboarding (o nelle impostazioni).</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {/* Badge tipo */}
+                <div className="flex items-center gap-2">
+                  <span className={`inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.04em] px-2.5 py-1 rounded-full ${isAzienda ? "bg-indigo-50 text-indigo-600" : "bg-emerald-50 text-emerald-600"}`}>
+                    {isAzienda ? (
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                    ) : (
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                    )}
+                    {isAzienda ? "Azienda" : "Persona fisica"}
+                  </span>
+                </div>
+
+                {/* Dati anagrafici / aziendali */}
+                <div className="bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-1.5">
+                  {isAzienda ? (
+                    <>
+                      <Row label="Ragione Sociale" value={b.companyName} />
+                      <Row label="Partita IVA" value={b.vatNumber} mono />
+                      <Row label="Codice SDI" value={b.sdiCode} mono />
+                      <Row label="PEC" value={b.pecEmail} />
+                      <Row label="Codice Fiscale" value={b.fiscalCode} mono />
+                    </>
+                  ) : (
+                    <>
+                      <Row label="Nome" value={b.firstName} />
+                      <Row label="Cognome" value={b.lastName} />
+                      <Row label="Codice Fiscale" value={b.fiscalCode} mono />
+                    </>
+                  )}
+                </div>
+
+                {/* Indirizzo */}
+                <div>
+                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-[0.06em] mb-1.5 px-1">Indirizzo di fatturazione</p>
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-1.5">
+                    <Row label="Indirizzo" value={addr?.street} />
+                    <Row label="Città" value={addr ? [addr.postalCode, addr.city].filter(Boolean).join(" ") : null} />
+                    <Row label="Provincia" value={addr?.province} />
+                    <Row label="Paese" value={addr?.country} />
+                  </div>
+                </div>
+
+                {/* Copia rapida */}
+                <button
+                  onClick={() => {
+                    const lines = isAzienda
+                      ? [b.companyName, `P.IVA ${b.vatNumber || "—"}`, b.fiscalCode ? `CF ${b.fiscalCode}` : null, `SDI ${b.sdiCode || "—"}`, b.pecEmail ? `PEC ${b.pecEmail}` : null, addressLine]
+                      : [`${b.firstName || ""} ${b.lastName || ""}`.trim(), `CF ${b.fiscalCode || "—"}`, addressLine];
+                    navigator.clipboard?.writeText(lines.filter(Boolean).join("\n")).catch(() => {});
+                  }}
+                  className="w-full inline-flex items-center justify-center gap-2 text-[13px] font-semibold text-indigo-600 border border-slate-200 hover:bg-slate-50 px-3 py-2.5 rounded-xl active:scale-[0.98] transition-all"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                  Copia dati per fattura
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </>
+    );
+  };
+
   const QuickPayModal = () => {
     if (!quickPayClient) return null;
     const [paymentMode, setPaymentMode] = useState<"totale" | "acconto">("totale");
@@ -2623,6 +2767,14 @@ export default function PagamentiPage() {
                 </button>
               )}
             </div>
+            <button
+              onClick={(e) => { e.stopPropagation(); openBillingModal(client.proprietarioId, client.proprietarioName); }}
+              className="w-8 h-8 rounded-lg border border-slate-200 hover:bg-slate-50 flex items-center justify-center text-slate-400 hover:text-indigo-600 active:scale-95 transition-all flex-shrink-0"
+              title="Dati di fatturazione"
+              aria-label="Dati di fatturazione"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            </button>
             <button
               onClick={handleExpand}
               className="inline-flex items-center gap-1 text-[12px] font-semibold text-indigo-600 border border-slate-200 hover:bg-slate-50 px-3 py-1.5 rounded-lg active:scale-[0.98] transition-all flex-shrink-0"
@@ -4594,6 +4746,7 @@ export default function PagamentiPage() {
 
       {/* Modals - solo dopo mount per evitare hydration mismatch */}
       {mounted && <QuickPayModal />}
+      {mounted && <BillingInfoModal />}
       {mounted && <ConfirmSaldoModal />}
       {mounted && <ConfirmModal />}
       {mounted && <ServiceEditModal />}
