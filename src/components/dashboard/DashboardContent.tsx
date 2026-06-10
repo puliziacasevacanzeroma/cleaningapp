@@ -264,15 +264,18 @@ const mobileStyles = `
   body.mobile-modal-open { overflow: hidden; position: fixed; width: 100%; }
   @keyframes scaleIn { 0% { transform: scale(0.8); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
   .scale-in { animation: scaleIn 0.2s ease forwards; }
+  @keyframes dashFadeDay { from { opacity: 0; } to { opacity: 1; } }
+  .dash-fade-day { animation: dashFadeDay 0.3s ease forwards; }
 `;
 
 // 🚀 CACHE PERSISTENTE (vive tra le navigazioni, stesso tipo dati della dashboard):
 // al rientro nella dashboard mostriamo subito l'ultimo dato del giorno dalla cache
 // (niente cerchio/flash) e il listener aggiorna in tempo reale. Chiave = giorno.
-const _dayKey = (d: Date) => d.toDateString();
-const _dashCleaningsCache = new Map<string, Cleaning[]>();
-const _dashOrdersCache = new Map<string, Order[]>();
-const _capCache = <T,>(m: Map<string, T>) => { if (m.size > 40) { const k = m.keys().next().value; if (k !== undefined) m.delete(k); } };
+// 🔒 POLITICA DATI: MAI mostrare dati stantii (cache di visite precedenti o di
+// altri giorni) come se fossero attuali. Finché la snapshot fresca di Firestore
+// non arriva, si mostra il loading; al cambio giorno il contenuto si dissolve e
+// si carica il nuovo (classe .dash-fade-day in mobileStyles). Le vecchie cache
+// per-giorno sono state RIMOSSE di proposito.
 
 export function DashboardContent({ userName, stats, cleanings: initialCleanings, operators, orders: initialOrders = [], riders = [] }: DashboardContentProps) {
   const router = useRouter();
@@ -305,8 +308,11 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
   const [selectedCleaning, setSelectedCleaning] = useState<Cleaning | null>(null);
   const [assigning, setAssigning] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [cleanings, setCleanings] = useState<Cleaning[]>(() => _dashCleaningsCache.get(_dayKey(new Date())) ?? initialCleanings);
-  const [loadingCleanings, setLoadingCleanings] = useState(() => !_dashCleaningsCache.has(_dayKey(new Date())));
+  // 🔒 MAI stantio: si parte SEMPRE vuoti e in loading (niente cache, niente
+  // initialCleanings dal wrapper — può venire da localStorage di ieri). Si
+  // mostra SOLO ciò che arriva fresco da Firestore.
+  const [cleanings, setCleanings] = useState<Cleaning[]>([]);
+  const [loadingCleanings, setLoadingCleanings] = useState(true);
   
   // 🔧 FIX v2 — MAPPE AUSILIARIE: ognuna inizializzata dalla cache localStorage
   // per-utente. Previene il "flash" di card con dati mancanti al boot prima che
@@ -368,8 +374,9 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   
   // 🔴 NUOVO: Stato per ordini con listener realtime
-  const [orders, setOrders] = useState<Order[]>(() => _dashOrdersCache.get(_dayKey(new Date())) ?? initialOrders);
-  const [loadingOrders, setLoadingOrders] = useState(() => !_dashOrdersCache.has(_dayKey(new Date())));
+  // 🔒 MAI stantio (vedi sopra): vuoti + loading finché non arriva la snapshot fresca
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [loadingOrders, setLoadingOrders] = useState(true);
   const [editingTimeId, setEditingTimeId] = useState<string | null>(null);
   const [editingTime, setEditingTime] = useState("");
   const [editingGuestsId, setEditingGuestsId] = useState<string | null>(null);
@@ -714,14 +721,10 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
 
   // 🔴 LISTENER REALTIME PER PULIZIE - Si aggiorna automaticamente
   useEffect(() => {
-    const dk = _dayKey(selectedDate);
-    const cached = _dashCleaningsCache.get(dk);
-    if (cached) {
-      setCleanings(cached);        // 🆕 mostra subito i dati di QUEL giorno dalla cache
-      setLoadingCleanings(false);  // niente cerchio se già in cache
-    } else {
-      setLoadingCleanings(true);   // primo caricamento di quel giorno → loading
-    }
+    // 🔒 Cambio giorno: SEMPRE dissolvenza + caricamento fresco. Mai dati di
+    // un'altra visita o di un altro giorno mostrati nell'attesa.
+    setCleanings([]);
+    setLoadingCleanings(true);
     const startOfDay = new Date(selectedDate);
     startOfDay.setHours(0, 0, 0, 0);
     const endOfDay = new Date(selectedDate);
@@ -818,8 +821,6 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
         return true;
       });
       setCleanings(updatedCleanings);
-      _dashCleaningsCache.set(_dayKey(selectedDate), updatedCleanings); // 🆕 aggiorna cache
-      _capCache(_dashCleaningsCache);
       setLoadingCleanings(false);
     }, (error) => {
       console.error("❌ Errore listener pulizie:", error);
@@ -833,14 +834,9 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
 
   // 🔴 LISTENER REALTIME PER ORDINI - Si aggiorna automaticamente al cambio data
   useEffect(() => {
-    const dkO = _dayKey(selectedDate);
-    const cachedO = _dashOrdersCache.get(dkO);
-    if (cachedO) {
-      setOrders(cachedO);        // 🆕 subito dalla cache
-      setLoadingOrders(false);
-    } else {
-      setLoadingOrders(true);
-    }
+    // 🔒 Cambio giorno: SEMPRE dissolvenza + caricamento fresco (vedi sopra)
+    setOrders([]);
+    setLoadingOrders(true);
     const startOfDay = new Date(selectedDate);
     startOfDay.setHours(0, 0, 0, 0);
     const endOfDay = new Date(selectedDate);
@@ -904,8 +900,6 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
         return { ...o, cleaning: { scheduledTime: (linked as any).scheduledTime, status: (linked as any).status } };
       });
       setOrders(enrichedOrders);
-      _dashOrdersCache.set(_dayKey(selectedDate), enrichedOrders); // 🆕 aggiorna cache
-      _capCache(_dashOrdersCache);
       setLoadingOrders(false);
     }, (error) => {
       console.error("❌ Errore listener ordini:", error);
@@ -2289,9 +2283,9 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
           <span className="text-xs text-slate-400">{statusFilteredCleanings.length} attività</span>
         </div>
 
-        {/* Cards */}
+        {/* Cards — key sul giorno: a ogni cambio data il contenuto nuovo entra in dissolvenza */}
         <LayoutGroup>
-        <div className="space-y-3 pb-4" ref={mobileCardsRef}>
+        <div className="space-y-3 pb-4 dash-fade-day" key={selectedDate.toDateString()} ref={mobileCardsRef}>
           {loadingCleanings ? (
             <div className="bg-white rounded-2xl p-8 text-center">
               <div className="w-8 h-8 border-2 border-slate-200 border-t-sky-500 rounded-full animate-spin mx-auto mb-2"></div>
@@ -3162,8 +3156,8 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
           </div>
         </div>
 
-        {/* Cleaning Cards */}
-        <div className="space-y-4">
+        {/* Cleaning Cards — key sul giorno: contenuto nuovo in dissolvenza a ogni cambio data */}
+        <div className="space-y-4 dash-fade-day" key={selectedDate.toDateString()}>
           {loadingCleanings ? (
             <div className="bg-white rounded-2xl border border-slate-200/60 p-12 text-center">
               <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-4">
