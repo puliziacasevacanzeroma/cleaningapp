@@ -1182,7 +1182,8 @@ export const PulizieContent = React.memo(function PulizieContent({
   }, [unifiedServices, operators, propertyMap, orders]);
 
   const ganttDays = useMemo(() => {
-    if (viewMode !== "calendar") return []; // Skip in list mode
+    // (guardia viewMode rimossa: il calcolo è banale — 31 oggetti — e serve
+    // sempre popolato per la cache keep-mounted del tab calendario)
     const days = [];
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
@@ -1200,7 +1201,38 @@ export const PulizieContent = React.memo(function PulizieContent({
       });
     }
     return days;
-  }, [currentDate, viewMode]);
+  }, [currentDate]);
+
+  // 🚀 PERF CALENDARIO: pre-indice O(N) del mese visibile.
+  // PRIMA: per OGNI proprietà si filtrava l'INTERO store pulizie (12 mesi) e per
+  // ogni pulizia si faceva new Date() + ganttDays.findIndex(isSameDay) — anche per
+  // pulizie di mesi non visibili, scartate DOPO aver pagato il calcolo.
+  // ORA: un solo passaggio su cleanings → mappa propertyId → [{cleaning, dayIndex}]
+  // del SOLO mese visibile, con dayIndex risolto via lookup O(1).
+  const monthCleaningsByProp = useMemo(() => {
+    const map = new Map<string, { cleaning: any; dayIndex: number }[]>();
+    if (ganttDays.length === 0) return map;
+    const year = ganttDays[0]!.date.getFullYear();
+    const month = ganttDays[0]!.date.getMonth();
+    for (const cleaning of cleanings) {
+      if (cleaning.status === "CANCELLED") continue;
+      const d = new Date(cleaning.date);
+      if (d.getFullYear() !== year || d.getMonth() !== month) continue;
+      const dayIndex = d.getDate() - 1; // ganttDays è 1..lastDay del mese → index = giorno-1
+      let arr = map.get(cleaning.propertyId);
+      if (!arr) { arr = []; map.set(cleaning.propertyId, arr); }
+      arr.push({ cleaning, dayIndex });
+    }
+    return map;
+  }, [cleanings, ganttDays]);
+
+  // 🚀 CACHE TAB CALENDARIO: dopo la prima apertura resta MONTATO (nascosto con
+  // display:none) → i cambi tab successivi sono istantanei e lo store realtime
+  // continua ad aggiornarlo anche in background.
+  const [calendarEverOpened, setCalendarEverOpened] = useState(false);
+  useEffect(() => {
+    if (viewMode === "calendar" && !calendarEverOpened) setCalendarEverOpened(true);
+  }, [viewMode, calendarEverOpened]);
 
   // Auto-scroll al giorno corrente quando si apre il calendario
   useEffect(() => {
@@ -2799,9 +2831,10 @@ export const PulizieContent = React.memo(function PulizieContent({
             </div>
           </div>
 
-          {/* Calendario — renderizzato SOLO quando visibile */}
-          {viewMode === "calendar" && (
-          <div ref={calContainerRef}>
+          {/* Calendario — montato alla PRIMA apertura, poi resta in cache (display:none)
+              → cambi tab istantanei; lo store realtime lo aggiorna anche da nascosto */}
+          {calendarEverOpened && (
+          <div ref={calContainerRef} style={{ display: viewMode === "calendar" ? undefined : "none" }}>
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200">
               
               {/* Navigation header */}
@@ -2887,11 +2920,12 @@ export const PulizieContent = React.memo(function PulizieContent({
                   <div className="p-8 text-center text-slate-500">Nessuna proprietà trovata</div>
                 ) : (
                   filteredProperties.map((property, propIndex) => {
-                    // 🔧 FIX: Escludi pulizie CANCELLED dal Gantt
-                    const propertyCleanings = cleanings.filter(c => c.propertyId === property.id && c.status !== "CANCELLED");
+                    // 🚀 PERF: lookup O(1) dal pre-indice del mese (già senza CANCELLED
+                    // e con dayIndex risolto) — prima: filter sull'intero store per OGNI riga
+                    const propertyCleanings = monthCleaningsByProp.get(property.id) ?? [];
                     
                     return (
-                      <div key={property.id} className="relative h-[70px] border-b-2 border-slate-200 last:border-b-0" style={{ width: `${ganttDays.length * 60}px` }}>
+                      <div key={property.id} className="relative h-[70px] border-b-2 border-slate-200 last:border-b-0" style={{ width: `${ganttDays.length * 60}px`, contentVisibility: "auto", containIntrinsicSize: "auto 70px" }}>
                         
                         {/* Badge nome proprietà */}
                         <div 
@@ -2923,10 +2957,9 @@ export const PulizieContent = React.memo(function PulizieContent({
                         </div>
 
                         {/* Blocchi pulizie */}
-                        {propertyCleanings.map((cleaning) => {
+                        {propertyCleanings.map(({ cleaning, dayIndex }) => {
+                          // 🚀 dayIndex già risolto dal pre-indice (niente new Date + findIndex per chip)
                           const cleaningDate = new Date(cleaning.date);
-                          const dayIndex = ganttDays.findIndex(d => isSameDay(d.date, cleaningDate));
-                          if (dayIndex === -1) return null;
                           const status = getStatusConfig(cleaning.status, !!cleaning.operator);
                           
                           // Calcola deadline e stato ospiti
