@@ -283,7 +283,11 @@ export async function GET(request: NextRequest) {
         let scadMonth = ms.m + 1;
         let scadYear = ms.y;
         if (scadMonth > 12) { scadMonth = 1; scadYear++; }
-        const scadenza = new Date(scadYear, scadMonth - 1, SCADENZA_GIORNO, 23, 59, 59);
+        // 🔧 FIX scadenza: il blocco deve essere ATTIVO il giorno 10 (coerente con
+        // le email di sollecito: "sospensione il 10"). Quindi l'ultimo giorno utile
+        // per pagare è il 9 (fino alle 23:59:59): dal 10 alle 08:00 il cron blocca.
+        // Prima: scadenza = il 10 alle 23:59:59 → il blocco scattava solo l'11.
+        const scadenza = new Date(scadYear, scadMonth - 1, SCADENZA_GIORNO - 1, 23, 59, 59);
 
         if (now <= scadenza) continue;
         if (ms.saldo === null) continue;
