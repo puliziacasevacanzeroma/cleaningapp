@@ -185,15 +185,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      // 🔥 FIX: Se l'ID ha il vecchio formato "user_XXX_XXX", forza re-verifica immediata
-      const hasOldIdFormat = storedUser.id && (
-        storedUser.id.startsWith("user_") || 
-        storedUser.id.includes("_") && storedUser.id.length > 25
-      );
-      if (hasOldIdFormat) {
-        console.log("🔧 AuthContext: ID vecchio formato rilevato, forzo re-verifica");
-        localStorage.removeItem("last-auth-check");
-      }
+      // NOTA STORICA: qui c'era una euristica "ID vecchio formato" che forzava
+      // la re-verifica completa (getDoc + rinnovo sessione) a OGNI page load
+      // per qualunque ID che iniziasse con "user_". Ma gli ID reali degli
+      // utenti SONO in formato "user_<timestamp>_<random>": la euristica
+      // scattava sempre, per tutti, vanificando la cache 24h e aggiungendo
+      // round-trip inutili a ogni caricamento. Il caso che voleva coprire
+      // (ID in localStorage non più esistente su Firestore) è già gestito
+      // dal fallback per email dentro verifyUserInDatabase.
 
       // Il cookie JWT lato server è la fonte di verità per l'autenticazione.
       // Qui facciamo solo una verifica DB opzionale ogni 24h per aggiornare
