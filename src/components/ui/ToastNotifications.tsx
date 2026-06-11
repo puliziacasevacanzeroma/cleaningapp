@@ -68,26 +68,59 @@ export function useToast() {
 let lastBecameVisibleAt = Date.now();
 
 // Tolleranza per lo sfasamento tra orologio del client e timestamp del server
-// (createdAt e' ora-server). 60s: una notifica "vera" arriva pochi secondi dopo
-// l'apertura, il backlog e' quasi sempre vecchio di minuti/ore -> resta escluso.
-const CLOCK_SKEW_TOLERANCE_MS = 60_000;
+// (createdAt e' ora-server). 🔧 FIX raffica: era 60s e faceva passare come "vive"
+// tutte le notifiche create nell'ultimo minuto PRIMA della riapertura. I telefoni
+// sono sincronizzati NTP (skew tipico <2s): 10s bastano e chiudono il buco.
+const CLOCK_SKEW_TOLERANCE_MS = 10_000;
 
-// Grazia breve usata SOLO come rete di sicurezza centrale (es. cambi stato
-// ordini che al risveglio possono ri-emettere diff in blocco).
+// Grazia breve di base (rete di sicurezza per diff in blocco al risveglio).
 const VISIBILITY_GRACE_MS = 1500;
+
+// 🔧 FIX raffica — FINESTRA DI RIENTRO: la grazia di 1.5s non bastava, perche'
+// su mobile la riconnessione Firestore dopo un resume puo' impiegare 2-10s e il
+// backlog veniva consegnato A GRAZIA SCADUTA → cascata di toast.
+// Ora: se l'app e' stata in background per un periodo REALE (>10s), al rientro
+// apriamo una finestra di soppressione di 12s: tutto cio' che viene consegnato
+// li' dentro (il backlog, quando arriva arriva) NON fa toast — resta campanella
+// + push, come deve. Le micro-uscite (<10s, es. alt-tab) non attivano nulla:
+// l'esperienza dentro l'app non cambia.
+const MIN_HIDDEN_FOR_RESUME_MS = 10_000;
+const RESUME_SUPPRESS_MS = 12_000;
+let lastBecameHiddenAt: number | null = null;
+let resumeSuppressUntil = 0;
+
+/** Vero se siamo nella finestra di soppressione post-rientro. */
+function inResumeSuppressionWindow(): boolean {
+  return Date.now() < resumeSuppressUntil;
+}
 
 function markForeground() {
   if (typeof document === "undefined" || document.visibilityState === "visible") {
-    lastBecameVisibleAt = Date.now();
+    const now = Date.now();
+    // Rientro da un background "vero" → apri la finestra di soppressione
+    if (lastBecameHiddenAt !== null && now - lastBecameHiddenAt >= MIN_HIDDEN_FOR_RESUME_MS) {
+      resumeSuppressUntil = now + RESUME_SUPPRESS_MS;
+    }
+    lastBecameHiddenAt = null;
+    lastBecameVisibleAt = now;
   }
 }
 
 if (typeof document !== "undefined") {
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") {
-      lastBecameVisibleAt = Date.now();
+      markForeground();
+    } else {
+      // Registra QUANDO siamo andati in background (serve a distinguere
+      // micro-uscite da assenze vere al rientro)
+      if (lastBecameHiddenAt === null) lastBecameHiddenAt = Date.now();
     }
   });
+  // Page Lifecycle (mobile/PWA): freeze puo' scattare senza visibilitychange
+  document.addEventListener("freeze", () => {
+    if (lastBecameHiddenAt === null) lastBecameHiddenAt = Date.now();
+  });
+  document.addEventListener("resume", markForeground);
 }
 if (typeof window !== "undefined") {
   // Mobile/PWA: a volte al risveglio scatta focus/pageshow invece di
@@ -255,10 +288,10 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     // 🔇 Non mostrare il "backlog": quando l'app torna in primo piano dopo essere
     // stata in background/chiusa, i listener Firestore sputano in blocco le
     // notifiche accumulate. Quelle le hai già ricevute come push: NON devono
-    // comparire come raffica di toast. Le ignoriamo nei primi istanti dopo il
-    // ritorno in primo piano. I toast genuini (arrivati mentre usi l'app)
-    // passano normalmente perché distano molto più del periodo di grazia.
-    if (Date.now() - lastBecameVisibleAt < VISIBILITY_GRACE_MS) {
+    // comparire come raffica di toast.
+    // 🔧 FIX raffica: oltre alla grazia breve, rispettiamo la FINESTRA DI RIENTRO
+    // (12s dopo un background reale) — copre anche le riconnessioni lente.
+    if (inResumeSuppressionWindow() || Date.now() - lastBecameVisibleAt < VISIBILITY_GRACE_MS) {
       return;
     }
     
