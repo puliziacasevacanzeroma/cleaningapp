@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useLayoutEffect } from "react";
+import { useState, useRef, useEffect, useLayoutEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence, LayoutGroup } from "framer-motion";
@@ -10,6 +10,7 @@ import CleaningActionModal from "~/components/cleaning/CleaningActionModal";
 import CleaningCardAdmin from "~/components/cleaning/CleaningCardAdmin";
 import { db } from "~/lib/firebase/config";
 import { collection, query, where, onSnapshot, orderBy, Timestamp, getDocs, doc, updateDoc, deleteField } from "firebase/firestore";
+import { resolveAvailability, type ShiftExceptionType } from "~/lib/shifts/availability";
 import { calculateDotazioni } from "~/lib/calculateDotazioni";
 
 /**
@@ -308,6 +309,61 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
   const [selectedCleaning, setSelectedCleaning] = useState<Cleaning | null>(null);
   const [assigning, setAssigning] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date());
+
+  // ════════════════════════════════════════════════════════════
+  // TURNI — disponibilità pianificata (badge nei selettori operatore
+  // + popup urgenza con grafica app al posto di window.confirm)
+  // ════════════════════════════════════════════════════════════
+
+  // workSchedule realtime: le props `operators` arrivano dal server STRIPPATE
+  // (getUsers non include workSchedule), quindi serve un listener dedicato
+  const [opSchedules, setOpSchedules] = useState<Map<string, Record<string, boolean> | null>>(new Map());
+  useEffect(() => {
+    const q = query(collection(db, "users"), where("role", "==", "OPERATORE_PULIZIE"));
+    const unsub = onSnapshot(q, (snap) => {
+      const m = new Map<string, Record<string, boolean> | null>();
+      snap.docs.forEach((d) => m.set(d.id, ((d.data() as Record<string, any>).workSchedule as Record<string, boolean>) || null));
+      setOpSchedules(m);
+    }, () => setOpSchedules(new Map())); // fail-open: il server fa comunque enforcement
+    return () => unsub();
+  }, []);
+
+  // Eccezioni turni del giorno selezionato in dashboard
+  const selectedDateKey = useMemo(
+    () => new Date(selectedDate).toLocaleDateString("en-CA", { timeZone: "Europe/Rome" }),
+    [selectedDate]
+  );
+  const [dayShiftExceptions, setDayShiftExceptions] = useState<Map<string, ShiftExceptionType>>(new Map());
+  useEffect(() => {
+    const q = query(collection(db, "shiftExceptions"), where("dateKey", "==", selectedDateKey));
+    const unsub = onSnapshot(q, (snap) => {
+      const m = new Map<string, ShiftExceptionType>();
+      snap.docs.forEach((d) => {
+        const raw = d.data() as Record<string, any>;
+        if (raw.userId) m.set(raw.userId, raw.type === "OFF" ? "OFF" : "ON");
+      });
+      setDayShiftExceptions(m);
+    }, () => setDayShiftExceptions(new Map()));
+    return () => unsub();
+  }, [selectedDateKey]);
+
+  // Badge disponibilità per un operatore nel giorno selezionato (null = in turno normale)
+  const getOpShiftBadge = (opId: string): { label: string; cls: string } | null => {
+    const av = resolveAvailability(opSchedules.get(opId) ?? null, dayShiftExceptions.get(opId) ?? null, selectedDateKey);
+    if (av.source === "exception_off") return { label: "ASSENTE", cls: "bg-rose-100 text-rose-600" };
+    if (av.source === "template_off") return { label: "NON IN TURNO", cls: "bg-slate-200 text-slate-500" };
+    if (av.source === "exception_on") return { label: "TURNO EXTRA", cls: "bg-purple-100 text-purple-600" };
+    return null;
+  };
+
+  // Popup conferma urgenza (sostituisce window.confirm, grafica in linea con l'app)
+  const [urgencyPrompt, setUrgencyPrompt] = useState<{ message: string; resolve: (ok: boolean) => void } | null>(null);
+  const askUrgency = (message: string) =>
+    new Promise<boolean>((resolve) => setUrgencyPrompt({ message, resolve }));
+  const answerUrgency = (ok: boolean) => {
+    urgencyPrompt?.resolve(ok);
+    setUrgencyPrompt(null);
+  };
   // 🔒 MAI stantio: si parte SEMPRE vuoti e in loading (niente cache, niente
   // initialCleanings dal wrapper — può venire da localStorage di ieri). Si
   // mostra SOLO ciò che arriva fresco da Firestore.
@@ -1058,11 +1114,7 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
     if (res.status === 409) {
       const data = await res.clone().json().catch(() => ({} as Record<string, any>));
       if (data.code === "SHIFT_UNAVAILABLE") {
-        const ok = window.confirm(
-          `⚠️ ${data.error || "L'operatore non è in turno questo giorno"}.\n\n` +
-          `Assegnare comunque come CHIAMATA D'URGENZA?\n` +
-          `(Verrà aggiunto un turno extra nella pagina Turni e l'operatore riceverà una notifica)`
-        );
+        const ok = await askUrgency(data.error || "L'operatore non è in turno questo giorno");
         if (ok) {
           res = await fetch('/api/dashboard/cleanings/' + cleaningId + '/assign', {
             method: "POST",
@@ -2870,7 +2922,9 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
                       </div>
                       <div className="text-left flex-1">
                         <p className="font-semibold text-gray-700">{op.name}</p>
-                        <p className="text-xs text-gray-400">Operatore pulizie</p>
+                        {(() => { const b = getOpShiftBadge(op.id); return b
+                          ? <span className={`inline-block text-[10px] font-bold px-1.5 py-0.5 rounded ${b.cls}`}>{b.label}</span>
+                          : <p className="text-xs text-gray-400">Operatore pulizie</p>; })()}
                       </div>
                       {isSelected && <div className="w-2 h-2 rounded-full bg-purple-500 animate-pulse"></div>}
                     </button>
@@ -3304,6 +3358,46 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
       </div>
 
       {/* Modal Assegna Operatore (Desktop) */}
+      {/* ── POPUP CONFERMA CHIAMATA D'URGENZA (turni) ── */}
+      {urgencyPrompt && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[70] p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
+            <div className="bg-gradient-to-r from-rose-500 to-purple-600 px-6 py-4 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
+                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white">Operatore fuori turno</h3>
+                <p className="text-rose-100 text-xs">Conferma chiamata d'urgenza</p>
+              </div>
+            </div>
+            <div className="p-5">
+              <p className="text-sm text-slate-700 mb-2">{urgencyPrompt.message}.</p>
+              <p className="text-xs text-slate-400 mb-5">
+                Confermando verrà aggiunto un turno extra nella pagina Turni e l'operatore riceverà una notifica.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => answerUrgency(false)}
+                  className="flex-1 px-4 py-2.5 border border-slate-200 text-slate-700 rounded-xl hover:bg-slate-50 transition-colors font-medium"
+                >
+                  Annulla
+                </button>
+                <button
+                  onClick={() => answerUrgency(true)}
+                  className="flex-1 px-4 py-2.5 rounded-xl text-white font-semibold transition-all hover:opacity-90"
+                  style={{ background: 'linear-gradient(135deg, #f43f5e 0%, #9333ea 100%)', boxShadow: '0 4px 12px rgba(244,63,94,0.3)' }}
+                >
+                  Assegna urgenza
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showAssignModal && selectedCleaning && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
@@ -3336,6 +3430,9 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
                         <span className="text-sm font-bold text-white">{getInitials(operator.name)}</span>
                       </div>
                       <span className="font-medium text-slate-800">{operator.name}</span>
+                      {(() => { const b = getOpShiftBadge(operator.id); return b
+                        ? <span className={`ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded ${b.cls}`}>{b.label}</span>
+                        : null; })()}
                     </button>
                   ))
                 )}
@@ -3681,7 +3778,9 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
                     {/* Nome */}
                     <div className="text-left flex-1">
                       <p className="font-semibold text-gray-700">{op.name}</p>
-                      <p className="text-xs text-gray-400">Operatore pulizie</p>
+                      {(() => { const b = getOpShiftBadge(op.id); return b
+                        ? <span className={`inline-block text-[10px] font-bold px-1.5 py-0.5 rounded ${b.cls}`}>{b.label}</span>
+                        : <p className="text-xs text-gray-400">Operatore pulizie</p>; })()}
                     </div>
                     
                     {/* Indicatore selezione */}

@@ -2,8 +2,9 @@
 
 import { useState, useRef, forwardRef, useImperativeHandle, lazy, Suspense, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { doc, updateDoc, deleteField } from "firebase/firestore";
+import { doc, updateDoc, deleteField, collection, query, where, onSnapshot } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
+import { resolveAvailability, type ShiftExceptionType } from "~/lib/shifts/availability";
 
 const GuestModal = lazy(() => import("~/components/proprietario/GuestModal").then(m => ({ default: m.GuestModal })));
 const GuestSuccessToast = lazy(() => import("~/components/proprietario/GuestSuccessToast").then(m => ({ default: m.GuestSuccessToast })));
@@ -68,6 +69,58 @@ export const PulizieModals = forwardRef<PulizieModalsHandle, PulizieModalsProps>
   const [operatorModalCleaning, setOperatorModalCleaning] = useState<Cleaning | null>(null);
   const [selectedOperatorIds, setSelectedOperatorIds] = useState<string[]>([]);
   const [savingOperator, setSavingOperator] = useState(false);
+
+  // ════════════════════════════════════════════════════════════
+  // TURNI — disponibilità per il giorno della pulizia nel modal operatori
+  // (badge "ASSENTE / NON IN TURNO / TURNO EXTRA" + popup urgenza in stile app)
+  // ════════════════════════════════════════════════════════════
+  const [opSchedules, setOpSchedules] = useState<Map<string, Record<string, boolean> | null>>(new Map());
+  useEffect(() => {
+    if (!isAdmin) return; // i turni servono solo nel flusso admin
+    const q = query(collection(db, "users"), where("role", "==", "OPERATORE_PULIZIE"));
+    const unsub = onSnapshot(q, (snap) => {
+      const m = new Map<string, Record<string, boolean> | null>();
+      snap.docs.forEach((d) => m.set(d.id, ((d.data() as Record<string, any>).workSchedule as Record<string, boolean>) || null));
+      setOpSchedules(m);
+    }, () => setOpSchedules(new Map()));
+    return () => unsub();
+  }, [isAdmin]);
+
+  const opModalDateKey = operatorModalCleaning
+    ? new Date(operatorModalCleaning.date).toLocaleDateString("en-CA", { timeZone: "Europe/Rome" })
+    : null;
+  const [opModalExceptions, setOpModalExceptions] = useState<Map<string, ShiftExceptionType>>(new Map());
+  useEffect(() => {
+    if (!opModalDateKey || !isAdmin) { setOpModalExceptions(new Map()); return; }
+    const q = query(collection(db, "shiftExceptions"), where("dateKey", "==", opModalDateKey));
+    const unsub = onSnapshot(q, (snap) => {
+      const m = new Map<string, ShiftExceptionType>();
+      snap.docs.forEach((d) => {
+        const raw = d.data() as Record<string, any>;
+        if (raw.userId) m.set(raw.userId, raw.type === "OFF" ? "OFF" : "ON");
+      });
+      setOpModalExceptions(m);
+    }, () => setOpModalExceptions(new Map()));
+    return () => unsub();
+  }, [opModalDateKey, isAdmin]);
+
+  const getOpShiftBadge = (opId: string): { label: string; cls: string } | null => {
+    if (!opModalDateKey) return null;
+    const av = resolveAvailability(opSchedules.get(opId) ?? null, opModalExceptions.get(opId) ?? null, opModalDateKey);
+    if (av.source === "exception_off") return { label: "ASSENTE", cls: "bg-rose-100 text-rose-600" };
+    if (av.source === "template_off") return { label: "NON IN TURNO", cls: "bg-slate-200 text-slate-500" };
+    if (av.source === "exception_on") return { label: "TURNO EXTRA", cls: "bg-purple-100 text-purple-600" };
+    return null;
+  };
+
+  // Popup conferma urgenza (grafica app, sostituisce window.confirm)
+  const [urgencyPrompt, setUrgencyPrompt] = useState<{ message: string; resolve: (ok: boolean) => void } | null>(null);
+  const askUrgency = (message: string) =>
+    new Promise<boolean>((resolve) => setUrgencyPrompt({ message, resolve }));
+  const answerUrgency = (ok: boolean) => {
+    urgencyPrompt?.resolve(ok);
+    setUrgencyPrompt(null);
+  };
   const [showNewCleaningModal, setShowNewCleaningModal] = useState(false);
   const [showOrderDetailModal, setShowOrderDetailModal] = useState(false);
   const [selectedOrderForDetail, setSelectedOrderForDetail] = useState<Order | null>(null);
@@ -195,38 +248,68 @@ export const PulizieModals = forwardRef<PulizieModalsHandle, PulizieModalsProps>
     }
   };
 
+  // FIX TURNI: prima faceva updateDoc DIRETTO su Firestore, bypassando il
+  // check turni e lasciando lo status sporco quando si rimuovevano tutti gli
+  // operatori. Ora passa dall'API dashboard: enforcement turni (409 + popup
+  // urgenza), status gestito dal server (ASSIGNED/SCHEDULED) e notifiche.
   const saveOperatorFromModal = async () => {
     if (!operatorModalCleaning) return;
     setSavingOperator(true);
     try {
-      const cleaningRef = doc(db, "cleanings", operatorModalCleaning.id);
-      
-      if (selectedOperatorIds.length > 0) {
-        // Costruisci array di operatori
-        const selectedOps = selectedOperatorIds.map(id => {
-          const op = operators.find(o => o.id === id);
-          return { id: id, name: op?.name || "" };
-        });
-        
-        // Salva anche il primo come operator singolo per retrocompatibilità
-        await updateDoc(cleaningRef, {
-          operators: selectedOps,
-          operatorId: selectedOps[0].id,
-          operatorName: selectedOps[0].name,
-          operator: selectedOps[0],
-          status: "SCHEDULED",
-          updatedAt: new Date()
-        });
-      } else {
-        // Nessun operatore selezionato
-        await updateDoc(cleaningRef, {
-          operators: [],
-          operatorId: null,
-          operatorName: null,
-          operator: null,
-          updatedAt: new Date()
-        });
+      const cleaningId = operatorModalCleaning.id;
+
+      // Operatori attualmente assegnati (array + fallback legacy)
+      const currentIds: string[] = [];
+      if (operatorModalCleaning.operators && operatorModalCleaning.operators.length > 0) {
+        operatorModalCleaning.operators.forEach(op => { if (op.id) currentIds.push(op.id); });
+      } else if (operatorModalCleaning.operator?.id) {
+        currentIds.push(operatorModalCleaning.operator.id);
       }
+
+      const target = selectedOperatorIds;
+      const toRemove = currentIds.filter(id => !target.includes(id));
+      const toAdd = target.filter(id => !currentIds.includes(id));
+
+      // 1. Rimozioni (il server riporta lo status a SCHEDULED se resta vuoto)
+      for (const opId of toRemove) {
+        const res = await fetch('/api/dashboard/cleanings/' + cleaningId + '/assign', {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ operatorId: opId })
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          alert("⚠️ Errore rimozione operatore: " + (err.error || res.status));
+        }
+      }
+
+      // 2. Aggiunte con check turni (409 → popup urgenza → retry force)
+      for (const opId of toAdd) {
+        let res = await fetch('/api/dashboard/cleanings/' + cleaningId + '/assign', {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ operatorId: opId })
+        });
+        if (res.status === 409) {
+          const data = await res.clone().json().catch(() => ({} as Record<string, any>));
+          if (data.code === "SHIFT_UNAVAILABLE") {
+            const ok = await askUrgency(data.error || "L'operatore non è in turno questo giorno");
+            if (ok) {
+              res = await fetch('/api/dashboard/cleanings/' + cleaningId + '/assign', {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ operatorId: opId, force: true, forceReason: "Chiamata d'urgenza confermata da pagina pulizie" })
+              });
+            }
+            // se rifiuta: l'operatore semplicemente non viene assegnato
+          }
+        }
+        if (!res.ok && res.status !== 409) {
+          const err = await res.json().catch(() => ({}));
+          alert("⚠️ Errore assegnazione: " + (err.error || res.status));
+        }
+      }
+
       setShowOperatorModal(false);
       setOperatorModalCleaning(null);
     } catch (error) {
@@ -716,6 +799,47 @@ export const PulizieModals = forwardRef<PulizieModalsHandle, PulizieModalsProps>
       )}
 
       {/* ========== MODAL OPERATORE (MULTISELEZIONE) ========== */}
+      {/* ── POPUP CONFERMA CHIAMATA D'URGENZA (turni) ── */}
+      {urgencyPrompt && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[70] p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
+            <div className="bg-gradient-to-r from-rose-500 to-purple-600 px-6 py-4 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
+                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white">Operatore fuori turno</h3>
+                <p className="text-rose-100 text-xs">Conferma chiamata d'urgenza</p>
+              </div>
+            </div>
+            <div className="p-5">
+              <p className="text-sm text-slate-700 mb-2">{urgencyPrompt.message}.</p>
+              <p className="text-xs text-slate-400 mb-5">
+                Confermando verrà aggiunto un turno extra nella pagina Turni e l'operatore riceverà una notifica.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => answerUrgency(false)}
+                  className="flex-1 px-4 py-2.5 border border-slate-200 text-slate-700 rounded-xl hover:bg-slate-50 transition-colors font-medium"
+                >
+                  Annulla
+                </button>
+                <button
+                  onClick={() => answerUrgency(true)}
+                  className="flex-1 px-4 py-2.5 rounded-xl text-white font-semibold transition-all hover:opacity-90"
+                  style={{ background: 'linear-gradient(135deg, #f43f5e 0%, #9333ea 100%)', boxShadow: '0 4px 12px rgba(244,63,94,0.3)' }}
+                >
+                  Assegna urgenza
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
       {showOperatorModal && operatorModalCleaning && typeof document !== 'undefined' && createPortal(
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-3xl w-full max-w-sm overflow-hidden" style={{ boxShadow: '0 25px 50px rgba(0,0,0,0.25)' }}>
@@ -799,7 +923,9 @@ export const PulizieModals = forwardRef<PulizieModalsHandle, PulizieModalsProps>
                     {/* Nome */}
                     <div className="text-left flex-1">
                       <p className="font-semibold text-gray-700">{op.name}</p>
-                      <p className="text-xs text-gray-400">Operatore pulizie</p>
+                      {(() => { const b = getOpShiftBadge(op.id); return b
+                        ? <span className={`inline-block text-[10px] font-bold px-1.5 py-0.5 rounded ${b.cls}`}>{b.label}</span>
+                        : <p className="text-xs text-gray-400">Operatore pulizie</p>; })()}
                     </div>
                     
                     {/* Indicatore selezione */}
