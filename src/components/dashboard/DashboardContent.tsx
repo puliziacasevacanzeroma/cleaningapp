@@ -812,6 +812,24 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
     return () => unsubscribe();
   }, []);
 
+  // ════════════════════════════════════════════════════════════
+  // PERF (fix 10s cold load): i listener pulizie/ordini avevano le mappe
+  // proprietà nelle DIPENDENZE dell'effect. Quando il listener properties
+  // consegnava le mappe fresche (~5s), l'effect SMONTAVA e RIATTACCAVA i
+  // listener da zero, ripagando l'intero costo del primo snapshot (~4-5s):
+  // card a schermo a ~10s. Ora: i listener attaccano UNA volta (dipendono
+  // solo dalla data), le mappe si leggono via ref sempre-aggiornata, e
+  // quando cambiano si RICOSTRUISCE IN MEMORIA dall'ultimo snapshot (ms).
+  // ════════════════════════════════════════════════════════════
+  const propMapsRef = useRef({ propertiesMaxGuests, propertiesServiceConfigs, propertiesBedsConfig, activePropertyIds, propertiesUsesOwnLinen });
+  propMapsRef.current = { propertiesMaxGuests, propertiesServiceConfigs, propertiesBedsConfig, activePropertyIds, propertiesUsesOwnLinen };
+  const cleaningsStateRef = useRef<Cleaning[]>([]);
+  cleaningsStateRef.current = cleanings;
+  const rawCleaningsRef = useRef<Array<{ id: string; data: Record<string, any> }> | null>(null);
+  const rebuildCleaningsRef = useRef<() => void>(() => {});
+  const rawOrdersRef = useRef<Array<{ id: string; data: Record<string, any> }> | null>(null);
+  const rebuildOrdersRef = useRef<() => void>(() => {});
+
   // 🔴 LISTENER REALTIME PER PULIZIE - Si aggiorna automaticamente
   const lastCleaningsDayRef = useRef<string | null>(null);
   useEffect(() => {
@@ -839,10 +857,12 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
       orderBy("scheduledDate", "asc")
     );
 
-    const unsubscribe = onSnapshot(cleaningsQuery, (snapshot) => {
-      console.log(`⏱️ [dash] snapshot pulizie INTERNO di DashboardContent: +${Math.round(performance.now())}ms dall'apertura pagina (${snapshot.size} doc)`);
-      const updatedCleanings: Cleaning[] = snapshot.docs.map(doc => {
-        const data = doc.data();
+    // Ricostruzione card dall'ultimo snapshot grezzo (mappe lette via ref)
+    const rebuildFromRaw = () => {
+      const raw = rawCleaningsRef.current;
+      if (!raw) return;
+      const { propertiesMaxGuests, propertiesServiceConfigs, propertiesBedsConfig, activePropertyIds, propertiesUsesOwnLinen } = propMapsRef.current;
+      const updatedCleanings: Cleaning[] = raw.map(({ id: docId, data }) => {
         // 🔧 Usa maxGuests dalla pulizia, oppure dalla proprietà, oppure fallback
         const propertyMaxGuests = data.maxGuests || propertiesMaxGuests[data.propertyId] || null;
         // 🔧 FIX: Usa serviceConfigs dalla mappa realtime delle proprietà
@@ -850,7 +870,7 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
         // 🔥 FIX BUG LETTI: Usa bedsConfig dalla mappa realtime delle proprietà
         const propertyBedsConfig = propertiesBedsConfig[data.propertyId] || null;
         return {
-          id: doc.id,
+          id: docId,
           date: data.scheduledDate?.toDate?.() || new Date(),
           scheduledTime: data.scheduledTime || null,
           status: data.status || "SCHEDULED",
@@ -923,7 +943,15 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
         return true;
       });
       setCleanings(updatedCleanings);
+      cleaningsStateRef.current = updatedCleanings;
       setLoadingCleanings(false);
+    };
+    rebuildCleaningsRef.current = rebuildFromRaw;
+
+    const unsubscribe = onSnapshot(cleaningsQuery, (snapshot) => {
+      console.log(`⏱️ [dash] snapshot pulizie INTERNO di DashboardContent: +${Math.round(performance.now())}ms dall'apertura pagina (${snapshot.size} doc)`);
+      rawCleaningsRef.current = snapshot.docs.map(d => ({ id: d.id, data: d.data() as Record<string, any> }));
+      rebuildFromRaw();
     }, (error) => {
       console.error("❌ Errore listener pulizie:", error);
       setLoadingCleanings(false);
@@ -932,7 +960,15 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
     return () => {
       unsubscribe();
     };
-  }, [selectedDate, propertiesMaxGuests, propertiesServiceConfigs, propertiesBedsConfig, activePropertyIds, propertiesUsesOwnLinen]);
+    // PERF: SOLO selectedDate. Le mappe proprietà NON devono stare qui
+    // (riattaccherebbero il listener: vedi nota su propMapsRef).
+  }, [selectedDate]);
+
+  // Quando le mappe proprietà si aggiornano, ricostruisci le card IN MEMORIA
+  // dall'ultimo snapshot (millisecondi, zero round-trip Firestore).
+  useEffect(() => {
+    if (rawCleaningsRef.current) rebuildCleaningsRef.current();
+  }, [propertiesMaxGuests, propertiesServiceConfigs, propertiesBedsConfig, activePropertyIds, propertiesUsesOwnLinen]);
 
   // 🔴 LISTENER REALTIME PER ORDINI - Si aggiorna automaticamente al cambio data
   useEffect(() => {
@@ -951,10 +987,13 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
       orderBy("scheduledDate", "asc")
     );
 
-    const unsubscribeOrders = onSnapshot(ordersQuery, (snapshot) => {
-      const updatedOrders: Order[] = snapshot.docs
-        .filter(doc => {
-          const data = doc.data();
+    // Ricostruzione ordini dall'ultimo snapshot grezzo (mappe/pulizie via ref)
+    const rebuildOrdersFromRaw = () => {
+      const raw = rawOrdersRef.current;
+      if (!raw) return;
+      const { activePropertyIds } = propMapsRef.current;
+      const updatedOrders: Order[] = raw
+        .filter(({ data }) => {
           // 🔧 FIX: Escludi ordini cancellati
           const status = data.status;
           if (status === "CANCELLED" || status === "cancelled") return false;
@@ -964,10 +1003,9 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
           }
           return true;
         })
-        .map(doc => {
-        const data = doc.data() as Record<string, any>;
+        .map(({ id: docId, data }) => {
         return {
-          id: doc.id,
+          id: docId,
           propertyId: data.propertyId || "",
           propertyName: data.propertyName || "",
           propertyAddress: data.propertyAddress || "",
@@ -994,15 +1032,21 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
           bedMakingFee: data.bedMakingFee || 0,
         };
       });
-      // Arricchisci ordini con dati pulizia collegata
+      // Arricchisci ordini con dati pulizia collegata (via ref, sempre fresca)
       const enrichedOrders = updatedOrders.map(o => {
         if (!o.cleaningId) return o;
-        const linked = cleanings.find(c => c.id === o.cleaningId);
+        const linked = cleaningsStateRef.current.find(c => c.id === o.cleaningId);
         if (!linked) return o;
         return { ...o, cleaning: { scheduledTime: (linked as any).scheduledTime, status: (linked as any).status } };
       });
       setOrders(enrichedOrders);
       setLoadingOrders(false);
+    };
+    rebuildOrdersRef.current = rebuildOrdersFromRaw;
+
+    const unsubscribeOrders = onSnapshot(ordersQuery, (snapshot) => {
+      rawOrdersRef.current = snapshot.docs.map(d => ({ id: d.id, data: d.data() as Record<string, any> }));
+      rebuildOrdersFromRaw();
     }, (error) => {
       console.error("❌ Errore listener ordini:", error);
       setLoadingOrders(false);
@@ -1011,7 +1055,14 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
     return () => {
       unsubscribeOrders();
     };
-  }, [selectedDate, activePropertyIds]);
+    // PERF: SOLO selectedDate (vedi nota su propMapsRef).
+  }, [selectedDate]);
+
+  // Ricostruzione ordini in memoria quando cambiano proprietà attive o
+  // pulizie (l'enrichment legge orario/status della pulizia collegata).
+  useEffect(() => {
+    if (rawOrdersRef.current) rebuildOrdersRef.current();
+  }, [activePropertyIds, cleanings]);
 
   const goToPreviousDay = () => {
     const newDate = new Date(selectedDate);
