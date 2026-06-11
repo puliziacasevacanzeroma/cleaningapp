@@ -377,6 +377,11 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
 
   // ── ⏱️ DIAGNOSTICA COLD LOAD (temporanea): pixel vero delle card ──
   const cardsPaintLoggedRef = useRef(false);
+  const mountLoggedRef = useRef(false);
+  if (!mountLoggedRef.current) {
+    mountLoggedRef.current = true;
+    console.log(`⏱️ [dash] DashboardContent MONTA: +${Math.round(performance.now())}ms dall'apertura pagina`);
+  }
   useEffect(() => {
     if (!cardsPaintLoggedRef.current && cleanings.length > 0 && !loadingCleanings) {
       cardsPaintLoggedRef.current = true;
@@ -835,6 +840,7 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
     );
 
     const unsubscribe = onSnapshot(cleaningsQuery, (snapshot) => {
+      console.log(`⏱️ [dash] snapshot pulizie INTERNO di DashboardContent: +${Math.round(performance.now())}ms dall'apertura pagina (${snapshot.size} doc)`);
       const updatedCleanings: Cleaning[] = snapshot.docs.map(doc => {
         const data = doc.data();
         // 🔧 Usa maxGuests dalla pulizia, oppure dalla proprietà, oppure fallback
