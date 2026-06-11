@@ -397,12 +397,19 @@ export const ContractAcceptSchema = z.object({
 
 export const AssignOperatorSchema = z.object({
   operatorId: firestoreId,
+  // Override turni: force=true assegna anche se l'operatore non è in turno
+  // (crea automaticamente l'eccezione "ON" — chiamata d'urgenza)
+  force: z.boolean().optional(),
+  forceReason: z.string().trim().max(300).optional(),
 });
 export type AssignOperatorInput = z.infer<typeof AssignOperatorSchema>;
 
 export const AssignRiderSchema = z.object({
   riderId: firestoreId,
   riderName: z.string().trim().max(100).optional(),
+  // Override turni (vedi AssignOperatorSchema)
+  force: z.boolean().optional(),
+  forceReason: z.string().trim().max(300).optional(),
 });
 export type AssignRiderInput = z.infer<typeof AssignRiderSchema>;
 

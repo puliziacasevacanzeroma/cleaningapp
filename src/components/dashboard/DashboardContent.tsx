@@ -1045,6 +1045,36 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
     setShowAssignModal(true);
   };
 
+  // ── TURNI: POST assegnazione con gestione 409 SHIFT_UNAVAILABLE ──
+  // Se l'operatore non è in turno il server risponde 409: chiediamo conferma
+  // esplicita (chiamata d'urgenza) e ritentiamo con force=true. Se l'admin
+  // annulla, la Response 409 viene ritornata e il chiamante NON mostra errori.
+  const assignWithShiftCheck = async (cleaningId: string, operatorId: string): Promise<Response> => {
+    let res = await fetch('/api/dashboard/cleanings/' + cleaningId + '/assign', {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ operatorId })
+    });
+    if (res.status === 409) {
+      const data = await res.clone().json().catch(() => ({} as Record<string, any>));
+      if (data.code === "SHIFT_UNAVAILABLE") {
+        const ok = window.confirm(
+          `⚠️ ${data.error || "L'operatore non è in turno questo giorno"}.\n\n` +
+          `Assegnare comunque come CHIAMATA D'URGENZA?\n` +
+          `(Verrà aggiunto un turno extra nella pagina Turni e l'operatore riceverà una notifica)`
+        );
+        if (ok) {
+          res = await fetch('/api/dashboard/cleanings/' + cleaningId + '/assign', {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ operatorId, force: true, forceReason: "Chiamata d'urgenza confermata da dashboard" })
+          });
+        }
+      }
+    }
+    return res;
+  };
+
   const handleAssignOperator = async (operatorId: string) => {
     if (!selectedCleaning) return;
     
@@ -1056,17 +1086,15 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
     
     setAssigning(true);
     try {
-      const response = await fetch('/api/dashboard/cleanings/' + selectedCleaning.id + '/assign', {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ operatorId })
-      });
+      const response = await assignWithShiftCheck(selectedCleaning.id, operatorId);
       
       if (response.ok) {
         // 🔥 FIX: Non aggiornare manualmente - il listener realtime aggiornerà automaticamente
         // Questo evita duplicati causati dal doppio aggiornamento (manuale + realtime)
         setShowAssignModal(false);
         setSelectedCleaning(null);
+      } else if (response.status === 409) {
+        // L'admin ha rifiutato la chiamata d'urgenza: nessun errore da mostrare
       } else {
         // 🔥 Mostra errore all'utente
         const errorData = await response.json().catch(() => ({}));
@@ -1134,15 +1162,11 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
     }
     
     try {
-      const res = await fetch('/api/dashboard/cleanings/' + cleaningId + '/assign', {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ operatorId })
-      });
+      const res = await assignWithShiftCheck(cleaningId, operatorId);
       // 🔥 FIX: Non aggiorniamo lo stato locale qui
       // Il listener Firestore aggiornerà automaticamente 'cleanings'
       // che a sua volta triggererà l'useEffect per aggiornare 'cleaningOperators'
-      if (!res.ok) {
+      if (!res.ok && res.status !== 409) {
         console.error("Errore assegnazione operatore:", res.status);
       }
     } catch (error) {
@@ -1746,14 +1770,12 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
     mobileCloseAll();
     
     try {
-      const response = await fetch('/api/dashboard/cleanings/' + mobileCurrentCardId + '/assign', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ operatorId: operator.id }),
-      });
+      const response = await assignWithShiftCheck(mobileCurrentCardId, operator.id);
       
       if (response.ok) {
         mobileShowToast(getShortName(operator.name) + ' assegnato');
+      } else if (response.status === 409) {
+        mobileShowToast('Assegnazione annullata (fuori turno)');
       } else {
         const errorData = await response.json().catch(() => ({}));
         mobileShowToast('⚠️ ' + (errorData.error || 'Errore assegnazione'));

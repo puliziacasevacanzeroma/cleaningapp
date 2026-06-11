@@ -4,6 +4,11 @@ import { Timestamp } from "firebase-admin/firestore";
 import { createNotificationDirect } from "~/lib/notifications/createNotification";
 import { getApiUser } from "~/lib/api-auth";
 import { z } from "zod";
+import {
+  checkPlannedAvailability,
+  forceShiftOnException,
+  dateKeyFromScheduled,
+} from "~/lib/shifts/plannedAvailability";
 
 export const dynamic = 'force-dynamic';
 
@@ -19,6 +24,10 @@ const BatchAssignSchema = z.object({
     scheduledTime: z.string().optional(),
     estimatedDuration: z.number().optional(), // ore — dall'auto-assign
   })).min(1).max(100),
+  // Override turni: force=true assegna anche operatori fuori turno
+  // (crea le eccezioni "ON" d'urgenza). Senza force: 409 con la lista conflitti.
+  force: z.boolean().optional(),
+  forceReason: z.string().trim().max(300).optional(),
 });
 
 // ═══════════════════════════════════════════════════════════════
@@ -50,7 +59,7 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
-    const { assignments } = parsed.data;
+    const { assignments, force, forceReason } = parsed.data;
     const now = Timestamp.now();
     const results: Array<{ cleaningId: string; success: boolean; error?: string }> = [];
 
@@ -62,11 +71,79 @@ export async function POST(request: NextRequest) {
       byCleaningId.set(a.cleaningId, arr);
     }
 
+    // ═══════════════════════════════════════════════════════════
+    // PRE-CHECK TURNI — PRIMA di qualunque scrittura.
+    // Se anche un solo operatore è fuori turno e force≠true → 409 con la
+    // lista completa dei conflitti e NESSUNA assegnazione applicata
+    // (mai un batch a metà). Con force=true: eccezioni "ON" create per
+    // ogni (operatore, giorno) in conflitto, poi si procede normalmente.
+    // ═══════════════════════════════════════════════════════════
+    const cleaningSnapCache = new Map<string, FirebaseFirestore.DocumentSnapshot>();
+    const availCache = new Map<string, boolean>(); // `${operatorId}_${dateKey}`
+    const shiftConflicts: Array<{
+      cleaningId: string;
+      userId: string;
+      userName: string;
+      dateKey: string;
+      propertyName: string;
+    }> = [];
+
+    for (const [cleaningId, ops] of byCleaningId) {
+      const snap = await adminDb.collection("cleanings").doc(cleaningId).get();
+      cleaningSnapCache.set(cleaningId, snap);
+      if (!snap.exists) continue; // il loop principale registrerà l'errore
+      const cdata = snap.data() as Record<string, any>;
+      const dateKey = dateKeyFromScheduled(cdata.scheduledDate);
+      if (!dateKey) continue; // data non interpretabile: fail-open
+      for (const op of ops) {
+        const cacheKey = `${op.operatorId}_${dateKey}`;
+        if (!availCache.has(cacheKey)) {
+          const a = await checkPlannedAvailability(op.operatorId, dateKey);
+          availCache.set(cacheKey, a.available);
+        }
+        if (!availCache.get(cacheKey)) {
+          shiftConflicts.push({
+            cleaningId,
+            userId: op.operatorId,
+            userName: op.operatorName,
+            dateKey,
+            propertyName: cdata.propertyName || "Proprietà",
+          });
+        }
+      }
+    }
+
+    if (shiftConflicts.length > 0) {
+      if (!force) {
+        return NextResponse.json({
+          error: `${shiftConflicts.length} assegnazion${shiftConflicts.length === 1 ? "e" : "i"} a operatori fuori turno`,
+          code: "SHIFT_UNAVAILABLE",
+          conflicts: shiftConflicts,
+        }, { status: 409 });
+      }
+      // force=true: una sola eccezione per (operatore, giorno) anche se in conflitto su più pulizie
+      const done = new Set<string>();
+      for (const c of shiftConflicts) {
+        const k = `${c.userId}_${c.dateKey}`;
+        if (done.has(k)) continue;
+        done.add(k);
+        await forceShiftOnException({
+          userId: c.userId,
+          userName: c.userName,
+          userRole: "OPERATORE_PULIZIE",
+          dateKey: c.dateKey,
+          createdBy: { id: user.id || "system", name: user.name || user.email || "Admin" },
+          reason: forceReason,
+          contextLabel: c.propertyName,
+        });
+      }
+    }
+
     // ── Processa ogni pulizia ──
     for (const [cleaningId, ops] of byCleaningId) {
       try {
         const cleaningRef = adminDb.collection("cleanings").doc(cleaningId);
-        const cleaningSnap = await cleaningRef.get();
+        const cleaningSnap = cleaningSnapCache.get(cleaningId) || await cleaningRef.get();
 
         if (!cleaningSnap.exists) {
           results.push({ cleaningId, success: false, error: "Pulizia non trovata" });

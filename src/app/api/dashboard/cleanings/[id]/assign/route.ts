@@ -5,6 +5,11 @@ import { Timestamp } from "firebase-admin/firestore";
 import { createNotificationDirect } from "~/lib/notifications/createNotification";
 import { getApiUser } from "~/lib/api-auth";
 import { validateBody, AssignOperatorSchema } from "~/lib/validation/schemas";
+import {
+  checkPlannedAvailability,
+  forceShiftOnException,
+  dateKeyFromScheduled,
+} from "~/lib/shifts/plannedAvailability";
 
 export const dynamic = 'force-dynamic';
 
@@ -73,7 +78,7 @@ export async function POST(
     const { id } = await params;
     const body = await validateBody(request, AssignOperatorSchema);
     if (body instanceof Response) return body;
-    const { operatorId } = body;
+    const { operatorId, force, forceReason } = body;
 
     if (!operatorId) {
       return NextResponse.json({ error: "operatorId richiesto" }, { status: 400 });
@@ -121,6 +126,36 @@ export async function POST(
     // Se ancora vuoto, usa l'email come fallback
     if (!operatorFullName) {
       operatorFullName = operator.email?.split('@')[0] || "Operatore";
+    }
+
+    // ─── CHECK TURNO PIANIFICATO (pagina Turni) ───
+    // NOTA: getUsers() STRIPPA workSchedule, quindi qui NON passiamo l'oggetto
+    // operator come userData: checkPlannedAvailability rilegge il doc utente
+    // completo da Firestore (altrimenti il check risulterebbe sempre "disponibile").
+    const shiftDateKey = dateKeyFromScheduled((cleaning as any).scheduledDate);
+    if (shiftDateKey) {
+      const avail = await checkPlannedAvailability(operatorId, shiftDateKey);
+      if (!avail.available) {
+        if (!force) {
+          const dateLabel = new Date(shiftDateKey + "T12:00:00Z").toLocaleDateString("it-IT", {
+            timeZone: "Europe/Rome", weekday: "long", day: "numeric", month: "long",
+          });
+          return NextResponse.json({
+            error: `${operatorFullName} non è in turno ${dateLabel}`,
+            code: "SHIFT_UNAVAILABLE",
+            conflicts: [{ userId: operatorId, userName: operatorFullName, dateKey: shiftDateKey }],
+          }, { status: 409 });
+        }
+        await forceShiftOnException({
+          userId: operatorId,
+          userName: operatorFullName,
+          userRole: "OPERATORE_PULIZIE",
+          dateKey: shiftDateKey,
+          createdBy: { id: user.id || "system", name: user.name || user.email || "Admin" },
+          reason: forceReason,
+          contextLabel: cleaning.propertyName || undefined,
+        });
+      }
     }
 
     // AGGIUNGI il nuovo operatore all'array

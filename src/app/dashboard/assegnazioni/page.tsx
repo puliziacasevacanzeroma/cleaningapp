@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { collection, query, where, onSnapshot, Timestamp, doc, updateDoc, getDocs } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 import { calculateDistance } from "~/lib/geo";
+import { resolveAvailability, type AvailabilityResult, type ShiftExceptionType } from "~/lib/shifts/availability";
 
 // ═══════════════════════════════════════════════════════════════
 // TIPI
@@ -48,6 +49,7 @@ interface Operator {
   speed?: string;
   todayCleanings: Cleaning[];
   colorIndex?: number;
+  workSchedule?: Record<string, boolean> | null; // template turni (pagina Turni)
 }
 
 // Bozza di assegnazione locale
@@ -57,6 +59,7 @@ interface DraftAssignment {
   operatorName: string;
   scheduledTime?: string;
   estimatedDuration?: number; // ore — dall'auto-assign (durata storica/calcolata)
+  forced?: boolean; // assegnazione confermata fuori turno (chiamata d'urgenza)
 }
 
 interface AssignmentScore {
@@ -465,6 +468,7 @@ export default function AssegnazioniPage() {
           speed: d.speed || ["Veloce", "Medio"][index % 2],
           todayCleanings: [] as Cleaning[],
           colorIndex: index,
+          workSchedule: (d.workSchedule as Record<string, boolean>) || null,
         };
       });
       setOperators(data);
@@ -589,6 +593,39 @@ export default function AssegnazioniPage() {
   const activeOps = useMemo(() => operators.filter((op) => op.status === "ACTIVE"), [operators]);
   const activeOpsRef = useRef(activeOps);
   useEffect(() => { activeOpsRef.current = activeOps; }, [activeOps]);
+
+  // ── TURNI: eccezioni del giorno selezionato (assenze/extra dalla pagina Turni) ──
+  const [dayExceptions, setDayExceptions] = useState<Map<string, ShiftExceptionType>>(new Map());
+  useEffect(() => {
+    if (!selectedDate) return;
+    const q = query(collection(db, "shiftExceptions"), where("dateKey", "==", selectedDate));
+    const unsub = onSnapshot(q, (snap) => {
+      const m = new Map<string, ShiftExceptionType>();
+      snap.docs.forEach((d) => {
+        const raw = d.data() as Record<string, any>;
+        if (raw.userId) m.set(raw.userId, raw.type === "OFF" ? "OFF" : "ON");
+      });
+      setDayExceptions(m);
+    }, () => {
+      // permission-denied o errore: fail-open (nessun blocco lato client,
+      // il server fa comunque enforcement)
+      setDayExceptions(new Map());
+    });
+    return () => unsub();
+  }, [selectedDate]);
+
+  // ── TURNI: disponibilità risolta per operatore (template + eccezione) ──
+  const opAvailability = useMemo(() => {
+    const m = new Map<string, AvailabilityResult>();
+    if (!selectedDate) return m;
+    for (const op of operators) {
+      m.set(op.id, resolveAvailability(op.workSchedule, dayExceptions.get(op.id) ?? null, selectedDate));
+    }
+    return m;
+  }, [operators, dayExceptions, selectedDate]);
+  const opAvailabilityRef = useRef(opAvailability);
+  useEffect(() => { opAvailabilityRef.current = opAvailability; }, [opAvailability]);
+
   const propertyCoordsRef = useRef(propertyCoords);
   useEffect(() => { propertyCoordsRef.current = propertyCoords; }, [propertyCoords]);
   const propertyTimesRef = useRef(propertyTimes);
@@ -608,6 +645,20 @@ export default function AssegnazioniPage() {
     if (serverCl?.operatorId === operatorId || serverCl?.operators?.some(o => o.id === operatorId)) {
       showToast("Già assegnata a questo operatore");
       return;
+    }
+
+    // ── CHECK TURNO (pagina Turni): conferma esplicita se fuori turno ──
+    const avail = opAvailabilityRef.current.get(operatorId);
+    let forced = false;
+    if (avail && !avail.available) {
+      const ok = window.confirm(
+        `⚠️ ${operatorName} NON è in turno questo giorno` +
+        `${avail.source === "exception_off" ? " (assenza registrata)" : ""}.\n\n` +
+        `Assegnare comunque come CHIAMATA D'URGENZA?\n` +
+        `(Verrà aggiunto un turno extra nella pagina Turni e l'operatore riceverà una notifica)`
+      );
+      if (!ok) return;
+      forced = true;
     }
 
     setDrafts(prev => {
@@ -631,18 +682,18 @@ export default function AssegnazioniPage() {
             }
           }
         }
-        updated.push({ cleaningId, operatorId, operatorName });
+        updated.push({ cleaningId, operatorId, operatorName, forced });
         return updated;
       } else {
         // Modalità SOSTITUISCI: rimuovi vecchie bozze e aggiungi la nuova
         const withoutThis = prev.filter(d => d.cleaningId !== cleaningId);
-        return [...withoutThis, { cleaningId, operatorId, operatorName }];
+        return [...withoutThis, { cleaningId, operatorId, operatorName, forced }];
       }
     });
 
-    showToast(addToExisting ? `✏️ +${operatorName} aggiunto` : `✏️ Bozza: ${operatorName}`);
+    showToast(forced ? `🚨 Bozza URGENZA: ${operatorName}` : addToExisting ? `✏️ +${operatorName} aggiunto` : `✏️ Bozza: ${operatorName}`);
     setSheetCleaningId(null);
-  }, []); // no deps — usa ref per serverCleanings, functional setState per drafts
+  }, []); // no deps — usa ref per serverCleanings/availability, functional setState per drafts
 
   const handleUnassign = useCallback((cleaningId: string, operatorId?: string) => {
     // Controlla se ci sono bozze per questa pulizia
@@ -740,8 +791,15 @@ export default function AssegnazioniPage() {
     if (unassignedList.length === 0) { showToast("Tutte le pulizie sono già assegnate"); return; }
 
     const assignedList = effective.filter(c => c.operatorId && c.status !== "COMPLETED" && c.status !== "CANCELLED");
-    const opsActive = activeOps.filter(op => op.status === "ACTIVE");
-    if (opsActive.length === 0) { showToast("Nessun operatore attivo"); return; }
+    // TURNI: l'auto-assign ESCLUDE chi non è in turno (mai forzature automatiche:
+    // una chiamata d'urgenza dev'essere sempre una decisione umana esplicita)
+    const allActive = activeOps.filter(op => op.status === "ACTIVE");
+    const opsActive = allActive.filter(op => opAvailabilityRef.current.get(op.id)?.available !== false);
+    const excludedCount = allActive.length - opsActive.length;
+    if (excludedCount > 0) {
+      showToast(`ℹ️ ${excludedCount} operator${excludedCount === 1 ? "e" : "i"} fuori turno esclus${excludedCount === 1 ? "o" : "i"} dall'auto-assegnazione`);
+    }
+    if (opsActive.length === 0) { showToast("Nessun operatore attivo in turno"); return; }
 
     setIsAutoAssigning(true);
 
@@ -1096,13 +1154,42 @@ export default function AssegnazioniPage() {
           estimatedDuration: d.estimatedDuration,
         }));
 
-        const res = await fetch("/api/cleanings/batch-assign", {
+        // force=true SOLO se almeno una bozza è stata confermata come urgenza
+        // (ogni bozza fuori turno ha già richiesto conferma esplicita in handleAssign)
+        const anyForced = currentDrafts.some(d => d.forced);
+
+        let res = await fetch("/api/cleanings/batch-assign", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ assignments }),
+          body: JSON.stringify(anyForced
+            ? { assignments, force: true, forceReason: "Chiamata d'urgenza confermata in assegnazioni" }
+            : { assignments }),
         });
 
-        const data = await res.json();
+        let data = await res.json();
+
+        // 409 SHIFT_UNAVAILABLE: conflitti rilevati dal server (es. eccezione
+        // inserita da un altro admin dopo la creazione della bozza). Chiedi
+        // conferma e ritenta con force.
+        if (res.status === 409 && data.code === "SHIFT_UNAVAILABLE" && Array.isArray(data.conflicts)) {
+          const names = [...new Set(data.conflicts.map((c: any) => c.userName))].join(", ");
+          const ok = window.confirm(
+            `⚠️ Operatori fuori turno: ${names}.\n\nAssegnare comunque come CHIAMATA D'URGENZA?`
+          );
+          if (ok) {
+            res = await fetch("/api/cleanings/batch-assign", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ assignments, force: true, forceReason: "Chiamata d'urgenza confermata in assegnazioni" }),
+            });
+            data = await res.json();
+          } else {
+            showToast("Conferma annullata: bozze mantenute");
+            setShowConfirmModal(false);
+            setIsConfirming(false);
+            return;
+          }
+        }
 
         if (res.ok) {
           showToast(`✅ ${data.successCount} pulizie assegnate e notificate!`);
@@ -1520,13 +1607,14 @@ export default function AssegnazioniPage() {
             const opCl = op.todayCleanings.sort((a, b) => a.scheduledTime.localeCompare(b.scheduledTime));
             const hours = Math.round(opCl.reduce((s, c) => s + (c.estimatedDuration || 2), 0) * 10) / 10;
             const hasDraftItems = opCl.some(c => draftCleaningIds.has(c.id) || draftTimeCleaningIds.has(c.id));
+            const offShift = opAvailability.get(op.id)?.available === false;
             return (
               <div key={op.id}
                 onDragOver={handleDragOver}
                 onDragEnter={() => setDropTarget(op.id)}
                 onDragLeave={() => setDropTarget(null)}
                 onDrop={(e) => handleDrop(e, op.id, op.name)}
-                className={`bg-white border-2 rounded-xl overflow-hidden flex flex-col transition-all ${
+                className={`bg-white border-2 rounded-xl overflow-hidden flex flex-col transition-all ${offShift ? "opacity-60 grayscale-[40%]" : ""} ${
                   dropTarget === op.id ? `${color.border} ${color.ring} ring-2` : hasDraftItems ? "border-amber-300 ring-1 ring-amber-200" : "border-slate-200"
                 }`}
               >
@@ -1537,6 +1625,7 @@ export default function AssegnazioniPage() {
                       <div className="font-bold text-sm truncate">{op.name}</div>
                       <div className="text-[11px] opacity-85">⭐ {op.rating?.toFixed(1)} · {op.preferredZone}</div>
                     </div>
+                    {offShift && <span className="bg-rose-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded">FUORI TURNO</span>}
                     {hasDraftItems && <span className="bg-amber-400 text-amber-900 text-[9px] font-bold px-1.5 py-0.5 rounded">BOZZE</span>}
                   </div>
                   <div className="flex gap-1.5">
@@ -1581,13 +1670,14 @@ export default function AssegnazioniPage() {
             const color = getColor(op.colorIndex || 0);
             const opCl = op.todayCleanings.sort((a, b) => a.scheduledTime.localeCompare(b.scheduledTime));
             const hasDraftItems = opCl.some(c => draftCleaningIds.has(c.id));
+            const offShift = opAvailability.get(op.id)?.available === false;
             return (
-              <div key={op.id} className={`bg-white border rounded-xl overflow-hidden ${hasDraftItems ? "border-amber-300 ring-1 ring-amber-200" : "border-slate-200"}`}>
+              <div key={op.id} className={`bg-white border rounded-xl overflow-hidden ${offShift ? "opacity-60" : ""} ${hasDraftItems ? "border-amber-300 ring-1 ring-amber-200" : "border-slate-200"}`}>
                 <div className={`${color.bg} p-2.5 text-white flex items-center gap-2`}>
                   <div className="w-7 h-7 rounded-full bg-white/25 flex items-center justify-center font-bold text-xs">{op.name.charAt(0)}</div>
                   <div className="flex-1 min-w-0">
                     <div className="font-bold text-xs truncate">{op.name}</div>
-                    <div className="text-[10px] opacity-80">{op.preferredZone}</div>
+                    <div className="text-[10px] opacity-80">{offShift ? "🚫 Fuori turno" : op.preferredZone}</div>
                   </div>
                   <div className="text-lg font-bold">{opCl.length}</div>
                 </div>
@@ -1647,7 +1737,7 @@ export default function AssegnazioniPage() {
                       <div className={`w-9 h-9 ${color.bg} rounded-full flex items-center justify-center font-bold text-sm text-white shadow`}>{op.name.charAt(0)}</div>
                       <div className="min-w-0">
                         <div className="font-semibold text-sm text-slate-700 truncate">{op.name}</div>
-                        <div className="text-[11px] text-slate-400">{opCl.length} pul · {op.rating?.toFixed(1)}</div>
+                        <div className="text-[11px] text-slate-400">{opAvailability.get(op.id)?.available === false ? <span className="text-rose-500 font-semibold">🚫 Fuori turno</span> : <>{opCl.length} pul · {op.rating?.toFixed(1)}</>}</div>
                       </div>
                     </div>
                   </div>
@@ -1719,7 +1809,7 @@ export default function AssegnazioniPage() {
               <div key={op.id} className="bg-white border border-slate-200 rounded-xl overflow-hidden">
                 <div className={`${color.bg} px-3 py-2 text-white flex items-center gap-2`}>
                   <div className="w-7 h-7 rounded-full bg-white/25 flex items-center justify-center font-bold text-xs">{op.name.charAt(0)}</div>
-                  <div className="flex-1 min-w-0"><div className="font-bold text-xs truncate">{op.name}</div><div className="text-[10px] opacity-80">{op.preferredZone}</div></div>
+                  <div className="flex-1 min-w-0"><div className="font-bold text-xs truncate">{op.name}</div><div className="text-[10px] opacity-80">{opAvailability.get(op.id)?.available === false ? "🚫 Fuori turno" : op.preferredZone}</div></div>
                   <div className="text-xs font-bold bg-white/20 px-2 py-0.5 rounded">{opCl.length} pul · {hours}h</div>
                 </div>
                 <div className="px-2 py-2">
@@ -1907,6 +1997,7 @@ export default function AssegnazioniPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5">
                       <span className="font-bold text-sm text-slate-800">{op.name}</span>
+                      {opAvailability.get(op.id)?.available === false && <span className="text-[9px] font-bold text-rose-600 bg-rose-100 px-1.5 py-0.5 rounded">FUORI TURNO</span>}
                       {isTop && <span className="text-[9px] font-bold text-emerald-600 bg-emerald-100 px-1.5 py-0.5 rounded">CONSIGLIATO</span>}
                     </div>
                     <div className="text-xs text-slate-400">

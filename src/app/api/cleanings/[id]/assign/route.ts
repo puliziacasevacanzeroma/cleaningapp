@@ -4,6 +4,11 @@ import { Timestamp, FieldValue } from "firebase-admin/firestore";
 import { createNotification } from "~/lib/firebase/notifications-admin";
 import { getApiUser } from "~/lib/api-auth";
 import { validateBody, AssignOperatorSchema } from "~/lib/validation/schemas";
+import {
+  checkPlannedAvailability,
+  forceShiftOnException,
+  dateKeyFromScheduled,
+} from "~/lib/shifts/plannedAvailability";
 
 export const dynamic = 'force-dynamic';
 
@@ -44,7 +49,7 @@ export async function POST(
     const { id } = await params;
     const body = await validateBody(request, AssignOperatorSchema);
     if (body instanceof Response) return body;
-    const { operatorId } = body;
+    const { operatorId, force, forceReason } = body;
 
     // Carica pulizia
     const cleaningRef = adminDb.collection("cleanings").doc(id);
@@ -81,6 +86,38 @@ export async function POST(
     const operatorName = operator.name || operator.displayName;
     if (!operatorName || operatorName.trim() === '') {
       return NextResponse.json({ error: "Operatore senza nome valido" }, { status: 400 });
+    }
+
+    // ─── CHECK TURNO PIANIFICATO (pagina Turni) ───
+    // Se l'operatore non è in turno il giorno della pulizia: 409 SHIFT_UNAVAILABLE.
+    // Con force=true si procede comunque e si crea l'eccezione "ON" (urgenza) + notifica.
+    // `operator` è il doc utente completo → contiene workSchedule, niente lettura extra.
+    // @ts-expect-error TODO-FIX: TS18048 'cleaning' is possibly 'undefined'.
+    const shiftDateKey = dateKeyFromScheduled(cleaning.scheduledDate);
+    if (shiftDateKey) {
+      const avail = await checkPlannedAvailability(operatorId, shiftDateKey, operator);
+      if (!avail.available) {
+        if (!force) {
+          const dateLabel = new Date(shiftDateKey + "T12:00:00Z").toLocaleDateString("it-IT", {
+            timeZone: "Europe/Rome", weekday: "long", day: "numeric", month: "long",
+          });
+          return NextResponse.json({
+            error: `${operatorName} non è in turno ${dateLabel}`,
+            code: "SHIFT_UNAVAILABLE",
+            conflicts: [{ userId: operatorId, userName: operatorName, dateKey: shiftDateKey }],
+          }, { status: 409 });
+        }
+        await forceShiftOnException({
+          userId: operatorId,
+          userName: operatorName,
+          userRole: "OPERATORE_PULIZIE",
+          dateKey: shiftDateKey,
+          createdBy: { id: user.id, name: user.name || user.email || "Admin" },
+          reason: forceReason,
+          // @ts-expect-error TODO-FIX: TS18048 'cleaning' is possibly 'undefined'.
+          contextLabel: cleaning.propertyName,
+        });
+      }
     }
 
     // ─── GESTISCI ARRAY OPERATORI ───

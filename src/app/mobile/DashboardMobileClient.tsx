@@ -404,22 +404,54 @@ export default function DashboardMobileClient() {
 
   const selectOperator = async (operator: Operator) => {
     if (!currentCardId) return;
+    const cardId = currentCardId;
+    const prevOperator = cleanings.find(c => c.id === cardId)?.operator ?? null;
     
     setCleanings(prev => prev.map(c => 
-      c.id === currentCardId ? { ...c, operator: { id: operator.id, name: operator.name } } : c
+      c.id === cardId ? { ...c, operator: { id: operator.id, name: operator.name } } : c
     ));
     
     closeAll();
-    showSuccess(getShortName(operator.name) + ' assegnato');
     
     try {
-      await fetch('/api/dashboard/cleanings/' + currentCardId + '/assign', {
+      let res = await fetch('/api/dashboard/cleanings/' + cardId + '/assign', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ operatorId: operator.id }),
       });
+
+      // TURNI: 409 = operatore fuori turno → conferma chiamata d'urgenza
+      if (res.status === 409) {
+        const data = await res.clone().json().catch(() => ({} as Record<string, any>));
+        if (data.code === "SHIFT_UNAVAILABLE") {
+          const ok = window.confirm(
+            `⚠️ ${data.error || "L'operatore non è in turno questo giorno"}.\n\n` +
+            `Assegnare comunque come CHIAMATA D'URGENZA?`
+          );
+          if (ok) {
+            res = await fetch('/api/dashboard/cleanings/' + cardId + '/assign', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ operatorId: operator.id, force: true, forceReason: "Chiamata d'urgenza confermata da mobile" }),
+            });
+          }
+        }
+      }
+
+      if (res.ok) {
+        showSuccess(getShortName(operator.name) + ' assegnato');
+      } else {
+        // Revert dell'aggiornamento ottimistico (rifiuto urgenza o errore)
+        setCleanings(prev => prev.map(c => 
+          c.id === cardId ? { ...c, operator: prevOperator } : c
+        ));
+        if (res.status !== 409) showSuccess('⚠️ Errore assegnazione');
+      }
     } catch (error) {
       console.error('Error assigning operator:', error);
+      setCleanings(prev => prev.map(c => 
+        c.id === cardId ? { ...c, operator: prevOperator } : c
+      ));
     }
   };
 

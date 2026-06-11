@@ -4,6 +4,11 @@ import { Timestamp, FieldValue } from "firebase-admin/firestore";
 import { notifyOrderAssigned } from "~/lib/firebase/statusNotifications";
 import { getApiUser } from "~/lib/api-auth";
 import { validateBody, AssignRiderSchema } from "~/lib/validation/schemas";
+import {
+  checkPlannedAvailability,
+  forceShiftOnException,
+  dateKeyFromScheduled,
+} from "~/lib/shifts/plannedAvailability";
 
 interface Params {
   params: Promise<{ id: string }>;
@@ -15,7 +20,7 @@ export async function POST(request: NextRequest, context: Params) {
     const { id } = await context.params;
     const body = await validateBody(request, AssignRiderSchema);
     if (body instanceof Response) return body;
-    const { riderId, riderName } = body;
+    const { riderId, riderName, force, forceReason } = body;
     const currentUser = await getApiUser();
 
     if (!riderId) {
@@ -29,8 +34,44 @@ export async function POST(request: NextRequest, context: Params) {
     
     // Ottieni i dati dell'ordine per la notifica
     const orderSnap = await orderRef.get();
-    const orderData = orderSnap.exists ? orderSnap.data() : null;
-    
+    if (!orderSnap.exists) {
+      return NextResponse.json({ error: "Ordine non trovato" }, { status: 404 });
+    }
+    const orderData = orderSnap.data() ?? null;
+
+    // ─── CHECK TURNO PIANIFICATO (pagina Turni) ───
+    // Se il rider non è in turno il giorno della consegna: 409 SHIFT_UNAVAILABLE.
+    // Con force=true si procede e si crea l'eccezione "ON" (urgenza) + notifica.
+    const shiftDateKey = dateKeyFromScheduled(orderData?.scheduledDate);
+    if (shiftDateKey) {
+      const avail = await checkPlannedAvailability(riderId, shiftDateKey);
+      if (!avail.available) {
+        const displayName = riderName || "Il rider";
+        if (!force) {
+          const dateLabel = new Date(shiftDateKey + "T12:00:00Z").toLocaleDateString("it-IT", {
+            timeZone: "Europe/Rome", weekday: "long", day: "numeric", month: "long",
+          });
+          return NextResponse.json({
+            error: `${displayName} non è in turno ${dateLabel}`,
+            code: "SHIFT_UNAVAILABLE",
+            conflicts: [{ userId: riderId, userName: displayName, dateKey: shiftDateKey }],
+          }, { status: 409 });
+        }
+        await forceShiftOnException({
+          userId: riderId,
+          userName: displayName,
+          userRole: "RIDER",
+          dateKey: shiftDateKey,
+          createdBy: {
+            id: currentUser?.id || "system",
+            name: currentUser?.name || "Admin",
+          },
+          reason: forceReason,
+          contextLabel: orderData?.propertyName,
+        });
+      }
+    }
+        
     await orderRef.update({
       riderId,
       riderName: riderName || null,

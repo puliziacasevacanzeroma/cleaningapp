@@ -248,11 +248,30 @@ export function DeliveriesView({
     setAssigning(true);
     try {
       const rider = riders.find(r => r.id === riderId);
-      const response = await fetch('/api/orders/' + selectedOrder.id + '/assign', {
+      let response = await fetch('/api/orders/' + selectedOrder.id + '/assign', {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ riderId, riderName: rider?.name })
       });
+
+      // TURNI: 409 = rider fuori turno → conferma chiamata d'urgenza e retry con force
+      if (response.status === 409) {
+        const data = await response.clone().json().catch(() => ({} as Record<string, any>));
+        if (data.code === "SHIFT_UNAVAILABLE") {
+          const ok = window.confirm(
+            `⚠️ ${data.error || "Il rider non è in turno questo giorno"}.\n\n` +
+            `Assegnare comunque come CHIAMATA D'URGENZA?\n` +
+            `(Verrà aggiunto un turno extra nella pagina Turni e il rider riceverà una notifica)`
+          );
+          if (ok) {
+            response = await fetch('/api/orders/' + selectedOrder.id + '/assign', {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ riderId, riderName: rider?.name, force: true, forceReason: "Chiamata d'urgenza confermata da consegne" })
+            });
+          }
+        }
+      }
       
       if (response.ok) {
         setOrders(prev => prev.map(o => 
@@ -263,6 +282,9 @@ export function DeliveriesView({
         setShowAssignModal(false);
         setSelectedOrder(null);
         onOrdersUpdate?.();
+      } else if (response.status !== 409) {
+        const errData = await response.json().catch(() => ({} as Record<string, any>));
+        alert("⚠️ " + (errData.error || "Errore assegnazione rider"));
       }
     } catch (error) {
       console.error("Errore assegnazione rider:", error);
