@@ -459,36 +459,34 @@ export default function TurniPage() {
   return (
     <div className="max-w-7xl mx-auto">
       {/* ── Header ── */}
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800">Turni</h1>
-          <p className="text-sm text-slate-500">
-            Pianificazione settimanale di operatori e rider. Le timbrature sono in{" "}
-            <a href="/dashboard/orari-lavoro" className="text-sky-600 underline">Orari di Lavoro</a>.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
+      <div className="mb-4">
+        <h1 className="text-2xl font-bold text-slate-800">Turni</h1>
+        <p className="text-sm text-slate-500">
+          Pianificazione settimanale di operatori e rider. Le timbrature sono in{" "}
+          <a href="/dashboard/orari-lavoro" className="text-sky-600 underline">Orari di Lavoro</a>.
+        </p>
+        <div className="flex items-center gap-2 mt-3">
           <button
             onClick={() => setWeekMonday(addDays(weekMonday, -7))}
-            className="px-3 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50"
+            className="w-10 h-10 flex items-center justify-center rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 active:bg-slate-100 flex-shrink-0"
             aria-label="Settimana precedente"
           >
             ←
           </button>
           <button
             onClick={() => setWeekMonday(mondayOfWeek(new Date()))}
-            className="px-3 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-sm font-medium"
+            className="h-10 px-3 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 active:bg-slate-100 text-sm font-medium flex-shrink-0"
           >
             Oggi
           </button>
           <button
             onClick={() => setWeekMonday(addDays(weekMonday, 7))}
-            className="px-3 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50"
+            className="w-10 h-10 flex items-center justify-center rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 active:bg-slate-100 flex-shrink-0"
             aria-label="Settimana successiva"
           >
             →
           </button>
-          <span className="ml-2 text-sm font-semibold text-slate-700">{weekLabel}</span>
+          <span className="ml-1 text-sm font-semibold text-slate-700 truncate">{weekLabel}</span>
         </div>
       </div>
 
@@ -551,7 +549,9 @@ export default function TurniPage() {
       ) : filteredEmployees.length === 0 ? (
         <div className="text-center py-16 text-slate-400">Nessun dipendente attivo trovato.</div>
       ) : (
-        <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+        <>
+        {/* DESKTOP (md+): tabella settimanale */}
+        <div className="hidden md:block overflow-x-auto rounded-2xl border border-slate-200 bg-white">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50">
@@ -620,12 +620,64 @@ export default function TurniPage() {
             </tbody>
           </table>
         </div>
+
+        {/* MOBILE (<md): una card per dipendente, 7 chip giorno — niente scroll orizzontale */}
+        <div className="md:hidden space-y-2.5">
+          {filteredEmployees.map((emp) => (
+            <div key={emp.id} className="bg-white border border-slate-200 rounded-2xl p-3">
+              <div className="flex items-center justify-between gap-2 mb-2.5">
+                <div className="min-w-0">
+                  <div className="font-semibold text-slate-800 text-sm truncate">{emp.name}</div>
+                  <div className="text-[11px] text-slate-400">
+                    {emp.role === "RIDER" ? "Rider" : "Operatore"}
+                    {!emp.workSchedule && <span className="ml-1 text-amber-500">• orario non configurato</span>}
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setTplModal(emp);
+                    setTplDraft(sanitizeSchedule(emp.workSchedule, true));
+                    setTplError(null);
+                  }}
+                  className="px-3 h-9 rounded-lg text-xs font-medium border border-slate-200 text-slate-500 active:bg-slate-100 flex-shrink-0"
+                >
+                  Orario
+                </button>
+              </div>
+              <div className="grid grid-cols-7 gap-1">
+                {weekDateKeys.map((dk) => {
+                  const av = availabilityOf(emp, dk);
+                  const exc = excMap.get(`${emp.id}_${dk}`);
+                  const isToday = dk === todayKey;
+                  return (
+                    <button
+                      key={dk}
+                      onClick={() => {
+                        setCellModal({ emp, dateKey: dk });
+                        setCellReason(exc?.reason || "");
+                        setCellError(null);
+                      }}
+                      className={`rounded-lg border text-center py-1.5 ${cellStyle(av)} ${isToday ? "ring-2 ring-indigo-400" : ""}`}
+                    >
+                      <div className="text-[9px] font-medium opacity-70">{WEEKDAY_LABELS_IT[weekdayKeyFromDateKey(dk)]}</div>
+                      <div className="text-xs font-bold">{dk.slice(8)}</div>
+                      <div className="text-[8px] font-semibold leading-tight">
+                        {av.source === "exception_on" ? "Extra" : av.source === "exception_off" ? "Ass." : av.available ? "✓" : "—"}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+        </>
       )}
 
       {/* ── MODAL CELLA (eccezione) ── */}
       {cellModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => !cellSaving && setCellModal(null)}>
-          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-5" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4" onClick={() => !cellSaving && setCellModal(null)}>
+          <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-xl max-w-md w-full p-5 max-h-[85vh] overflow-y-auto" style={{ paddingBottom: "calc(1.25rem + env(safe-area-inset-bottom, 0px))" }} onClick={(e) => e.stopPropagation()}>
             <h3 className="font-bold text-slate-800 mb-1">{cellModal.emp.name}</h3>
             <p className="text-sm text-slate-500 mb-3">{fmtFull(cellModal.dateKey)}</p>
 
@@ -653,7 +705,7 @@ export default function TurniPage() {
               onChange={(e) => setCellReason(e.target.value)}
               maxLength={300}
               placeholder="Es. ferie, malattia, urgenza…"
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-base sm:text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-indigo-300"
             />
 
             {cellError && <div className="text-sm text-rose-600 mb-3">{cellError}</div>}
@@ -696,8 +748,8 @@ export default function TurniPage() {
 
       {/* ── MODAL TEMPLATE (orario settimanale) ── */}
       {tplModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => !tplSaving && setTplModal(null)}>
-          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-5" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4" onClick={() => !tplSaving && setTplModal(null)}>
+          <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-xl max-w-md w-full p-5 max-h-[85vh] overflow-y-auto" style={{ paddingBottom: "calc(1.25rem + env(safe-area-inset-bottom, 0px))" }} onClick={(e) => e.stopPropagation()}>
             <h3 className="font-bold text-slate-800 mb-1">Orario settimanale</h3>
             <p className="text-sm text-slate-500 mb-4">
               {tplModal.name} — giorni in cui è normalmente in turno. Le eccezioni puntuali (assenze/extra) vincono
