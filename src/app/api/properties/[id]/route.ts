@@ -102,6 +102,44 @@ export async function PATCH(
     // Salva le modifiche sulla proprietà
     await updateProperty(id, body);
 
+    // ════════════════════════════════════════════════════════════
+    // RISOLVI LE NOTIFICHE "Nuova Proprietà da Approvare"
+    // Quando la proprietà esce dallo stato PENDING (es. approvazione con
+    // prezzo → PENDING_SIGNATURE), le notifiche admin con i bottoni
+    // Approva/Rifiuta vanno chiuse, altrimenti restano azionabili per
+    // sempre nel centro messaggi anche a decisione già presa.
+    // (Il Rifiuta passa da DELETE, che già elimina le notifiche in cascata.)
+    // ════════════════════════════════════════════════════════════
+    if (
+      typeof body.status === "string" &&
+      property.status === "PENDING" &&
+      body.status !== "PENDING"
+    ) {
+      try {
+        const notifSnap = await adminDb
+          .collection("notifications")
+          .where("relatedEntityId", "==", id)
+          .where("type", "==", "NEW_PROPERTY")
+          .get();
+        const now = Timestamp.now();
+        for (const d of notifSnap.docs) {
+          if ((d.data() as Record<string, any>).actionStatus !== "PENDING") continue;
+          await d.ref.update({
+            actionStatus: "APPROVED",
+            actionBy: currentUser.id || "system",
+            actionNote: "Approvata dalla pagina Proprietà",
+            actionAt: now,
+            status: "READ",
+            readAt: now,
+            updatedAt: now,
+          });
+        }
+      } catch (e) {
+        // Non bloccante: la proprietà è già stata approvata correttamente
+        console.error("Risoluzione notifiche NEW_PROPERTY fallita (non bloccante):", e);
+      }
+    }
+
     // ========================================================
     // 🚿 Se updateScendibagno richiesto, aggiorna nelle serviceConfigs
     // ========================================================
