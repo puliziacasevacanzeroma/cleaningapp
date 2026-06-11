@@ -12,6 +12,7 @@ import { useToday } from "~/lib/useToday";
 import { toDate, getDateString as utilGetDateString } from "~/lib/dateUtils";
 import { getItemName, resolveItemDisplayName } from "~/lib/itemNames";
 import ShiftBadge from "~/components/shifts/ShiftBadge";
+import MyPlannedShifts from "~/components/shifts/MyPlannedShifts";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // STORAGE KEYS
@@ -2936,6 +2937,7 @@ function RiderDashboardContent() {
           {/* Badge Turno */}
           <div className="px-4 pt-3">
             <ShiftBadge />
+            <MyPlannedShifts />
           </div>
 
           {/* Tab Bar - 3 TAB */}
