@@ -64,6 +64,20 @@ export function useDashboardRealtime() {
 
   useEffect(() => {
 
+    // ── ⏱️ DIAGNOSTICA COLD LOAD (temporanea, rimuovere a diagnosi chiusa) ──
+    // Log in console: quando l'effect parte (= auth pronta, listener attaccati)
+    // e quando arriva il PRIMO snapshot di ogni listener. Confrontare col
+    // timestamp di navigazione per capire dove muore il tempo.
+    const t0 = performance.now();
+    console.log(`⏱️ [dash] listener ATTACCATI a +${Math.round(t0)}ms dall'apertura pagina (auth pronta)`);
+    const firstSnap: Record<string, boolean> = {};
+    const logFirst = (name: string, docs: number) => {
+      if (firstSnap[name]) return;
+      firstSnap[name] = true;
+      console.log(`⏱️ [dash] primo snapshot ${name}: +${Math.round(performance.now() - t0)}ms dai listener (${docs} doc)`);
+    };
+    let firstPaintLogged = false;
+
     // Prepara date per query pulizie di oggi
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -86,7 +100,13 @@ export function useDashboardRealtime() {
     // ════════════════════════════════════════════════════════════
     const loadedFlags = { properties: false, cleanings: false, operators: false, orders: false, riders: false };
     const maybeUpdate = () => {
-      if (loadedFlags.properties && loadedFlags.cleanings) updateDashboard();
+      if (loadedFlags.properties && loadedFlags.cleanings) {
+        if (!firstPaintLogged) {
+          firstPaintLogged = true;
+          console.log(`⏱️ [dash] PRIMO PAINT (properties+cleanings pronti): +${Math.round(performance.now() - t0)}ms dai listener`);
+        }
+        updateDashboard();
+      }
     };
 
     const updateDashboard = () => {
@@ -282,6 +302,7 @@ export function useDashboardRealtime() {
       (snapshot) => {
         propertiesData = snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as Record<string, any>) }));
         loadedFlags.properties = true;
+        logFirst("properties", snapshot.size);
         maybeUpdate();
       },
       (err) => {
@@ -305,6 +326,7 @@ export function useDashboardRealtime() {
       (snapshot) => {
         cleaningsData = snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as Record<string, any>) }));
         loadedFlags.cleanings = true;
+        logFirst("cleanings", snapshot.size);
         maybeUpdate();
       },
       (err) => {
@@ -319,6 +341,7 @@ export function useDashboardRealtime() {
       (snapshot) => {
         operatorsData = snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as Record<string, any>) }));
         loadedFlags.operators = true;
+        logFirst("operators", snapshot.size);
         maybeUpdate();
       },
       (err) => {
@@ -344,6 +367,7 @@ export function useDashboardRealtime() {
       (snapshot) => {
         ordersData = snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as Record<string, any>) }));
         loadedFlags.orders = true;
+        logFirst("orders", snapshot.size);
         maybeUpdate();
       },
       (err) => {
@@ -358,6 +382,7 @@ export function useDashboardRealtime() {
       (snapshot) => {
         ridersData = snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as Record<string, any>) }));
         loadedFlags.riders = true;
+        logFirst("riders", snapshot.size);
         maybeUpdate();
       },
       (err) => {
