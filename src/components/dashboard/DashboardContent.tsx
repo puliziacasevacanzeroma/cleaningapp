@@ -323,9 +323,13 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
     const unsub = onSnapshot(q, (snap) => {
       const m = new Map<string, Record<string, boolean> | null>();
       snap.docs.forEach((d) => m.set(d.id, ((d.data() as Record<string, any>).workSchedule as Record<string, boolean>) || null));
-      setOpSchedules(m);
+      // Anti-churn: i doc users cambiano spesso per campi che non c'entrano
+      // (token push, lastSeen...). Aggiorna lo stato solo se i workSchedule
+      // sono davvero cambiati, altrimenti niente re-render.
+      setIfChangedJson("opSchedules", m, setOpSchedules, JSON.stringify(Array.from(m.entries()).sort()));
     }, () => setOpSchedules(new Map())); // fail-open: il server fa comunque enforcement
     return () => unsub();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Eccezioni turni del giorno selezionato in dashboard
@@ -342,9 +346,10 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
         const raw = d.data() as Record<string, any>;
         if (raw.userId) m.set(raw.userId, raw.type === "OFF" ? "OFF" : "ON");
       });
-      setDayShiftExceptions(m);
+      setIfChangedJson("dayShiftExceptions", m, setDayShiftExceptions, JSON.stringify(Array.from(m.entries()).sort()));
     }, () => setDayShiftExceptions(new Map()));
     return () => unsub();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDateKey]);
 
   // Badge disponibilità per un operatore nel giorno selezionato (null = in turno normale)
@@ -378,7 +383,22 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
   // come fallback legacy. Appena `useAuth` pubblica il vero uid, un successivo
   // re-render NON resetta questi useState (valore lazy iniziale). Non è un
   // problema perché Firestore sovrascrive rapidamente con i dati freschi.
-  
+
+  // ════════════════════════════════════════════════════════════
+  // ANTI-FLICKER: ogni snapshot Firestore ricostruiva le mappe derivate
+  // con IDENTITÀ NUOVE anche a contenuto identico → le useEffect a valle
+  // (in primis il listener pulizie, che azzera le card) ripartivano a ogni
+  // scrittura di background in produzione. Questi helper aggiornano lo
+  // stato SOLO se il contenuto è davvero cambiato (confronto JSON).
+  // ════════════════════════════════════════════════════════════
+  const derivedJsonRef = useRef<Record<string, string>>({});
+  const setIfChangedJson = <T,>(key: string, value: T, setter: (v: T) => void, serialized?: string) => {
+    const j = serialized !== undefined ? serialized : JSON.stringify(value);
+    if (derivedJsonRef.current[key] === j) return;
+    derivedJsonRef.current[key] = j;
+    setter(value);
+  };
+
   // 🔧 NUOVO: Mappa propertyId -> maxGuests per le proprietà
   const [propertiesMaxGuests, setPropertiesMaxGuests] = useState<Record<string, number>>(
     () => readAuxCache("maxGuests", userId, {} as Record<string, number>)
@@ -704,16 +724,17 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
       });
       
       
-      setPropertiesMaxGuests(maxGuestsMap);
-      setPropertiesServiceConfigs(serviceConfigsMap);
-      setPropertiesImageUrls(imageUrlMap);
-      setPropertiesBedrooms(bedroomsMap);
-      setPropertiesBathrooms(bathroomsMap);
-      setPropertiesCleaningPrice(cleaningPriceMap);
-      setPropertiesBedsConfig(bedsConfigMap);
-      setPropertiesAddresses(addressMap);
-      setPropertiesUsesOwnLinen(usesOwnLinenMap);
-      setActivePropertyIds(activeIds);
+      setIfChangedJson("maxGuests", maxGuestsMap, setPropertiesMaxGuests);
+      setIfChangedJson("serviceConfigs", serviceConfigsMap, setPropertiesServiceConfigs);
+      setIfChangedJson("imageUrls", imageUrlMap, setPropertiesImageUrls);
+      setIfChangedJson("bedrooms", bedroomsMap, setPropertiesBedrooms);
+      setIfChangedJson("bathrooms", bathroomsMap, setPropertiesBathrooms);
+      setIfChangedJson("cleaningPrice", cleaningPriceMap, setPropertiesCleaningPrice);
+      setIfChangedJson("bedsConfig", bedsConfigMap, setPropertiesBedsConfig);
+      setIfChangedJson("addresses", addressMap, setPropertiesAddresses);
+      setIfChangedJson("usesOwnLinen", usesOwnLinenMap, setPropertiesUsesOwnLinen);
+      // Set non è JSON-serializzabile direttamente: confronto su array ordinato
+      setIfChangedJson("activeIds", activeIds, setActivePropertyIds, JSON.stringify(Array.from(activeIds).sort()));
 
       // 🔧 FIX v2: write-through su localStorage. Ogni volta che i listener
       // portano dati freschi, la cache viene aggiornata. Al mount successivo
@@ -776,11 +797,19 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
   }, []);
 
   // 🔴 LISTENER REALTIME PER PULIZIE - Si aggiorna automaticamente
+  const lastCleaningsDayRef = useRef<string | null>(null);
   useEffect(() => {
-    // 🔒 Cambio giorno: SEMPRE dissolvenza + caricamento fresco. Mai dati di
-    // un'altra visita o di un altro giorno mostrati nell'attesa.
-    setCleanings([]);
-    setLoadingCleanings(true);
+    // 🔒 Cambio GIORNO: dissolvenza + caricamento fresco. Se invece l'effect
+    // riparte per un aggiornamento delle config proprietà nello STESSO giorno
+    // (scritture di background in produzione), NON azzerare: le card restano
+    // visibili e lo snapshot le sostituisce appena arriva (anti-flicker).
+    const dayKey = new Date(selectedDate).toDateString();
+    const dayChanged = lastCleaningsDayRef.current !== dayKey;
+    lastCleaningsDayRef.current = dayKey;
+    if (dayChanged) {
+      setCleanings([]);
+      setLoadingCleanings(true);
+    }
     const startOfDay = new Date(selectedDate);
     startOfDay.setHours(0, 0, 0, 0);
     const endOfDay = new Date(selectedDate);
