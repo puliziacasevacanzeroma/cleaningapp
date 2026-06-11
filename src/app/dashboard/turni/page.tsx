@@ -676,8 +676,8 @@ export default function TurniPage() {
 
       {/* ── MODAL CELLA (eccezione) ── */}
       {cellModal && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4" onClick={() => !cellSaving && setCellModal(null)}>
-          <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-xl max-w-md w-full p-5 max-h-[85vh] overflow-y-auto" style={{ paddingBottom: "calc(1.25rem + env(safe-area-inset-bottom, 0px))" }} onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onClick={() => !cellSaving && setCellModal(null)}>
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-5 max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <h3 className="font-bold text-slate-800 mb-1">{cellModal.emp.name}</h3>
             <p className="text-sm text-slate-500 mb-3">{fmtFull(cellModal.dateKey)}</p>
 
@@ -748,8 +748,8 @@ export default function TurniPage() {
 
       {/* ── MODAL TEMPLATE (orario settimanale) ── */}
       {tplModal && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4" onClick={() => !tplSaving && setTplModal(null)}>
-          <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-xl max-w-md w-full p-5 max-h-[85vh] overflow-y-auto" style={{ paddingBottom: "calc(1.25rem + env(safe-area-inset-bottom, 0px))" }} onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onClick={() => !tplSaving && setTplModal(null)}>
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-5 max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <h3 className="font-bold text-slate-800 mb-1">Orario settimanale</h3>
             <p className="text-sm text-slate-500 mb-4">
               {tplModal.name} — giorni in cui è normalmente in turno. Le eccezioni puntuali (assenze/extra) vincono
