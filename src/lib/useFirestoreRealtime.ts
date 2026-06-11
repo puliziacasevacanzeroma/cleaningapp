@@ -77,6 +77,7 @@ export function useDashboardRealtime() {
       console.log(`⏱️ [dash] primo snapshot ${name}: +${Math.round(performance.now() - t0)}ms dai listener (${docs} doc)`);
     };
     let firstPaintLogged = false;
+    let saveCacheTimer: ReturnType<typeof setTimeout> | null = null;
 
     // Prepara date per query pulizie di oggi
     const today = new Date();
@@ -290,7 +291,17 @@ export function useDashboardRealtime() {
 
 
       // 🔄 Salva in cache per persistenza (per-utente, v3)
-      saveToCache(cacheKey, newData, cacheTsKey);
+      // ⚡ ANTI-LONG-TASK: prima lo stringify da ~3MB + write localStorage
+      // girava SINCRONO dentro updateDashboard, che col paint progressivo
+      // viene chiamato a ogni snapshot (5 volte in raffica al cold load):
+      // 5 serializzazioni da 3MB bloccavano il main thread proprio mentre
+      // React doveva dipingere le card ([Violation] handler took Nms).
+      // Ora: debounce 2s, una sola scrittura a raffica finita, fuori dal
+      // percorso critico del rendering.
+      if (saveCacheTimer) clearTimeout(saveCacheTimer);
+      saveCacheTimer = setTimeout(() => {
+        saveToCache(cacheKey, newData, cacheTsKey);
+      }, 2000);
       
       setData(newData);
       setIsLoading(false);
@@ -393,6 +404,7 @@ export function useDashboardRealtime() {
 
     // Cleanup
     return () => {
+      if (saveCacheTimer) clearTimeout(saveCacheTimer);
       unsubProperties();
       unsubCleanings();
       unsubOperators();

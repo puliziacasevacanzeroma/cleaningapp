@@ -374,6 +374,17 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
   // mostra SOLO ciò che arriva fresco da Firestore.
   const [cleanings, setCleanings] = useState<Cleaning[]>([]);
   const [loadingCleanings, setLoadingCleanings] = useState(true);
+
+  // ── ⏱️ DIAGNOSTICA COLD LOAD (temporanea): pixel vero delle card ──
+  const cardsPaintLoggedRef = useRef(false);
+  useEffect(() => {
+    if (!cardsPaintLoggedRef.current && cleanings.length > 0 && !loadingCleanings) {
+      cardsPaintLoggedRef.current = true;
+      requestAnimationFrame(() => {
+        console.log(`⏱️ [dash] CARD A SCHERMO (DOM dipinto): +${Math.round(performance.now())}ms dall'apertura pagina`);
+      });
+    }
+  }, [cleanings, loadingCleanings]);
   
   // 🔧 FIX v2 — MAPPE AUSILIARIE: ognuna inizializzata dalla cache localStorage
   // per-utente. Previene il "flash" di card con dati mancanti al boot prima che
