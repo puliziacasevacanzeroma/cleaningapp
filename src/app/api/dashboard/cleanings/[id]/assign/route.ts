@@ -166,6 +166,10 @@ export async function POST(
       operators: newOperators,
       operatorId: newOperators[0]?.id || "",
       operatorName: newOperators[0]?.name || "",
+      // Campo LEGACY `operator` (singolare): alcune card lo usano come
+      // fallback quando `operators` è vuoto. Va tenuto in sync, altrimenti
+      // resta un "operatore fantasma" dopo le modifiche via API.
+      operator: newOperators[0] || null,
       status: "ASSIGNED",
       updatedAt: Timestamp.now(),
     });
@@ -238,6 +242,7 @@ export async function DELETE(
       operators: newOperators,
       operatorId: newOperators[0]?.id || "",
       operatorName: newOperators[0]?.name || "",
+      operator: newOperators[0] || null, // sync campo legacy (vedi POST)
       status: newOperators.length > 0 ? "ASSIGNED" : "SCHEDULED",
       updatedAt: Timestamp.now(),
     });

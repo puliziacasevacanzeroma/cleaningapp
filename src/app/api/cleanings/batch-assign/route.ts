@@ -167,6 +167,7 @@ export async function POST(request: NextRequest) {
           operators: newOperators,
           operatorId: newOperators[0]?.id || "",
           operatorName: newOperators[0]?.name || "",
+          operator: newOperators[0] || null, // sync campo legacy (fallback card)
           status: "ASSIGNED",
           assignedBy: user.id,
           assignedAt: now,

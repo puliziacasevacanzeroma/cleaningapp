@@ -1633,46 +1633,60 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
   };
   
   // Salva operatori da modal
+  // FIX TURNI: prima faceva updateDoc DIRETTO su Firestore, bypassando il
+  // check turni e lasciando lo status sporco quando si rimuovevano tutti
+  // gli operatori. Ora passa dall'API: il server fa enforcement turni
+  // (409 + conferma urgenza) e gestisce lo status (ASSIGNED se restano
+  // operatori, SCHEDULED se zero).
   const saveOperatorFromModal = async () => {
     if (!operatorModalCleaning) return;
     setSavingOperator(true);
     try {
-      const cleaningRef = doc(db, "cleanings", operatorModalCleaning.id);
-      
-      if (selectedOperatorIds.length > 0) {
-        const selectedOps = selectedOperatorIds.map(id => {
-          const op = operators.find(o => o.id === id);
-          return { id: id, name: op?.name || "" };
+      const cleaningId = operatorModalCleaning.id;
+      const current = (cleaningOperators[cleaningId] || []).map(o => o.id);
+      const target = selectedOperatorIds;
+      const toRemove = current.filter(id => !target.includes(id));
+      const toAdd = target.filter(id => !current.includes(id));
+
+      // 1. Rimozioni (il server sistema status/operatorId/operatorName)
+      for (const opId of toRemove) {
+        const res = await fetch('/api/dashboard/cleanings/' + cleaningId + '/assign', {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ operatorId: opId })
         });
-        
-        await updateDoc(cleaningRef, {
-          operators: selectedOps,
-          operatorId: selectedOps[0].id,
-          operatorName: selectedOps[0].name,
-          operator: selectedOps[0],
-          status: "SCHEDULED",
-          updatedAt: new Date()
-        });
-        
-        // Aggiorna stato locale
-        setCleaningOperators(prev => ({
-          ...prev,
-          [operatorModalCleaning.id]: selectedOps
-        }));
-      } else {
-        await updateDoc(cleaningRef, {
-          operators: [],
-          operatorId: null,
-          operatorName: null,
-          operator: null,
-          updatedAt: new Date()
-        });
-        
-        setCleaningOperators(prev => ({
-          ...prev,
-          [operatorModalCleaning.id]: []
-        }));
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          alert("⚠️ Errore rimozione operatore: " + (err.error || res.status));
+        }
       }
+
+      // 2. Aggiunte con check turni (409 → popup conferma urgenza → retry force)
+      const declinedIds: string[] = [];
+      for (const opId of toAdd) {
+        const res = await assignWithShiftCheck(cleaningId, opId);
+        if (res.status === 409) {
+          // urgenza rifiutata dall'admin: operatore non assegnato
+          declinedIds.push(opId);
+        } else if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          alert("⚠️ Errore assegnazione: " + (err.error || res.status));
+          declinedIds.push(opId);
+        }
+      }
+
+      // 3. Stato locale: target meno i rifiutati (il listener realtime
+      //    riallineerà comunque da Firestore)
+      const finalOps = target
+        .filter(id => !declinedIds.includes(id))
+        .map(id => {
+          const op = operators.find(o => o.id === id);
+          return { id, name: op?.name || "" };
+        });
+      setCleaningOperators(prev => ({
+        ...prev,
+        [cleaningId]: finalOps
+      }));
       setShowOperatorModal(false);
       setOperatorModalCleaning(null);
     } catch (error) {

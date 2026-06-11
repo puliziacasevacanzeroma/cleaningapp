@@ -679,6 +679,10 @@ export function PulizieAdminView({ properties, cleanings, operators = [] }: Puli
   };
 
   // ========== FUNZIONI ASSEGNAZIONE RAPIDA ADMIN ==========
+  // FIX TURNI: prima scriveva updateDoc DIRETTO (solo operatorId, senza array
+  // operators, senza check turni, status sempre "SCHEDULED"). Ora passa
+  // dall'API dashboard: enforcement turni (409 + conferma urgenza), array
+  // operators coerente, status corretto e notifica all'operatore.
   const handleQuickAssignOperator = async (cleaningId: string, operatorId: string) => {
     setSavingAssignment(true);
     try {
@@ -688,13 +692,50 @@ export function PulizieAdminView({ properties, cleanings, operators = [] }: Puli
         return;
       }
 
-      const cleaningRef = doc(db, "cleanings", cleaningId);
-      await updateDoc(cleaningRef, {
-        operatorId: operatorId,
-        operatorName: operator.name,
-        status: "SCHEDULED",
-        updatedAt: new Date()
+      // Semantica del calendario = SOSTITUZIONE: rimuovi gli operatori attuali
+      const cl = cleanings.find(c => c.id === cleaningId);
+      const existingIds = new Set<string>();
+      (cl?.operators || []).forEach(o => { if (o?.id) existingIds.add(o.id); });
+      if (cl?.operator?.id) existingIds.add(cl.operator.id);
+      if ((cl as any)?.operatorId) existingIds.add((cl as any).operatorId);
+
+      if (existingIds.has(operatorId)) { setAssigningOperator(null); return; } // già assegnato a lui
+
+      for (const oldId of existingIds) {
+        await fetch('/api/dashboard/cleanings/' + cleaningId + '/assign', {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ operatorId: oldId })
+        });
+      }
+
+      // Assegna con check turni
+      let res = await fetch('/api/dashboard/cleanings/' + cleaningId + '/assign', {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ operatorId })
       });
+      if (res.status === 409) {
+        const data = await res.clone().json().catch(() => ({} as Record<string, any>));
+        if (data.code === "SHIFT_UNAVAILABLE") {
+          const ok = window.confirm(
+            `⚠️ ${data.error || operator.name + " non è in turno questo giorno"}.\n\n` +
+            `Assegnare comunque come CHIAMATA D'URGENZA?\n` +
+            `(Verrà aggiunto un turno extra nella pagina Turni e l'operatore riceverà una notifica)`
+          );
+          if (ok) {
+            res = await fetch('/api/dashboard/cleanings/' + cleaningId + '/assign', {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ operatorId, force: true, forceReason: "Chiamata d'urgenza confermata da calendario" })
+            });
+          }
+        }
+      }
+      if (!res.ok && res.status !== 409) {
+        const err = await res.json().catch(() => ({}));
+        alert("⚠️ " + (err.error || "Errore nell'assegnazione"));
+      }
       
       setAssigningOperator(null);
     } catch (error) {
@@ -726,12 +767,26 @@ export function PulizieAdminView({ properties, cleanings, operators = [] }: Puli
   const handleRemoveOperator = async (cleaningId: string) => {
     setSavingAssignment(true);
     try {
-      const cleaningRef = doc(db, "cleanings", cleaningId);
-      await updateDoc(cleaningRef, {
-        operatorId: null,
-        operatorName: null,
-        updatedAt: new Date()
-      });
+      // FIX TURNI/STATUS: rimozione via API così il server riporta lo status
+      // a SCHEDULED quando non restano operatori (prima updateDoc diretto
+      // lasciava lo status sporco, es. badge "ASSEGNATA" senza operatori)
+      const cl = cleanings.find(c => c.id === cleaningId);
+      const existingIds = new Set<string>();
+      (cl?.operators || []).forEach(o => { if (o?.id) existingIds.add(o.id); });
+      if (cl?.operator?.id) existingIds.add(cl.operator.id);
+      if ((cl as any)?.operatorId) existingIds.add((cl as any).operatorId);
+
+      for (const oldId of existingIds) {
+        const res = await fetch('/api/dashboard/cleanings/' + cleaningId + '/assign', {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ operatorId: oldId })
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          alert("⚠️ Errore rimozione: " + (err.error || res.status));
+        }
+      }
       
     } catch (error) {
       console.error("Errore rimozione operatore:", error);

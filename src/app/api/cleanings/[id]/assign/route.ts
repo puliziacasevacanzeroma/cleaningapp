@@ -150,6 +150,7 @@ export async function POST(
       operators: newOperators,
       operatorId: newOperators[0].id,
       operatorName: newOperators[0].name,
+      operator: newOperators[0] || null, // sync campo legacy (fallback card)
       status: "ASSIGNED",
       assignedBy: user.id,
       assignedAt: now,
@@ -263,6 +264,7 @@ export async function DELETE(
       operators: newOperators,
       operatorId: newOperators[0]?.id || "",
       operatorName: newOperators[0]?.name || "",
+      operator: newOperators[0] || null, // sync campo legacy (fallback card)
       status: newOperators.length > 0 ? "ASSIGNED" : "SCHEDULED",
       updatedAt: now,
     });
