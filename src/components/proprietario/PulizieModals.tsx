@@ -305,8 +305,12 @@ export const PulizieModals = forwardRef<PulizieModalsHandle, PulizieModalsProps>
           }
         }
         if (!res.ok && res.status !== 409) {
-          const err = await res.json().catch(() => ({}));
-          alert("⚠️ Errore assegnazione: " + (err.error || res.status));
+          const err = await res.json().catch(() => ({} as Record<string, any>));
+          // "già assegnato" = lo stato desiderato esiste già sul server
+          // (può capitare dopo una rimozione fallita): non è un errore per l'utente
+          if (!String(err.error || "").includes("già assegnato")) {
+            alert("⚠️ Errore assegnazione: " + (err.error || res.status));
+          }
         }
       }
 

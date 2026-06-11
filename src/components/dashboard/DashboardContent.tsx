@@ -1721,24 +1721,21 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
           // urgenza rifiutata dall'admin: operatore non assegnato
           declinedIds.push(opId);
         } else if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          alert("⚠️ Errore assegnazione: " + (err.error || res.status));
-          declinedIds.push(opId);
+          const err = await res.json().catch(() => ({} as Record<string, any>));
+          // "già assegnato" = lo stato desiderato esiste già sul server
+          // (può capitare dopo una rimozione fallita): non è un errore per l'utente
+          if (!String(err.error || "").includes("già assegnato")) {
+            alert("⚠️ Errore assegnazione: " + (err.error || res.status));
+            declinedIds.push(opId);
+          }
         }
       }
 
-      // 3. Stato locale: target meno i rifiutati (il listener realtime
-      //    riallineerà comunque da Firestore)
-      const finalOps = target
-        .filter(id => !declinedIds.includes(id))
-        .map(id => {
-          const op = operators.find(o => o.id === id);
-          return { id, name: op?.name || "" };
-        });
-      setCleaningOperators(prev => ({
-        ...prev,
-        [cleaningId]: finalOps
-      }));
+      // NOTA: niente aggiornamento manuale di cleaningOperators qui.
+      // Il listener realtime su cleanings riallinea lo stato dal server:
+      // così la UI non può mai divergere dalla verità (es. dopo una
+      // rimozione fallita lo stato locale mostrava "rimosso" a torto).
+
       setShowOperatorModal(false);
       setOperatorModalCleaning(null);
     } catch (error) {

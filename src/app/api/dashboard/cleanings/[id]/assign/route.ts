@@ -208,8 +208,10 @@ export async function DELETE(
     }
 
     const { id } = await params;
-    // @ts-expect-error TODO-FIX: TS2304 Cannot find name 'GenericBodySchema'.
-    const body = await validateBody(request, GenericBodySchema);
+    // FIX 500: questa riga usava GenericBodySchema SENZA importarlo
+    // (mascherato da @ts-expect-error) → ReferenceError a runtime → 500.
+    // La rimozione operatore da dashboard non ha mai funzionato per questo.
+    const body = await validateBody(request, AssignOperatorSchema);
     if (body instanceof Response) return body;
     const { operatorId } = body;
 
