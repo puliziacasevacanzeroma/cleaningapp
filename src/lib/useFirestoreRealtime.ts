@@ -75,9 +75,19 @@ export function useDashboardRealtime() {
     let ordersData: any[] = [];
     let ridersData: any[] = [];
     
-    // Flag per sapere quando tutti i listener hanno caricato
-    let loadedCount = 0;
-    const totalListeners = 5;
+    // ════════════════════════════════════════════════════════════
+    // PRIMO PAINT PROGRESSIVO (fix carico a freddo ~13s)
+    // Prima: la dashboard restava sullo skeleton finché TUTTI e 5 i
+    // listener non avevano consegnato il primo snapshot → il più lento
+    // (properties intere coi serviceConfigs, 7 giorni di ordini) dettava
+    // il tempo. Ora: si dipinge appena ci sono PROPRIETÀ + PULIZIE (il
+    // minimo per le card); operatori/ordini/rider raffinano appena
+    // arrivano (i contatori partono a 0 e si aggiornano in un attimo).
+    // ════════════════════════════════════════════════════════════
+    const loadedFlags = { properties: false, cleanings: false, operators: false, orders: false, riders: false };
+    const maybeUpdate = () => {
+      if (loadedFlags.properties && loadedFlags.cleanings) updateDashboard();
+    };
 
     const updateDashboard = () => {
       // Mappa proprietà per lookup veloce
@@ -271,10 +281,8 @@ export function useDashboardRealtime() {
       query(collection(db, "properties"), where("status", "==", "ACTIVE")),
       (snapshot) => {
         propertiesData = snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as Record<string, any>) }));
-        loadedCount++;
-        if (loadedCount >= totalListeners) updateDashboard();
-        else if (loadedCount === totalListeners) updateDashboard();
-        if (loadedCount > totalListeners) updateDashboard();
+        loadedFlags.properties = true;
+        maybeUpdate();
       },
       (err) => {
         console.error("Errore properties:", err);
@@ -296,8 +304,8 @@ export function useDashboardRealtime() {
       ),
       (snapshot) => {
         cleaningsData = snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as Record<string, any>) }));
-        loadedCount++;
-        if (loadedCount >= totalListeners) updateDashboard();
+        loadedFlags.cleanings = true;
+        maybeUpdate();
       },
       (err) => {
         console.error("Errore cleanings:", err);
@@ -310,8 +318,8 @@ export function useDashboardRealtime() {
       query(collection(db, "users"), where("role", "==", "OPERATORE_PULIZIE")),
       (snapshot) => {
         operatorsData = snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as Record<string, any>) }));
-        loadedCount++;
-        if (loadedCount >= totalListeners) updateDashboard();
+        loadedFlags.operators = true;
+        maybeUpdate();
       },
       (err) => {
         console.error("Errore operators:", err);
@@ -335,8 +343,8 @@ export function useDashboardRealtime() {
       ),
       (snapshot) => {
         ordersData = snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as Record<string, any>) }));
-        loadedCount++;
-        if (loadedCount >= totalListeners) updateDashboard();
+        loadedFlags.orders = true;
+        maybeUpdate();
       },
       (err) => {
         console.error("Errore orders:", err);
@@ -349,8 +357,8 @@ export function useDashboardRealtime() {
       query(collection(db, "users"), where("role", "==", "RIDER")),
       (snapshot) => {
         ridersData = snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as Record<string, any>) }));
-        loadedCount++;
-        if (loadedCount >= totalListeners) updateDashboard();
+        loadedFlags.riders = true;
+        maybeUpdate();
       },
       (err) => {
         console.error("Errore riders:", err);
