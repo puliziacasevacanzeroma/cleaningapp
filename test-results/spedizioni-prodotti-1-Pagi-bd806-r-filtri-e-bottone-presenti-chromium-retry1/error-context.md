@@ -1,0 +1,78 @@
+# Page snapshot
+
+```yaml
+- generic [active]:
+  - generic [ref=e2]:
+    - generic [ref=e6]:
+      - generic [ref=e7]:
+        - img [ref=e9]
+        - generic [ref=e11]:
+          - text: CleaningApp
+          - paragraph [ref=e12]: Gestionale Pro
+      - generic [ref=e13]:
+        - heading "Gestisci i tuoi servizi di pulizia in modo semplice" [level=1] [ref=e14]:
+          - text: Gestisci i tuoi
+          - text: servizi di pulizia
+          - text: in modo semplice
+        - paragraph [ref=e15]:
+          - text: Pulizie, biancheria, operatori e consegne.
+          - text: Tutto in un'unica piattaforma.
+      - generic [ref=e16]:
+        - generic [ref=e17]:
+          - paragraph [ref=e18]: 99+
+          - paragraph [ref=e19]: Proprietà gestite
+        - generic [ref=e20]:
+          - paragraph [ref=e21]: 1k+
+          - paragraph [ref=e22]: Prenotazioni
+        - generic [ref=e23]:
+          - paragraph [ref=e24]: 98%
+          - paragraph [ref=e25]: Soddisfazione
+    - generic [ref=e28]:
+      - generic [ref=e29]:
+        - heading "Bentornato!" [level=2] [ref=e30]
+        - paragraph [ref=e31]: Accedi al tuo account per continuare
+      - button "Continua con Google" [ref=e32]:
+        - img [ref=e33]
+        - text: Continua con Google
+      - generic [ref=e42]: oppure
+      - generic [ref=e43]:
+        - generic [ref=e44]:
+          - generic [ref=e45]: Email
+          - generic [ref=e46]:
+            - generic:
+              - img
+            - textbox "nome@email.com" [ref=e47]
+        - generic [ref=e48]:
+          - generic [ref=e49]: Password
+          - generic [ref=e50]:
+            - generic:
+              - img
+            - textbox "••••••••" [ref=e51]
+            - button [ref=e52]:
+              - img [ref=e53]
+        - button "Accedi" [ref=e56]
+      - link "Password dimenticata?" [ref=e58] [cursor=pointer]:
+        - /url: /forgot-password
+      - paragraph [ref=e60]:
+        - text: Non hai un account?
+        - link "Registrati" [ref=e61] [cursor=pointer]:
+          - /url: /register
+      - generic [ref=e62]:
+        - paragraph [ref=e63]: Accesso rapido demo
+        - generic [ref=e64]:
+          - button "🛡️ Admin" [ref=e65]:
+            - generic [ref=e66]: 🛡️
+            - generic [ref=e67]: Admin
+          - button "🏠 Proprietario" [ref=e68]:
+            - generic [ref=e69]: 🏠
+            - generic [ref=e70]: Proprietario
+          - button "🧹 Operatore" [ref=e71]:
+            - generic [ref=e72]: 🧹
+            - generic [ref=e73]: Operatore
+          - button "🚗 Rider" [ref=e74]:
+            - generic [ref=e75]: 🚗
+            - generic [ref=e76]: Rider
+  - button "Open Next.js Dev Tools" [ref=e82] [cursor=pointer]:
+    - img [ref=e83]
+  - alert [ref=e86]
+```

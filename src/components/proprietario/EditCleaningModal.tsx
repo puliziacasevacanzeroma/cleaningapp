@@ -3892,42 +3892,6 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                   )}
                 </div>
 
-                {/* 🧴 Prodotti Pulizia (admin) — gratuiti, consegnati col rider, non addebitati */}
-                {isAdmin && (
-                  <div className="mb-4 p-3 rounded-xl bg-white border border-slate-200">
-                    <div className="flex items-center gap-2 mb-2">
-                      <div className="w-8 h-8 rounded-lg bg-teal-50 flex items-center justify-center"><span className="text-sm">🧴</span></div>
-                      <div>
-                        <span className="text-sm font-semibold text-slate-700">Prodotti Pulizia</span>
-                        <p className="text-[10px] text-slate-500">Gratuiti, consegnati col rider — non addebitati al proprietario</p>
-                      </div>
-                    </div>
-                    <div className="max-h-44 overflow-y-auto border border-slate-200 rounded-lg divide-y divide-slate-100">
-                      {productCatalog.length === 0 ? (
-                        <p className="text-xs text-slate-400 p-2.5">Nessun prodotto in inventario.</p>
-                      ) : productCatalog.map(p => {
-                        const sel = cleaningProductsSel[p.id];
-                        return (
-                          <div key={p.id} className={`flex items-center justify-between gap-2 p-2 ${sel ? 'bg-teal-50/50' : ''}`}>
-                            <button type="button" onClick={() => setCleaningProductsSel(prev => { const n = { ...prev }; if (n[p.id]) delete n[p.id]; else n[p.id] = { name: p.name, qty: 1 }; return n; })} className="flex items-center gap-2 min-w-0 flex-1 text-left">
-                              <span className={`w-5 h-5 shrink-0 rounded-md border flex items-center justify-center text-[10px] font-bold text-white ${sel ? 'bg-teal-600 border-teal-600' : 'border-slate-300'}`}>{sel ? '✓' : ''}</span>
-                              <span className="text-xs text-slate-700 truncate">{p.name}</span>
-                            </button>
-                            {sel && (
-                              <div className="flex items-center gap-1.5 shrink-0">
-                                <button type="button" onClick={() => setCleaningProductsSel(prev => { const n = { ...prev }; if (n[p.id]) n[p.id] = { ...n[p.id], qty: Math.max(1, n[p.id].qty - 1) }; return n; })} className="w-6 h-6 rounded-md bg-slate-100 text-slate-600 font-bold text-xs">−</button>
-                                <span className="w-5 text-center text-xs font-semibold">{sel.qty}</span>
-                                <button type="button" onClick={() => setCleaningProductsSel(prev => { const n = { ...prev }; if (n[p.id]) n[p.id] = { ...n[p.id], qty: Math.min(99, n[p.id].qty + 1) }; return n; })} className="w-6 h-6 rounded-md bg-slate-100 text-slate-600 font-bold text-xs">+</button>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                    <p className="text-[10px] text-slate-400 mt-1.5">Le modifiche si applicano premendo &quot;Salva&quot;.</p>
-                  </div>
-                )}
-
                 {/* 🔥 Toggle Biancheria */}
                 <div className="mb-4 p-3 rounded-xl bg-gradient-to-r from-slate-50 to-slate-100 border border-slate-200">
                   <div className="flex items-center justify-between">
@@ -4129,6 +4093,42 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                 <span className="text-2xl font-bold text-white">€{totalDotazioni.toFixed(2)}</span>
               </div>
             </div>
+
+                {/* 🧴 Prodotti Pulizia (admin) — gratuiti, consegnati col rider, non addebitati */}
+                {isAdmin && (
+                  <div className="mb-4 p-3 rounded-xl bg-white border border-slate-200">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="w-8 h-8 rounded-lg bg-teal-50 flex items-center justify-center"><span className="text-sm">🧴</span></div>
+                      <div>
+                        <span className="text-sm font-semibold text-slate-700">Prodotti Pulizia</span>
+                        <p className="text-[10px] text-slate-500">Gratuiti, consegnati col rider — non addebitati al proprietario</p>
+                      </div>
+                    </div>
+                    <div className="max-h-44 overflow-y-auto border border-slate-200 rounded-lg divide-y divide-slate-100">
+                      {productCatalog.length === 0 ? (
+                        <p className="text-xs text-slate-400 p-2.5">Nessun prodotto in inventario.</p>
+                      ) : productCatalog.map(p => {
+                        const sel = cleaningProductsSel[p.id];
+                        return (
+                          <div key={p.id} className={`flex items-center justify-between gap-2 p-2 ${sel ? 'bg-teal-50/50' : ''}`}>
+                            <button type="button" onClick={() => setCleaningProductsSel(prev => { const n = { ...prev }; if (n[p.id]) delete n[p.id]; else n[p.id] = { name: p.name, qty: 1 }; return n; })} className="flex items-center gap-2 min-w-0 flex-1 text-left">
+                              <span className={`w-5 h-5 shrink-0 rounded-md border flex items-center justify-center text-[10px] font-bold text-white ${sel ? 'bg-teal-600 border-teal-600' : 'border-slate-300'}`}>{sel ? '✓' : ''}</span>
+                              <span className="text-xs text-slate-700 truncate">{p.name}</span>
+                            </button>
+                            {sel && (
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <button type="button" onClick={() => setCleaningProductsSel(prev => { const n = { ...prev }; if (n[p.id]) n[p.id] = { ...n[p.id], qty: Math.max(1, n[p.id].qty - 1) }; return n; })} className="w-6 h-6 rounded-md bg-slate-100 text-slate-600 font-bold text-xs">−</button>
+                                <span className="w-5 text-center text-xs font-semibold">{sel.qty}</span>
+                                <button type="button" onClick={() => setCleaningProductsSel(prev => { const n = { ...prev }; if (n[p.id]) n[p.id] = { ...n[p.id], qty: Math.min(99, n[p.id].qty + 1) }; return n; })} className="w-6 h-6 rounded-md bg-slate-100 text-slate-600 font-bold text-xs">+</button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <p className="text-[10px] text-slate-400 mt-1.5">Le modifiche si applicano premendo &quot;Salva&quot;.</p>
+                  </div>
+                )}
               </>
             )}
           </>

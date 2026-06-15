@@ -164,6 +164,8 @@ export default function OrderDetailModal({
   const [invLinen, setInvLinen] = useState<LinenItem[]>([]);
   const [invBath, setInvBath] = useState<LinenItem[]>([]);
   const [invKit, setInvKit] = useState<LinenItem[]>([]);
+  const [invProducts, setInvProducts] = useState<LinenItem[]>([]);
+  const [cleaningProductsSel, setCleaningProductsSel] = useState<Record<string, { name: string; qty: number }>>({});
   const [editedItems, setEditedItems] = useState<Record<string, number>>({});
   
   const [liveOrder, setLiveOrder] = useState<Order | null>(null);
@@ -245,18 +247,20 @@ export default function OrderDetailModal({
       try {
         const res = await fetch('/api/inventory/list');
         const data = await res.json();
-        const linen: LinenItem[] = [], bath: LinenItem[] = [], kit: LinenItem[] = [];
+        const linen: LinenItem[] = [], bath: LinenItem[] = [], kit: LinenItem[] = [], prod: LinenItem[] = [];
         data.categories?.forEach((cat: { id: string; items: { key?: string; id: string; name: string; sellPrice?: number }[] }) => {
           cat.items?.forEach((item) => {
             const m = { id: item.key || item.id, n: item.name, p: item.sellPrice || 0 };
             if (cat.id === 'biancheria_letto') linen.push(m);
             else if (cat.id === 'biancheria_bagno') bath.push(m);
             else if (cat.id === 'kit_cortesia') kit.push(m);
+            else if (cat.id === 'prodotti_pulizia') prod.push(m);
           });
         });
         setInvLinen(linen);
         setInvBath(bath);
         setInvKit(kit);
+        setInvProducts(prod);
       } catch (e) { console.error("Errore caricamento inventario:", e); }
     }
     load();
@@ -267,9 +271,21 @@ export default function OrderDetailModal({
     if (!order?.items || (invLinen.length === 0 && invBath.length === 0 && invKit.length === 0)) return;
     const map: Record<string, number> = {};
     [...invLinen, ...invBath, ...invKit].forEach(item => { map[item.id] = 0; });
-    order.items.forEach(item => { map[item.id] = item.quantity; });
+    order.items.forEach(item => { if ((item as any).type === "cleaning_product" || (item as any).categoryId === "prodotti_pulizia") return; map[item.id] = item.quantity; });
     setEditedItems(map);
   }, [order?.id, order?.items?.length, invLinen.length, invBath.length, invKit.length]);
+
+  // ═══ INIT PRODOTTI PULIZIA (dai prodotti già presenti sull'ordine, indipendente dall'inventario) ═══
+  useEffect(() => {
+    if (!order?.items) return;
+    const psel: Record<string, { name: string; qty: number }> = {};
+    order.items.forEach(item => {
+      if ((item as any).type === "cleaning_product" || (item as any).categoryId === "prodotti_pulizia") {
+        psel[item.id] = { name: item.name || "Prodotto", qty: item.quantity || 1 };
+      }
+    });
+    setCleaningProductsSel(psel);
+  }, [order?.id, order?.items?.length]);
 
   // ═══ BODY OVERFLOW ═══
   useEffect(() => {
@@ -309,7 +325,15 @@ export default function OrderDetailModal({
   const hasTimeChange = editTime !== (order?.scheduledTime || '10:00');
   const hasBedMakingChange = editBedMaking !== (order?.bedMaking || false) || 
     (editBedMaking && selectedBedIds.length !== (order?.bedMakingCount || 0));
-  const hasChanges = hasItemChanges || hasDateChange || hasTimeChange || hasBedMakingChange;
+  const hasProductChanges = useMemo(() => {
+    const orig: Record<string, number> = {};
+    (order?.items || []).forEach(it => { if ((it as any).type === "cleaning_product" || (it as any).categoryId === "prodotti_pulizia") orig[it.id] = it.quantity; });
+    const keys = new Set<string>([...Object.keys(orig), ...Object.keys(cleaningProductsSel)]);
+    for (const k of keys) { if ((orig[k] || 0) !== (cleaningProductsSel[k]?.qty || 0)) return true; }
+    return false;
+  }, [order?.items, cleaningProductsSel]);
+
+  const hasChanges = hasItemChanges || hasDateChange || hasTimeChange || hasBedMakingChange || hasProductChanges;
 
   if (!isOpen || !order || !order.id) return null;
 
@@ -393,9 +417,17 @@ export default function OrderDetailModal({
         }
       });
 
+      // 🧴 Prodotti pulizia (gratuiti) — gestiti a parte dai linen e preservati.
+      const productItems = Object.entries(cleaningProductsSel).map(([id, v]) => ({
+        id, itemId: id, name: v.name, quantity: v.qty, price: 0,
+        categoryName: "Prodotti Pulizia", type: "cleaning_product", categoryId: "prodotti_pulizia",
+      }));
+
       // 2. Prepara update Firestore diretto (per data + bedMaking)
       const updateData: Record<string, any> = {
-        items: newItems,
+        items: [...newItems, ...productItems],
+        cleaningProducts: productItems,
+        hasCleaningProducts: productItems.length > 0,
         totalPrice: newItems.reduce((s, i) => s + ((i.price || 0) * i.quantity), 0),
         updatedAt: Timestamp.now(),
       };
@@ -805,6 +837,37 @@ export default function OrderDetailModal({
                 <span className="text-2xl font-bold text-white">€{formatPrice(totalPrice)}</span>
               </div>
             </div>
+
+            {/* 🧴 Prodotti Pulizia (admin) — sempre in fondo, gratuiti, consegnati col rider */}
+            {isAdmin && (
+              <Section title="Prodotti Pulizia" icon={<span className="text-lg">🧴</span>} price={0} expanded={sec === 'prods'} onToggle={() => setSec(sec === 'prods' ? null : 'prods')}>
+                <p className="text-[11px] text-slate-500 mb-2">Gratuiti, consegnati col rider — non addebitati al proprietario.</p>
+                {invProducts.length === 0 ? (
+                  <div className="text-center py-3"><p className="text-sm text-slate-500">Nessun prodotto in inventario</p></div>
+                ) : (
+                  <div className="space-y-2">
+                    {invProducts.map(p => {
+                      const sel = cleaningProductsSel[p.id];
+                      return (
+                        <div key={p.id} className={`flex items-center justify-between gap-2 rounded-lg p-2.5 border ${sel ? 'border-teal-300 bg-teal-50/50' : 'border-slate-100 bg-white'}`}>
+                          <button type="button" onClick={() => setCleaningProductsSel(prev => { const n = { ...prev }; if (n[p.id]) delete n[p.id]; else n[p.id] = { name: p.n, qty: 1 }; return n; })} className="flex items-center gap-2 min-w-0 flex-1 text-left">
+                            <span className={`w-5 h-5 shrink-0 rounded-md border flex items-center justify-center text-[10px] font-bold text-white ${sel ? 'bg-teal-600 border-teal-600' : 'border-slate-300'}`}>{sel ? '✓' : ''}</span>
+                            <span className="text-xs text-slate-700 font-medium truncate">{p.n}</span>
+                          </button>
+                          {sel && (
+                            <div className="flex items-center gap-0 shrink-0">
+                              <button type="button" onClick={() => setCleaningProductsSel(prev => { const n = { ...prev }; if (n[p.id]) n[p.id] = { ...n[p.id], qty: Math.max(1, n[p.id].qty - 1) }; return n; })} className="w-8 h-8 rounded-lg border border-slate-200 bg-white flex items-center justify-center text-slate-400 active:scale-90 transition-transform"><span className="text-lg font-bold leading-none">−</span></button>
+                              <span className="min-w-[28px] text-center text-sm font-bold text-slate-800">{sel.qty}</span>
+                              <button type="button" onClick={() => setCleaningProductsSel(prev => { const n = { ...prev }; if (n[p.id]) n[p.id] = { ...n[p.id], qty: Math.min(99, n[p.id].qty + 1) }; return n; })} className="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center text-white active:scale-90 transition-transform"><span className="text-lg font-bold leading-none">+</span></button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </Section>
+            )}
           </>
         )}
 

@@ -7,6 +7,11 @@ import { db } from "~/lib/firebase/config";
 import OrderDetailModal from "~/components/OrderDetailModal";
 import { getItemName, resolveItemDisplayName } from "~/lib/itemNames";
 
+// 🧴 Un item è un "prodotto pulizia" (gratuito, categoria a parte) se marcato come tale.
+function isCleaningProductItem(item: any): boolean {
+  return item?.type === "cleaning_product" || item?.categoryId === "prodotti_pulizia";
+}
+
 interface OrderItem {
   id: string;
   name: string;
@@ -405,6 +410,7 @@ export function DeliveriesView({
     const deliveryTotals = new Map<string, number>();
     activeOrders.forEach(order => {
       order.items?.forEach(item => {
+        if (isCleaningProductItem(item)) return; // i prodotti pulizia non sono biancheria
         const name = resolveItemDisplayName(item.id, item.name);
         deliveryTotals.set(name, (deliveryTotals.get(name) || 0) + item.quantity);
       });
@@ -676,6 +682,9 @@ export function DeliveriesView({
               const isExpanded = expandedCards[order.id] || false;
               const imageUrl = propertiesImageUrls[order.propertyId] || null;
               const totalItems = order.items?.reduce((sum, item) => sum + item.quantity, 0) || 0;
+              const linenItems = (order.items || []).filter((it: any) => !isCleaningProductItem(it));
+              const productItems = (order.items || []).filter((it: any) => isCleaningProductItem(it));
+              const linenPieces = linenItems.reduce((acc: number, it: any) => acc + (it.quantity || 0), 0);
               const itemsPrice = order.items?.reduce((sum, item) => {
                 const invItem = inventory.find(i => i.id === item.id || i.name === item.name);
                 return sum + ((invItem?.sellPrice || 0) * item.quantity);
@@ -926,8 +935,8 @@ export function DeliveriesView({
                             </div>
                           )}
 
-                          {/* Articoli da consegnare */}
-                          {order.items && order.items.length > 0 && (
+                          {/* Articoli da consegnare (solo biancheria) */}
+                          {linenItems.length > 0 && (
                             <div className="mb-3">
                               <div className="flex items-center gap-1.5 mb-1.5">
                                 <div className="w-5 h-5 rounded-md bg-orange-50 flex items-center justify-center">
@@ -935,11 +944,30 @@ export function DeliveriesView({
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                                   </svg>
                                 </div>
-                                <span className="text-[10px] font-semibold text-gray-700">Articoli da Consegnare ({totalItems} pz)</span>
+                                <span className="text-[10px] font-semibold text-gray-700">Articoli da Consegnare ({linenPieces} pz)</span>
                               </div>
                               <div className="flex flex-wrap gap-1">
-                                {order.items.map((item, idx) => (
+                                {linenItems.map((item, idx) => (
                                   <span key={idx} className="px-1.5 py-0.5 bg-orange-50 rounded-md text-[9px] text-orange-700 border border-orange-100">
+                                    {resolveItemDisplayName(item.id, item.name)}: <span className="font-bold">{item.quantity}</span>
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* 🧴 Prodotti Pulizia (categoria separata dalla biancheria) */}
+                          {productItems.length > 0 && (
+                            <div className="mb-3">
+                              <div className="flex items-center gap-1.5 mb-1.5">
+                                <div className="w-5 h-5 rounded-md bg-teal-50 flex items-center justify-center">
+                                  <span className="text-[11px]">🧴</span>
+                                </div>
+                                <span className="text-[10px] font-semibold text-gray-700">Prodotti Pulizia</span>
+                              </div>
+                              <div className="flex flex-wrap gap-1">
+                                {productItems.map((item, idx) => (
+                                  <span key={idx} className="px-1.5 py-0.5 bg-teal-50 rounded-md text-[9px] text-teal-700 border border-teal-100">
                                     {resolveItemDisplayName(item.id, item.name)}: <span className="font-bold">{item.quantity}</span>
                                   </span>
                                 ))}
@@ -1353,6 +1381,9 @@ export function DeliveriesView({
             const isExpanded = expandedCards[order.id] || false;
             const imageUrl = propertiesImageUrls[order.propertyId] || null;
             const totalItems = order.items?.reduce((sum, item) => sum + item.quantity, 0) || 0;
+            const linenItems = (order.items || []).filter((it: any) => !isCleaningProductItem(it));
+            const productItems = (order.items || []).filter((it: any) => isCleaningProductItem(it));
+            const linenPieces = linenItems.reduce((acc: number, it: any) => acc + (it.quantity || 0), 0);
             const itemsPrice = order.items?.reduce((sum, item) => {
               const invItem = inventory.find(i => i.id === item.id || i.name === item.name);
               return sum + ((invItem?.sellPrice || 0) * item.quantity);
@@ -1564,8 +1595,8 @@ export function DeliveriesView({
                           </div>
                         )}
 
-                        {/* Articoli da consegnare */}
-                        {order.items && order.items.length > 0 && (
+                        {/* Articoli da consegnare (solo biancheria) */}
+                        {linenItems.length > 0 && (
                           <div className="mb-4">
                             <div className="flex items-center gap-2 mb-2">
                               <div className="w-6 h-6 rounded-lg bg-orange-50 flex items-center justify-center">
@@ -1573,11 +1604,30 @@ export function DeliveriesView({
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                                 </svg>
                               </div>
-                              <span className="text-xs font-semibold text-gray-700">Articoli da Consegnare ({totalItems} pz)</span>
+                              <span className="text-xs font-semibold text-gray-700">Articoli da Consegnare ({linenPieces} pz)</span>
                             </div>
                             <div className="flex flex-wrap gap-1.5">
-                              {order.items.map((item, idx) => (
+                              {linenItems.map((item, idx) => (
                                 <span key={idx} className="px-2 py-1 bg-orange-50 rounded-lg text-[10px] text-orange-700 border border-orange-100">
+                                  {resolveItemDisplayName(item.id, item.name)}: <span className="font-bold">{item.quantity}</span>
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* 🧴 Prodotti Pulizia (categoria separata dalla biancheria) */}
+                        {productItems.length > 0 && (
+                          <div className="mb-4">
+                            <div className="flex items-center gap-2 mb-2">
+                              <div className="w-6 h-6 rounded-lg bg-teal-50 flex items-center justify-center">
+                                <span className="text-sm">🧴</span>
+                              </div>
+                              <span className="text-xs font-semibold text-gray-700">Prodotti Pulizia</span>
+                            </div>
+                            <div className="flex flex-wrap gap-1.5">
+                              {productItems.map((item, idx) => (
+                                <span key={idx} className="px-2 py-1 bg-teal-50 rounded-lg text-[10px] text-teal-700 border border-teal-100">
                                   {resolveItemDisplayName(item.id, item.name)}: <span className="font-bold">{item.quantity}</span>
                                 </span>
                               ))}
