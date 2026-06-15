@@ -2541,6 +2541,7 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
                   bathItems={bathItems}
                   kitItems={kitItems || []}
                   extraItems={extraItems || []}
+                  productItems={(((_linenOrder && _linenOrder.items) || []).filter((i) => i.type === 'cleaning_product' || i.categoryId === 'prodotti_pulizia')).map((i) => ({ name: i.name, quantity: i.quantity }))}
                   isAdmin={true}
                   onAssignOperator={handleQuickAssignOperator}
                   onRemoveOperator={handleQuickRemoveOperator}
@@ -3425,6 +3426,7 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
                   bathItems={bathItems}
                   kitItems={kitItems || []}
                   extraItems={extraItems || []}
+                  productItems={(((_linenOrder && _linenOrder.items) || []).filter((i) => i.type === 'cleaning_product' || i.categoryId === 'prodotti_pulizia')).map((i) => ({ name: i.name, quantity: i.quantity }))}
                   isAdmin={true}
                   onAssignOperator={handleQuickAssignOperator}
                   onRemoveOperator={handleQuickRemoveOperator}

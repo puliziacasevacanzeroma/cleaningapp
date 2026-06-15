@@ -138,6 +138,7 @@ interface CleaningCardAdminProps {
   bathItems?: LinenItem[];
   kitItems?: LinenItem[];
   extraItems?: LinenItem[];
+  productItems?: LinenItem[];
   isAdmin?: boolean;
   onAssignOperator: (cleaningId: string, operatorId: string) => void;
   onRemoveOperator: (cleaningId: string) => void;
@@ -166,6 +167,7 @@ export default function CleaningCardAdmin({
   bathItems = [],
   kitItems = [],
   extraItems = [],
+  productItems = [],
   isAdmin = true,
   onAssignOperator,
   onRemoveOperator,
@@ -727,8 +729,27 @@ export default function CleaningCardAdmin({
                 </div>
               )}
 
+              {/* Prodotti Pulizia (richiesti per questa pulizia) */}
+              {productItems.length > 0 && (
+                <div className="mb-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-6 h-6 rounded-lg bg-teal-50 flex items-center justify-center">
+                      <span className="text-xs">🧴</span>
+                    </div>
+                    <span className="text-xs font-semibold text-gray-700">Prodotti Pulizia</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {productItems.map((item, idx) => (
+                      <span key={idx} className="px-2 py-1 bg-teal-50 rounded-lg text-[10px] text-teal-700 border border-teal-100">
+                        {item.name}: <span className="font-bold">{item.quantity}</span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Messaggio se non ci sono dati */}
-              {bedItems.length === 0 && bathItems.length === 0 && kitItems.length === 0 && extraItems.length === 0 && (
+              {bedItems.length === 0 && bathItems.length === 0 && kitItems.length === 0 && extraItems.length === 0 && productItems.length === 0 && (
                 <div className="mb-3 p-3 rounded-xl flex items-center justify-center gap-2" style={{ background: 'linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%)' }}>
                   <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />

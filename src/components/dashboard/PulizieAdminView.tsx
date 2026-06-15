@@ -1006,6 +1006,10 @@ export function PulizieAdminView({ properties, cleanings, operators = [] }: Puli
                             }
                           }
                           
+                          const productItems = ((linenOrder?.items as any[]) || [])
+                            .filter((i: any) => i.type === 'cleaning_product' || i.categoryId === 'prodotti_pulizia')
+                            .map((i: any) => ({ name: i.name, quantity: i.quantity }));
+
                           return (
                             <CleaningCardAdmin
                               key={cleaning.id}
@@ -1019,6 +1023,7 @@ export function PulizieAdminView({ properties, cleanings, operators = [] }: Puli
                               bathItems={bathItems}
                               kitItems={kitItems || []}
                               extraItems={extraItems || []}
+                              productItems={productItems}
                               onAssignOperator={handleQuickAssignOperator}
                               onRemoveOperator={handleRemoveOperator}
                               onChangeTime={handleQuickAssignTime}
