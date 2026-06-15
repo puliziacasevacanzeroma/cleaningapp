@@ -435,6 +435,23 @@ export function DashboardLayoutClient({
                 <span className="font-medium">Inventario</span>
               </Link>
 
+              {/* 🧴 Spedizioni Prodotti */}
+              <Link
+                href="/dashboard/spedizioni"
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
+                  isActive("/dashboard/spedizioni")
+                    ? "text-white bg-gradient-to-r from-sky-500 to-blue-600 shadow-lg shadow-sky-500/30"
+                    : "text-slate-500 hover:bg-slate-50"
+                }`}
+              >
+                <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${isActive("/dashboard/spedizioni") ? "bg-white/20" : ""}`}>
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                  </svg>
+                </div>
+                <span className="font-medium">Spedizioni</span>
+              </Link>
+
               {/* 🔔 Centro Messaggi (Notifiche + Segnalazioni) */}
               <Link
                 href="/dashboard/notifiche"
@@ -825,6 +842,16 @@ export function DashboardLayoutClient({
                     </svg>
                   </div>
                   <span className="font-medium text-slate-700">Inventario</span>
+                </Link>
+
+                {/* 🧴 Spedizioni Prodotti */}
+                <Link href="/dashboard/spedizioni" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 active:bg-slate-100 transition-colors">
+                  <div className="w-10 h-10 rounded-xl bg-sky-50 flex items-center justify-center">
+                    <svg className="w-5 h-5 text-sky-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                    </svg>
+                  </div>
+                  <span className="font-medium text-slate-700">Spedizioni Prodotti</span>
                 </Link>
 
                 {/* 🔔 Centro Messaggi (Notifiche + Segnalazioni) */}
