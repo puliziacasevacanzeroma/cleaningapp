@@ -539,6 +539,10 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
   const [date, setDate] = useState('');
   const [time, setTime] = useState('');
   const [notes, setNotes] = useState('');
+  // 🧴 Prodotti pulizia (admin): selezione corrente + catalogo inventario
+  const [cleaningProductsSel, setCleaningProductsSel] = useState<Record<string, { name: string; qty: number }>>({});
+  const [productCatalog, setProductCatalog] = useState<Array<{ id: string; name: string }>>([]);
+  const productsLoadedRef = useRef(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -628,6 +632,38 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
   const manualPhotoInputRef = useRef<HTMLInputElement>(null);
 
   const isAdmin = userRole === "ADMIN";
+
+  // 🧴 Carica catalogo prodotti + prodotti già presenti sull'ordine (admin).
+  // Inizializzando da ciò che c'è, un Salva "normale" PRESERVA i prodotti
+  // (fix del bug: prima venivano cancellati ricostruendo items dalla sola biancheria).
+  useEffect(() => {
+    if (!isOpen || !isAdmin || !cleaning?.id) return;
+    let cancelled = false;
+    productsLoadedRef.current = false;
+    (async () => {
+      try {
+        const r = await fetch("/api/product-requests/available");
+        const d = await r.json();
+        if (!cancelled) setProductCatalog((d.products ?? []).map((p: any) => ({ id: p.id, name: p.name })));
+      } catch { if (!cancelled) setProductCatalog([]); }
+      try {
+        const snap = await getDocs(query(collection(db, "orders"), where("cleaningId", "==", cleaning.id)));
+        const sel: Record<string, { name: string; qty: number }> = {};
+        snap.docs.forEach(dd => {
+          const o = dd.data() as any;
+          if (String(o.status ?? "").toUpperCase() === "CANCELLED") return;
+          (o.items || []).forEach((it: any) => {
+            if (it.type === "cleaning_product" || it.categoryId === "prodotti_pulizia") {
+              const id = it.itemId || it.id || it.name;
+              if (id) sel[id] = { name: it.name || "Prodotto", qty: it.quantity || 1 };
+            }
+          });
+        });
+        if (!cancelled) { setCleaningProductsSel(sel); productsLoadedRef.current = true; }
+      } catch { /* non critico */ }
+    })();
+    return () => { cancelled = true; };
+  }, [isOpen, isAdmin, cleaning?.id]);
   const isReadOnly = userRole === "OPERATORE";
   const isCompleted = cleaning?.status === "COMPLETED" || cleaning?.status === "completed" || cleaning?.status === "VERIFIED" || cleaning?.status === "verified";
 
@@ -1297,6 +1333,26 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
   };
 
   const handleSave = async (forceInProgress = false) => {
+    // 🧴 Cattura i prodotti pulizia da persistere PRIMA che la logica biancheria
+    // modifichi/elimini l'ordine. Se lo stato è già caricato uso quello (riflette
+    // le modifiche admin); altrimenti li leggo dall'ordine adesso (anti-race: evita
+    // di cancellare i prodotti se l'admin salva prima che il caricamento finisca).
+    let prodToPersist: Array<{ itemId: string; name: string; quantity: number }> = [];
+    if (isAdmin) {
+      if (productsLoadedRef.current) {
+        prodToPersist = Object.entries(cleaningProductsSel).map(([id, v]) => ({ itemId: id, name: v.name, quantity: v.qty }));
+      } else {
+        try {
+          const s0 = await getDocs(query(collection(db, "orders"), where("cleaningId", "==", cleaning.id)));
+          const ao0 = s0.docs.find(dd => String((dd.data() as any).status ?? "").toUpperCase() !== "CANCELLED");
+          if (ao0) (((ao0.data() as any).items) || []).forEach((it: any) => {
+            if (it.type === "cleaning_product" || it.categoryId === "prodotti_pulizia") {
+              prodToPersist.push({ itemId: it.itemId || it.id || it.name, name: it.name || "Prodotto", quantity: it.quantity || 1 });
+            }
+          });
+        } catch { /* non critico */ }
+      }
+    }
     
     // @ts-expect-error TODO-FIX: TS7015 Element implicitly has an 'any' type because index expression is not of type 'nu...
     if (cfgs[g] || cfgs[String(g)]) {
@@ -1989,6 +2045,40 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
         // Non bloccare il salvataggio se la gestione ordine fallisce
       }
       
+      // 🧴 Riconciliazione PRODOTTI PULIZIA (admin) — eseguita DOPO la logica
+      // biancheria del modal, che ricostruisce/elimina l'ordine. Senza questo, i
+      // prodotti verrebbero persi (bug). Logica = quella testata dell'endpoint
+      // PATCH (preserva la biancheria, tocca solo i prodotti); funziona anche su
+      // ordini DELIVERED. Se l'ordine non esiste (biancheria off) e ci sono
+      // prodotti, lo crea con l'endpoint POST testato (merge stesso-giorno).
+      if (isAdmin) {
+        try {
+          const prodSel = prodToPersist;
+          const ordSnap = await getDocs(query(collection(db, "orders"), where("cleaningId", "==", cleaning.id)));
+          const activeOrder = ordSnap.docs.find(dd => String((dd.data() as any).status ?? "").toUpperCase() !== "CANCELLED");
+          if (activeOrder) {
+            const od = activeOrder.data() as any;
+            const nonProduct = (od.items || []).filter((it: any) => it.type !== "cleaning_product");
+            const prodFull = prodSel.map(p => ({
+              itemId: p.itemId, id: p.itemId, name: p.name, quantity: p.quantity,
+              unitPrice: 0, totalPrice: 0, categoryName: "Prodotti Pulizia",
+              type: "cleaning_product", categoryId: "prodotti_pulizia",
+            }));
+            await updateDoc(doc(db, "orders", activeOrder.id), {
+              items: [...nonProduct, ...prodFull],
+              cleaningProducts: prodFull,
+              hasCleaningProducts: prodFull.length > 0,
+              updatedAt: Timestamp.now(),
+            });
+          } else if (prodSel.length > 0) {
+            await fetch("/api/orders/products-shipment", {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ propertyId: property.id, scheduledDate: date, items: prodSel }),
+            });
+          }
+        } catch (prodErr) { console.error("Errore riconciliazione prodotti pulizia:", prodErr); }
+      }
+
       onSuccess?.(); onClose();
     } catch (e) { console.error(e); alert('Errore nel salvataggio'); } finally { setSaving(false); }
   };
@@ -3801,6 +3891,42 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                     </div>
                   )}
                 </div>
+
+                {/* 🧴 Prodotti Pulizia (admin) — gratuiti, consegnati col rider, non addebitati */}
+                {isAdmin && (
+                  <div className="mb-4 p-3 rounded-xl bg-white border border-slate-200">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="w-8 h-8 rounded-lg bg-teal-50 flex items-center justify-center"><span className="text-sm">🧴</span></div>
+                      <div>
+                        <span className="text-sm font-semibold text-slate-700">Prodotti Pulizia</span>
+                        <p className="text-[10px] text-slate-500">Gratuiti, consegnati col rider — non addebitati al proprietario</p>
+                      </div>
+                    </div>
+                    <div className="max-h-44 overflow-y-auto border border-slate-200 rounded-lg divide-y divide-slate-100">
+                      {productCatalog.length === 0 ? (
+                        <p className="text-xs text-slate-400 p-2.5">Nessun prodotto in inventario.</p>
+                      ) : productCatalog.map(p => {
+                        const sel = cleaningProductsSel[p.id];
+                        return (
+                          <div key={p.id} className={`flex items-center justify-between gap-2 p-2 ${sel ? 'bg-teal-50/50' : ''}`}>
+                            <button type="button" onClick={() => setCleaningProductsSel(prev => { const n = { ...prev }; if (n[p.id]) delete n[p.id]; else n[p.id] = { name: p.name, qty: 1 }; return n; })} className="flex items-center gap-2 min-w-0 flex-1 text-left">
+                              <span className={`w-5 h-5 shrink-0 rounded-md border flex items-center justify-center text-[10px] font-bold text-white ${sel ? 'bg-teal-600 border-teal-600' : 'border-slate-300'}`}>{sel ? '✓' : ''}</span>
+                              <span className="text-xs text-slate-700 truncate">{p.name}</span>
+                            </button>
+                            {sel && (
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <button type="button" onClick={() => setCleaningProductsSel(prev => { const n = { ...prev }; if (n[p.id]) n[p.id] = { ...n[p.id], qty: Math.max(1, n[p.id].qty - 1) }; return n; })} className="w-6 h-6 rounded-md bg-slate-100 text-slate-600 font-bold text-xs">−</button>
+                                <span className="w-5 text-center text-xs font-semibold">{sel.qty}</span>
+                                <button type="button" onClick={() => setCleaningProductsSel(prev => { const n = { ...prev }; if (n[p.id]) n[p.id] = { ...n[p.id], qty: Math.min(99, n[p.id].qty + 1) }; return n; })} className="w-6 h-6 rounded-md bg-slate-100 text-slate-600 font-bold text-xs">+</button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <p className="text-[10px] text-slate-400 mt-1.5">Le modifiche si applicano premendo &quot;Salva&quot;.</p>
+                  </div>
+                )}
 
                 {/* 🔥 Toggle Biancheria */}
                 <div className="mb-4 p-3 rounded-xl bg-gradient-to-r from-slate-50 to-slate-100 border border-slate-200">
