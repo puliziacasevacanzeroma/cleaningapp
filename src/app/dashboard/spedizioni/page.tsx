@@ -20,7 +20,7 @@ interface Order {
   hasCleaningProducts?: boolean; items?: OrderItem[]; linenItems?: OrderItem[];
   cleaningProducts?: OrderItem[]; scheduledDate?: any; createdAt?: any;
 }
-interface Property { id: string; name?: string; address?: string; city?: string; status?: string; usesOwnLinen?: boolean; imageUrl?: string; maxGuests?: number; }
+interface Property { id: string; name?: string; address?: string; city?: string; status?: string; usesOwnLinen?: boolean; imageUrl?: string; photos?: string[]; maxGuests?: number; }
 interface CatalogProduct { id: string; name: string; unit?: string; }
 
 // ─── Icone (coerenti con la modal del sito) ─────────────────────────────────
@@ -70,6 +70,7 @@ function isPureStandalone(o: Order): boolean {
   return !o.cleaningId && !orderHasLinen(o) && (o.isProductsOnly === true || String(o.type ?? "").toUpperCase() === "PRODUCTS");
 }
 function isDelivered(o: Order): boolean { return String(o.status ?? "").toUpperCase() === "DELIVERED"; }
+function propImg(p?: Property | null): string | null { return p?.imageUrl || p?.photos?.[0] || null; }
 
 // ════════════════════════════════════════════════════════════════════════
 export default function SpedizioniPage() {
@@ -141,6 +142,7 @@ export default function SpedizioniPage() {
 
   const resetFilters = () => { setSearch(""); setStatusFilter("todeliver"); setTypeFilter("all"); setDateFrom(""); setDateTo(""); };
   const activeFilters = !!search || statusFilter !== "todeliver" || typeFilter !== "all" || !!dateFrom || !!dateTo;
+  const propMap = useMemo(() => { const m = new Map<string, Property>(); properties.forEach(p => m.set(p.id, p)); return m; }, [properties]);
 
   return (
     <div className="max-w-4xl mx-auto pb-10">
@@ -200,7 +202,7 @@ export default function SpedizioniPage() {
         </div>
       ) : (
         <div className="space-y-3">
-          {shipments.map(o => <ShipmentCard key={o.id} order={o} onEdit={() => setEditing(o)} />)}
+          {shipments.map(o => <ShipmentCard key={o.id} order={o} property={propMap.get(o.propertyId ?? "")} onEdit={() => setEditing(o)} />)}
         </div>
       )}
 
@@ -211,15 +213,18 @@ export default function SpedizioniPage() {
 }
 
 // ─── Card spedizione ──────────────────────────────────────────────────────
-function ShipmentCard({ order, onEdit }: { order: Order; onEdit: () => void }) {
+function ShipmentCard({ order, property, onEdit }: { order: Order; property?: Property; onEdit: () => void }) {
   const products = getProductItems(order);
   const withLinen = orderHasLinen(order);
   const delivered = isDelivered(order);
+  const img = propImg(property);
   return (
     <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
       <div className="flex items-start gap-3">
-        <div className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: delivered ? "#ecfdf5" : "#eff6ff" }}>
-          <span className={`w-5 h-5 ${delivered ? "text-emerald-500" : "text-blue-500"}`}>{withLinen ? I.bed : I.box}</span>
+        <div className="w-12 h-12 rounded-xl overflow-hidden flex items-center justify-center flex-shrink-0 border border-slate-100" style={{ background: delivered ? "#ecfdf5" : "#eff6ff" }}>
+          {img
+            ? <img src={img} alt="" className="w-full h-full object-cover" />
+            : <span className={`w-5 h-5 ${delivered ? "text-emerald-500" : "text-blue-500"}`}>{withLinen ? I.bed : I.box}</span>}
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
@@ -405,7 +410,7 @@ function NewShipmentModal({ properties, catalog, onClose }: { properties: Proper
         {selectedProperty ? (
           <div className="p-3 bg-blue-50 rounded-xl border border-blue-200 flex items-center gap-3">
             <div className="w-11 h-11 rounded-xl bg-white shadow-sm overflow-hidden flex-shrink-0 flex items-center justify-center">
-              {selectedProperty.imageUrl ? <img src={selectedProperty.imageUrl} alt="" className="w-full h-full object-cover" /> : <span className="w-5 h-5 text-blue-400">{I.home}</span>}
+              {propImg(selectedProperty) ? <img src={propImg(selectedProperty) as string} alt="" className="w-full h-full object-cover" /> : <span className="w-5 h-5 text-blue-400">{I.home}</span>}
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-bold text-slate-800 truncate">{selectedProperty.name}</p>
@@ -428,7 +433,7 @@ function NewShipmentModal({ properties, catalog, onClose }: { properties: Proper
                 : filteredProperties.map(prop => (
                   <button key={prop.id} onClick={() => { setSelectedProperty(prop); setPropSearch(""); }} className="w-full p-3 flex items-center gap-3 hover:bg-blue-50 text-left">
                     <div className="w-10 h-10 rounded-lg bg-slate-100 flex-shrink-0 overflow-hidden flex items-center justify-center">
-                      {prop.imageUrl ? <img src={prop.imageUrl} alt="" className="w-full h-full object-cover" /> : <span className="w-5 h-5 text-slate-400">{I.home}</span>}
+                      {propImg(prop) ? <img src={propImg(prop) as string} alt="" className="w-full h-full object-cover" /> : <span className="w-5 h-5 text-slate-400">{I.home}</span>}
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold text-slate-800 truncate text-sm">{prop.name}</p>
@@ -445,29 +450,44 @@ function NewShipmentModal({ properties, catalog, onClose }: { properties: Proper
       {/* Data */}
       {selectedProperty && (
         <CardSection icon={I.calendar} title="Data di consegna" required>
-          {(loadingCleanings || cleanings.length > 0) && (
-            <div className="mb-2">
-              <p className="text-xs text-slate-400 mb-1.5">{loadingCleanings ? "Carico pulizie…" : "Pulizie in programma (tocca per consegnare insieme):"}</p>
-              <div className="flex flex-wrap gap-1.5">
+          {loadingCleanings ? (
+            <div className="h-9 bg-slate-100 rounded-lg animate-pulse mb-3" />
+          ) : cleanings.length > 0 ? (
+            <div className="mb-3 p-3 rounded-xl bg-blue-50 border border-blue-100">
+              <div className="flex items-start gap-2">
+                <span className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0">{I.calendar}</span>
+                <div>
+                  <p className="text-xs font-semibold text-blue-800">Giorni con una pulizia già in programma</p>
+                  <p className="text-[11px] text-blue-600 leading-snug mt-0.5">Toccane uno: i prodotti viaggiano con quella consegna, <strong>senza un giro extra del rider</strong>.</p>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-1.5 mt-2.5">
                 {cleanings.map(c => {
                   const key = toInputDate(c.date);
+                  const on = date === key;
                   return (
-                    <button key={c.id} onClick={() => setDate(key)} className={`px-2.5 py-1 rounded-lg text-xs border ${date === key ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-600 border-slate-200 hover:border-blue-300"}`}>
+                    <button key={c.id} onClick={() => setDate(key)} className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition ${on ? "bg-blue-600 text-white border-blue-600 shadow-sm" : "bg-white text-blue-700 border-blue-200 hover:border-blue-400"}`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${on ? "bg-white" : "bg-blue-400"}`} />
                       {c.date.toLocaleDateString("it-IT", { day: "2-digit", month: "short" })}
                     </button>
                   );
                 })}
               </div>
             </div>
+          ) : (
+            <div className="mb-3 p-3 rounded-xl bg-amber-50 border border-amber-100">
+              <p className="text-xs text-amber-800 leading-snug">{selectedProperty.usesOwnLinen ? "🧺 Casa con biancheria propria: nessuna consegna in programma. I prodotti partiranno come spedizione dedicata." : "Nessuna pulizia in programma: scegli una data, partirà una spedizione dedicata."}</p>
+            </div>
           )}
-          {!loadingCleanings && cleanings.length === 0 && (
-            <p className="text-xs text-slate-400 mb-2">{selectedProperty.usesOwnLinen ? "Nessuna pulizia — casa con biancheria propria." : "Nessuna pulizia in programma."}</p>
-          )}
+
+          <p className="text-[11px] font-medium text-slate-400 mb-1">{cleanings.length > 0 ? "Oppure scegli un'altra data:" : "Data di consegna:"}</p>
           <input type="date" value={date} onChange={e => setDate(e.target.value)} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:border-blue-400 outline-none" />
+
           {date && (
-            <p className={`text-xs mt-2 ${chosenHasCleaning ? "text-blue-600" : "text-slate-500"}`}>
-              {chosenHasCleaning ? "🔗 C'è una pulizia quel giorno: unico ordine biancheria + prodotti." : "📦 Nessuna pulizia: verrà creata una spedizione dedicata."}
-            </p>
+            <div className={`mt-2.5 flex items-start gap-2 p-2.5 rounded-xl text-xs ${chosenHasCleaning ? "bg-blue-50 text-blue-700 border border-blue-100" : "bg-slate-50 text-slate-600 border border-slate-200"}`}>
+              <span className="text-sm leading-none">{chosenHasCleaning ? "🔗" : "📦"}</span>
+              <span>{chosenHasCleaning ? "C'è una pulizia quel giorno: i prodotti finiranno in un unico ordine biancheria + prodotti." : "Nessuna pulizia quel giorno: verrà creata una spedizione dedicata di soli prodotti."}</span>
+            </div>
           )}
         </CardSection>
       )}
