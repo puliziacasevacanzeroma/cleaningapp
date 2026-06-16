@@ -838,35 +838,41 @@ export default function OrderDetailModal({
               </div>
             </div>
 
-            {/* 🧴 Prodotti Pulizia (admin) — sempre in fondo, gratuiti, consegnati col rider */}
+            {/* 🧴 Prodotti Pulizia (admin) — gratuiti, consegnati col rider, non addebitati */}
             {isAdmin && (
-              <Section title="Prodotti Pulizia" icon={<span className="text-lg">🧴</span>} price={0} expanded={sec === 'prods'} onToggle={() => setSec(sec === 'prods' ? null : 'prods')}>
-                <p className="text-[11px] text-slate-500 mb-2">Gratuiti, consegnati col rider — non addebitati al proprietario.</p>
-                {invProducts.length === 0 ? (
-                  <div className="text-center py-3"><p className="text-sm text-slate-500">Nessun prodotto in inventario</p></div>
-                ) : (
-                  <div className="space-y-2">
-                    {invProducts.map(p => {
-                      const sel = cleaningProductsSel[p.id];
-                      return (
-                        <div key={p.id} className={`flex items-center justify-between gap-2 rounded-lg p-2.5 border ${sel ? 'border-teal-300 bg-teal-50/50' : 'border-slate-100 bg-white'}`}>
-                          <button type="button" onClick={() => setCleaningProductsSel(prev => { const n = { ...prev }; if (n[p.id]) delete n[p.id]; else n[p.id] = { name: p.n, qty: 1 }; return n; })} className="flex items-center gap-2 min-w-0 flex-1 text-left">
-                            <span className={`w-5 h-5 shrink-0 rounded-md border flex items-center justify-center text-[10px] font-bold text-white ${sel ? 'bg-teal-600 border-teal-600' : 'border-slate-300'}`}>{sel ? '✓' : ''}</span>
-                            <span className="text-xs text-slate-700 font-medium truncate">{p.n}</span>
-                          </button>
-                          {sel && (
-                            <div className="flex items-center gap-0 shrink-0">
-                              <button type="button" onClick={() => setCleaningProductsSel(prev => { const n = { ...prev }; if (n[p.id]) n[p.id] = { ...n[p.id], qty: Math.max(1, n[p.id].qty - 1) }; return n; })} className="w-8 h-8 rounded-lg border border-slate-200 bg-white flex items-center justify-center text-slate-400 active:scale-90 transition-transform"><span className="text-lg font-bold leading-none">−</span></button>
-                              <span className="min-w-[28px] text-center text-sm font-bold text-slate-800">{sel.qty}</span>
-                              <button type="button" onClick={() => setCleaningProductsSel(prev => { const n = { ...prev }; if (n[p.id]) n[p.id] = { ...n[p.id], qty: Math.min(99, n[p.id].qty + 1) }; return n; })} className="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center text-white active:scale-90 transition-transform"><span className="text-lg font-bold leading-none">+</span></button>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
+              <div className="mb-4 p-3 rounded-xl bg-white border border-slate-200">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-8 h-8 rounded-lg bg-teal-50 flex items-center justify-center"><span className="text-sm">🧴</span></div>
+                  <div>
+                    <span className="text-sm font-semibold text-slate-700">Prodotti Pulizia</span>
+                    <p className="text-[10px] text-slate-500">Gratuiti, consegnati col rider — non addebitati al proprietario</p>
                   </div>
-                )}
-              </Section>
+                </div>
+                <div className="max-h-64 overflow-y-auto border border-slate-200 rounded-xl divide-y divide-slate-100">
+                  {invProducts.length === 0 && <p className="text-sm text-slate-400 p-3">Nessun prodotto in inventario.</p>}
+                  {invProducts.map(p => {
+                    const sel = cleaningProductsSel[p.id];
+                    return (
+                      <div key={p.id} className="flex items-center justify-between gap-2 p-2.5">
+                        <button type="button" onClick={() => setCleaningProductsSel(prev => { const next = { ...prev }; if (next[p.id]) delete next[p.id]; else next[p.id] = { name: p.n, qty: 1 }; return next; })} className="flex items-center gap-2 min-w-0 flex-1 text-left">
+                          <span className={`w-5 h-5 shrink-0 rounded-md border flex items-center justify-center ${sel ? "bg-sky-500 border-sky-500" : "border-slate-300"}`}>
+                            {sel && (<svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>)}
+                          </span>
+                          <span className="text-sm text-slate-700 truncate">{p.n}</span>
+                        </button>
+                        {sel && (
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <button type="button" onClick={() => setCleaningProductsSel(prev => { const next = { ...prev }; if (next[p.id]) next[p.id] = { ...next[p.id], qty: Math.max(1, next[p.id].qty - 1) }; return next; })} className="w-7 h-7 rounded-lg bg-slate-100 text-slate-600 font-bold">−</button>
+                            <span className="w-6 text-center text-sm font-medium">{sel.qty}</span>
+                            <button type="button" onClick={() => setCleaningProductsSel(prev => { const next = { ...prev }; if (next[p.id]) next[p.id] = { ...next[p.id], qty: Math.min(99, next[p.id].qty + 1) }; return next; })} className="w-7 h-7 rounded-lg bg-slate-100 text-slate-600 font-bold">+</button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                <p className="text-[10px] text-slate-400 mt-1.5">Le modifiche si applicano premendo &quot;Salva&quot;.</p>
+              </div>
             )}
           </>
         )}
