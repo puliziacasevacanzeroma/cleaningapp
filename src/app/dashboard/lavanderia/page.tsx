@@ -115,6 +115,11 @@ export default function AdminLavanderiaPage() {
   // ═══ LISTINO STATE ═══
   const [laundryPrices, setLaundryPrices] = useState<Record<string, number>>({});
   const [editPrices, setEditPrices] = useState<Record<string, string>>({});
+  // 🧺 Biancheria definita nell'INVENTARIO (letto+bagno): così ogni articolo nuovo
+  // entra automaticamente nell'ordine lavanderia e nel listino prezzi.
+  const [linenInvIds, setLinenInvIds] = useState<Set<string>>(new Set());
+  const [linenInvNames, setLinenInvNames] = useState<Set<string>>(new Set());
+  const [linenInvDisplay, setLinenInvDisplay] = useState<string[]>([]);
   const [savingPrices, setSavingPrices] = useState(false);
 
   // ═══ HELPERS ═══
@@ -210,6 +215,36 @@ export default function AdminLavanderiaPage() {
     return () => unsubscribe();
   }, []);
 
+  // ═══ Carica la biancheria dall'inventario (categorie letto+bagno) ═══
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/inventory/list');
+        const data = await res.json();
+        const ids = new Set<string>(); const names = new Set<string>(); const display: string[] = [];
+        data.categories?.forEach((cat: { id: string; items?: { key?: string; id: string; name: string }[] }) => {
+          if (cat.id === 'biancheria_letto' || cat.id === 'biancheria_bagno') {
+            cat.items?.forEach((it) => {
+              const id = it.key || it.id;
+              if (id) ids.add(id);
+              if (it.name) { names.add(it.name); if (!display.includes(it.name)) display.push(it.name); }
+            });
+          }
+        });
+        if (!cancelled) { setLinenInvIds(ids); setLinenInvNames(names); setLinenInvDisplay(display); }
+      } catch (e) { console.error("Errore caricamento inventario lavanderia:", e); }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Lista nomi per il listino = base storica + tutto ciò che è in inventario (letto+bagno)
+  const displayNames = useMemo(() => {
+    const out = [...ALL_LINEN_DISPLAY_NAMES];
+    linenInvDisplay.forEach(n => { if (!out.includes(n)) out.push(n); });
+    return out;
+  }, [linenInvDisplay]);
+
   // Deliveries — listener realtime SEMPRE attivo (serve anche in tab Gestione per card completate).
   // ⚠️ FIX: prima l'effect aveva `[storicoLoaded]` come dipendenza + `if (storicoLoaded) return`
   // e chiamava `setStoricoLoaded(true)` dentro lo snapshot. Effetto collaterale: dopo il PRIMO
@@ -258,7 +293,7 @@ export default function AdminLavanderiaPage() {
     const totals = new Map<string, number>();
     orders.forEach((order) => {
       order.items?.forEach((item) => {
-        if (!isLinenItem(item)) return;
+        if (!isLinenItem(item) && !linenInvIds.has(item.id) && !linenInvNames.has(item.name)) return;
         const translated = getItemName(item.id || item.name);
         const name = translated !== (item.id || item.name) ? translated : item.name;
         totals.set(name, (totals.get(name) || 0) + item.quantity);
@@ -911,7 +946,7 @@ export default function AdminLavanderiaPage() {
             </div>
             <div className="px-5 py-4">
               <div className="space-y-2">
-                {ALL_LINEN_DISPLAY_NAMES.map((name) => {
+                {displayNames.map((name) => {
                   const currentPrice = laundryPrices[name];
                   const editVal = editPrices[name] || "";
                   return (
@@ -942,7 +977,7 @@ export default function AdminLavanderiaPage() {
                 <button
                   onClick={() => {
                     const ep: Record<string, string> = {};
-                    ALL_LINEN_DISPLAY_NAMES.forEach(name => { ep[name] = laundryPrices[name] !== undefined ? String(laundryPrices[name]) : ""; });
+                    displayNames.forEach(name => { ep[name] = laundryPrices[name] !== undefined ? String(laundryPrices[name]) : ""; });
                     setEditPrices(ep);
                   }}
                   className="flex-1 py-3 font-semibold rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors"
@@ -1164,7 +1199,7 @@ export default function AdminLavanderiaPage() {
                           className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 outline-none focus:border-indigo-400"
                         >
                           <option value="">Seleziona articolo...</option>
-                          {ALL_LINEN_DISPLAY_NAMES.filter(n => !getRawTotals(editingDay).has(n) && !(editItemOverrides[n] && editItemOverrides[n] !== "")).map(n => (
+                          {displayNames.filter(n => !getRawTotals(editingDay).has(n) && !(editItemOverrides[n] && editItemOverrides[n] !== "")).map(n => (
                             <option key={n} value={n}>{n}</option>
                           ))}
                         </select>

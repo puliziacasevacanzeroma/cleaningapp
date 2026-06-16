@@ -79,6 +79,10 @@ export default function LavanderiaPage() {
   const [addItemQty, setAddItemQty] = useState("");
   const [activeTab, setActiveTab] = useState<"consegne" | "riepilogo">("consegne");
   const [laundryPrices, setLaundryPrices] = useState<Record<string, number>>({});
+  // 🧺 Biancheria definita nell'inventario (letto+bagno): ogni articolo nuovo entra nell'ordine.
+  const [linenInvIds, setLinenInvIds] = useState<Set<string>>(new Set());
+  const [linenInvNames, setLinenInvNames] = useState<Set<string>>(new Set());
+  const [linenInvDisplay, setLinenInvDisplay] = useState<string[]>([]);
   const [expandedDelivery, setExpandedDelivery] = useState<string | null>(null);
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const now = new Date();
@@ -188,13 +192,42 @@ export default function LavanderiaPage() {
     return () => clearInterval(id);
   }, [hasModifiableCompleted]);
 
+  // ═══ Carica la biancheria dall'inventario (categorie letto+bagno) ═══
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/inventory/list');
+        const data = await res.json();
+        const ids = new Set<string>(); const names = new Set<string>(); const display: string[] = [];
+        data.categories?.forEach((cat: { id: string; items?: { key?: string; id: string; name: string }[] }) => {
+          if (cat.id === 'biancheria_letto' || cat.id === 'biancheria_bagno') {
+            cat.items?.forEach((it) => {
+              const id = it.key || it.id;
+              if (id) ids.add(id);
+              if (it.name) { names.add(it.name); if (!display.includes(it.name)) display.push(it.name); }
+            });
+          }
+        });
+        if (!cancelled) { setLinenInvIds(ids); setLinenInvNames(names); setLinenInvDisplay(display); }
+      } catch (e) { console.error("Errore caricamento inventario lavanderia:", e); }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const displayNames = useMemo(() => {
+    const out = [...ALL_LINEN_DISPLAY_NAMES];
+    linenInvDisplay.forEach(n => { if (!out.includes(n)) out.push(n); });
+    return out;
+  }, [linenInvDisplay]);
+
   // Calcola totali giornalieri
   const getDayTotals = useCallback((dayKey: string) => {
     const orders = ordersByDay[dayKey] || [];
     const totals = new Map<string, number>();
     orders.forEach((order) => {
       order.items?.forEach((item) => {
-        if (!isLinenItem(item)) return;
+        if (!isLinenItem(item) && !linenInvIds.has(item.id) && !linenInvNames.has(item.name)) return;
         const translated = getItemName(item.id || item.name);
         const name = translated !== (item.id || item.name) ? translated : item.name;
         totals.set(name, (totals.get(name) || 0) + item.quantity);
@@ -205,7 +238,7 @@ export default function LavanderiaPage() {
     if (adj?.itemOverrides) { for (const [itemName, overrideQty] of Object.entries(adj.itemOverrides)) { totals.set(itemName, overrideQty); } }
     if (effectivePct !== 0) { for (const [name, qty] of totals) { if (!adj?.itemOverrides || adj.itemOverrides[name] === undefined) { totals.set(name, Math.round(qty * (1 + effectivePct / 100))); } } }
     return Array.from(totals.entries()).sort((a, b) => b[1] - a[1]);
-  }, [ordersByDay, adjustments, defaultPercentage]);
+  }, [ordersByDay, adjustments, defaultPercentage, linenInvIds, linenInvNames]);
 
   // Helper per costi
   const calcCost = (items: Record<string, number>) => Object.entries(items).reduce((s, [name, qty]) => s + qty * (laundryPrices[name] || 0), 0);
@@ -553,7 +586,7 @@ export default function LavanderiaPage() {
                               className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 outline-none focus:border-indigo-400"
                             >
                               <option value="">Seleziona articolo...</option>
-                              {ALL_LINEN_DISPLAY_NAMES.filter(n => !(n in editQuantities)).map(n => (
+                              {displayNames.filter(n => !(n in editQuantities)).map(n => (
                                 <option key={n} value={n}>{n}</option>
                               ))}
                             </select>
