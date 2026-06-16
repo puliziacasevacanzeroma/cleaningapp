@@ -3,6 +3,7 @@ import { adminDb } from "~/lib/firebase/admin";
 import { Timestamp } from "firebase-admin/firestore";
 import { getApiUser } from "~/lib/api-auth";
 import { validateBody, GenericBodySchema } from "~/lib/validation/schemas";
+import { sanitizeServiceConfigsLinen } from "~/lib/linen/linenGuardrail";
 import { 
   createPropertyChangeRequestNotification,
   createActionResultNotification 
@@ -488,6 +489,18 @@ export async function PUT(request: NextRequest) {
         hasServiceConfigs: !!updateData.serviceConfigs,
         configNeedsReview: updateData.configNeedsReview,
       }));
+      // 🛡️ GUARDRAIL biancheria: mai copripiumino come lenzuolo, sempre il minimo di lenzuola
+      if (updateData.serviceConfigs && (propertyData as any)?.usesOwnLinen !== true) {
+        const bedsForGuard = (Array.isArray((updateData as any).bedsConfig) && (updateData as any).bedsConfig.length)
+          ? (updateData as any).bedsConfig
+          : ((propertyData as any).beds || []);
+        const _g = sanitizeServiceConfigsLinen(updateData.serviceConfigs as any, bedsForGuard);
+        if (_g.changed) {
+          updateData.serviceConfigs = _g.sanitized;
+          console.warn(`🛡️ [linen-guardrail] change-request ${requestData.propertyId}:`, _g.log.join(" | "));
+        }
+      }
+
       await propertyRef.update( updateData);
       
       // ════════════════════════════════════════════════════════════

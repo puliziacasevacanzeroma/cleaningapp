@@ -3,6 +3,7 @@ import { adminDb } from "~/lib/firebase/admin";
 import { Timestamp } from "firebase-admin/firestore";
 import { getApiUser } from "~/lib/api-auth";
 import { validateBody, GenericBodySchema } from "~/lib/validation/schemas";
+import { sanitizeServiceConfigsLinen } from "~/lib/linen/linenGuardrail";
 
 export const dynamic = 'force-dynamic';
 
@@ -106,6 +107,15 @@ export async function PUT(
     if (bedConfiguration !== undefined) {
       updateData.bedConfiguration = bedConfiguration;
       changes.push(`Aggiornata configurazione stanze`);
+    }
+
+    // 🛡️ GUARDRAIL biancheria: mai copripiumino come lenzuolo, sempre il minimo di lenzuola
+    if (updateData.serviceConfigs && (propertyData as any)?.usesOwnLinen !== true) {
+      const _g = sanitizeServiceConfigsLinen(updateData.serviceConfigs, (propertyData as any).beds || []);
+      if (_g.changed) {
+        updateData.serviceConfigs = _g.sanitized;
+        console.warn(`🛡️ [linen-guardrail] property-update ${id}:`, _g.log.join(" | "));
+      }
     }
 
     await propertyRef.update(updateData);
