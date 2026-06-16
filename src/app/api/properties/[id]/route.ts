@@ -5,7 +5,6 @@ import { getPropertyById, updateProperty, deletePropertyWithCascade } from "~/li
 import { getApiUser } from "~/lib/api-auth";
 import { validateBody, GenericBodySchema } from "~/lib/validation/schemas";
 import { buildExpectedItems } from "~/lib/linen/linenCore";
-import { sanitizeServiceConfigsLinen } from "~/lib/linen/linenGuardrail";
 
 export const dynamic = 'force-dynamic';
 
@@ -98,18 +97,6 @@ export async function PATCH(
       }
       
       body.feedHashes = newHashes;
-    }
-
-    // 🛡️ GUARDRAIL biancheria: mai copripiumino come lenzuolo, sempre il minimo di lenzuola
-    if ((body as any).serviceConfigs && (property as any)?.usesOwnLinen !== true) {
-      const bedsForGuard = (Array.isArray((body as any).bedsConfig) && (body as any).bedsConfig.length)
-        ? (body as any).bedsConfig
-        : ((property as any).beds || []);
-      const _g = sanitizeServiceConfigsLinen((body as any).serviceConfigs, bedsForGuard);
-      if (_g.changed) {
-        (body as any).serviceConfigs = _g.sanitized;
-        console.warn(`🛡️ [linen-guardrail] ${id}:`, _g.log.join(" | "));
-      }
     }
 
     // Salva le modifiche sulla proprietà
