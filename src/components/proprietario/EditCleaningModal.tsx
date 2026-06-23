@@ -1376,6 +1376,12 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
       alert("Per 'Altro' devi specificare il motivo nelle note");
       return;
     }
+
+    // ✅ Per APPROVARE uno sgrosso in attesa, l'admin deve definire un prezzo > 0
+    if (isAdmin && cleaning.status === "PENDING_APPROVAL" && (customPrice === null || customPrice <= 0)) {
+      alert("Inserisci il prezzo dello sgrosso per approvare la richiesta");
+      return;
+    }
     
     // 🔥 Controllo IN_PROGRESS: se la data è cambiata e la pulizia è in corso, chiedi conferma
     const cleaningOriginalDate = cleaning.date instanceof Date ? cleaning.date : new Date(cleaning.date);
@@ -1595,6 +1601,20 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
           updateData.sgrossoReason = null;
           updateData.sgrossoNotes = null;
           updateData.sgrossoReasonLabel = null;
+        }
+
+        // ✅ APPROVAZIONE RICHIESTA SGROSSO: la pulizia era PENDING_APPROVAL
+        // (creata dal proprietario, in attesa). Con il salvataggio admin e il
+        // prezzo definito ora, diventa attiva (SCHEDULED/ASSIGNED) e perde il
+        // flag di attesa. Questo è il momento dell'approvazione.
+        if (cleaning.status === "PENDING_APPROVAL") {
+          const hasOperatorApprove = (cleaning as any).operatorId || (cleaning.operators && cleaning.operators.length > 0);
+          updateData.status = hasOperatorApprove ? "ASSIGNED" : "SCHEDULED";
+          updateData.isPendingApproval = false;
+          updateData.price = effectiveCleaningPrice;
+          updateData.priceModified = true;
+          updateData.approvedAt = new Date();
+          updateData.approvedBy = user?.id || "admin";
         }
       }
       
