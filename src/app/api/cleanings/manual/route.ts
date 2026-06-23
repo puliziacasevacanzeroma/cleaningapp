@@ -262,6 +262,13 @@ export async function POST(request: Request) {
       bedMakingCount = 0,
       bedMakingFee = 0,
       bedMakingBeds = [],
+      // 🆕 Dati richiesta Sgrosso (inviati dal modale): prima la route NON li
+      // leggeva → motivo perso e nessuna notifica all'admin.
+      sgrossoReason = null,
+      sgrossoReasonLabel = null,
+      sgrossoNotes = null,
+      requestedByRole = null,
+      isPendingApproval = false,
     } = body;
 
     if (!propertyId) {
@@ -602,6 +609,14 @@ export async function POST(request: Request) {
       hasLinenOrder: createLinenOrder && !usesOwnLinen,
       // 🆕 FIX: Salva flag biancheria personalizzata
       linenConfigModified: linenConfigModified,
+      // 🆕 FIX: Salva i dati Sgrosso (prima persi → l'admin non vedeva il motivo)
+      ...(type === "SGROSSO" ? {
+        sgrossoReason: sgrossoReason || null,
+        sgrossoReasonLabel: sgrossoReasonLabel || null,
+        sgrossoNotes: sgrossoNotes || null,
+        requestedByRole: requestedByRole || _user.role || null,
+        isPendingApproval: isPendingApproval === true,
+      } : {}),
     };
     
     // 🆕 Salva sempre la configurazione biancheria quando ci sono items
@@ -658,6 +673,33 @@ export async function POST(request: Request) {
     
     // @ts-expect-error TODO-FIX: TS2345 Argument of type 'Record<string, any>' is not assignable to parameter of type 'O...
     const cleaningId = await createCleaning(cleaningData);
+
+    // 🔔 NOTIFICA ADMIN per richieste Sgrosso dei proprietari.
+    // Prima mancava del tutto: il proprietario inviava la richiesta e l'admin
+    // non riceveva nulla. Notifica role-based (recipientRole ADMIN, nessun
+    // recipientId) coerente col resto del sistema (es. auth/register).
+    if (type === "SGROSSO" && (isPendingApproval === true || (requestedByRole || _user.role || "").toUpperCase() === "PROPRIETARIO")) {
+      try {
+        await adminDb.collection("notifications").add({
+          title: "🧽 Richiesta Sgrosso da approvare",
+          message: `${property.name}: richiesto uno sgrosso per il ${scheduledDate}${sgrossoReasonLabel ? ` — Motivo: ${sgrossoReasonLabel}` : ""}. Apri la pulizia per approvare e definire il prezzo.`,
+          type: "SGROSSO_REQUEST",
+          recipientRole: "ADMIN",
+          senderId: _user.id || "system",
+          senderName: _user.name || "Proprietario",
+          relatedEntityId: cleaningId,
+          relatedEntityType: "CLEANING",
+          relatedEntityName: property.name,
+          actionRequired: true,
+          status: "UNREAD",
+          link: "/dashboard/calendario/pulizie",
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        });
+      } catch (notifErr) {
+        console.error("⚠️ Errore notifica sgrosso admin:", notifErr);
+      }
+    }
 
     let orderId: string | undefined;
 
