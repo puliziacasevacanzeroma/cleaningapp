@@ -666,6 +666,10 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
   }, [isOpen, isAdmin, cleaning?.id]);
   const isReadOnly = userRole === "OPERATORE";
 
+  // ✅ Modalità APPROVAZIONE: pulizia in attesa = richiesta sgrosso del proprietario.
+  // In questa modalità il pannello mostra solo il prezzo + bottone "Approva".
+  const isApprovalMode = userRole === "ADMIN" && (cleaning?.status === "PENDING_APPROVAL" || (cleaning as any)?.isPendingApproval === true);
+
   // ✅ Auto-apri il pannello prezzo/servizio quando un admin apre una RICHIESTA
   // SGROSSO in attesa (arrivo da notifica): atterra dritto sull'inserimento del
   // prezzo per approvare. Scatta una sola volta per apertura della modale.
@@ -4508,13 +4512,21 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                   <span className="text-2xl">💰</span>
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-white">Modifica Servizio</h3>
-                  <p className="text-white/80 text-sm">Tipo servizio e prezzo</p>
+                  <h3 className="text-lg font-bold text-white">{isApprovalMode ? 'Approva Richiesta Sgrosso' : 'Modifica Servizio'}</h3>
+                  <p className="text-white/80 text-sm">{isApprovalMode ? 'Definisci il prezzo e approva' : 'Tipo servizio e prezzo'}</p>
                 </div>
               </div>
             </div>
             <div className="p-6 space-y-4">
-              {/* Tipo Servizio */}
+              {isApprovalMode && (
+                <div className="bg-purple-50 border border-purple-200 rounded-xl p-3">
+                  <p className="font-semibold text-purple-800 text-sm">📋 Richiesta Sgrosso da approvare</p>
+                  <p className="text-slate-600 text-sm mt-0.5">{(cleaning as any)?.propertyName || ''}{((cleaning as any)?.sgrossoReasonLabel || cleaning?.sgrossoReason) ? ` — ${(cleaning as any)?.sgrossoReasonLabel || cleaning?.sgrossoReason}` : ''}</p>
+                  <p className="text-xs text-purple-600 mt-1">Inserisci il prezzo qui sotto, poi approva.</p>
+                </div>
+              )}
+              {/* Tipo Servizio (nascosto in approvazione: il tipo è SGROSSO) */}
+              {!isApprovalMode && (
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-2">Tipo Servizio</label>
                 <div className="grid grid-cols-3 gap-2">
@@ -4556,9 +4568,10 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                   );})}
                 </div>
               </div>
+              )}
 
-              {/* Motivo Sgrosso (solo se SGROSSO) */}
-              {editingServiceType === 'SGROSSO' && (
+              {/* Motivo Sgrosso (nascosto in approvazione: già nel banner) */}
+              {editingServiceType === 'SGROSSO' && !isApprovalMode && (
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-2">Motivo Sgrosso *</label>
                   <select
@@ -4642,11 +4655,11 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                   onClick={async () => {
                     // Validazione
                     if (editingServiceType === 'SGROSSO') {
-                      if (!editingSgrossoReason) {
+                      if (!editingSgrossoReason && !isApprovalMode) {
                         alert('Seleziona un motivo per lo sgrosso');
                         return;
                       }
-                      if (editingSgrossoReason === 'ALTRO' && !editingSgrossoNotes.trim()) {
+                      if (editingSgrossoReason === 'ALTRO' && !editingSgrossoNotes.trim() && !isApprovalMode) {
                         alert('Specifica il motivo dello sgrosso');
                         return;
                       }
@@ -4722,10 +4735,10 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                   {savingPriceService ? (
                     <>
                       <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                      Salvataggio...
+                      {isApprovalMode ? 'Approvazione...' : 'Salvataggio...'}
                     </>
                   ) : (
-                    '💾 Salva Modifiche'
+                    isApprovalMode ? '✅ Approva richiesta' : '💾 Salva Modifiche'
                   )}
                 </button>
               </div>
