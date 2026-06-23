@@ -247,6 +247,8 @@ export async function POST(request: Request) {
       guestsCount,
       notes,
       type = "MANUAL", // MANUAL, CHECKOUT, CHECKIN, DEEP_CLEAN
+      serviceType = null, // STANDARD | APPROFONDITA | SGROSSO (inviato dal modale)
+      serviceTypeName = null,
       createLinenOrder = true, // Se creare ordine biancheria
       linenOnly = false, // Se creare SOLO ordine biancheria (senza pulizia)
       customLinenItems, // Items personalizzati per biancheria
@@ -603,6 +605,12 @@ export async function POST(request: Request) {
       // (prima nasceva SCHEDULED = attivo, saltando l'approvazione).
       status: (type === "SGROSSO" && isPendingApproval === true) ? "PENDING_APPROVAL" : "SCHEDULED",
       type: type,
+      // 🔧 FIX CRITICO: salva ANCHE serviceType. La modale, l'auto-apertura del
+      // pannello approvazione e l'init del tipo leggono `serviceType` — prima
+      // salvavamo solo `type` → serviceType=undefined → il pannello sgrosso non
+      // si apriva e mostrava "Standard".
+      serviceType: serviceType || (type === "SGROSSO" ? "SGROSSO" : "STANDARD"),
+      serviceTypeName: serviceTypeName || (type === "SGROSSO" ? "Sgrosso" : null),
       notes: notes || "",
       // 🔧 Sgrosso in attesa = prezzo DA DEFINIRE (0). Prima `cleaningPrice || ...`
       // trattava lo 0 inviato dal proprietario come "mancante" e ci infilava il

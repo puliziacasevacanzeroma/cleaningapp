@@ -676,9 +676,8 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
       console.log('🟣 [sgrossoApprovo] status=', cleaning?.status, '| serviceType=', cleaning?.serviceType, '| price=', cleaning?.price, '| isPendingApproval=', (cleaning as any)?.isPendingApproval, '| requestedByRole=', (cleaning as any)?.requestedByRole);
     }
     if (autoOpenedApprovalRef.current) return;
-    const isSgrossoReq = cleaning?.serviceType === "SGROSSO";
     const isPending = cleaning?.status === "PENDING_APPROVAL" || (cleaning as any)?.isPendingApproval === true;
-    if (userRole === "ADMIN" && isSgrossoReq && isPending) {
+    if (userRole === "ADMIN" && isPending) {
       autoOpenedApprovalRef.current = true;
       setShowPriceServiceModal(true);
     }
@@ -878,7 +877,9 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
       setSgrossoNotes(cleaning.sgrossoNotes || "");
       
       // Inizializza stati per modifica admin
-      setEditingServiceType(cleaning.serviceType || "STANDARD");
+      // 🔧 PENDING_APPROVAL = richiesta sgrosso → forza SGROSSO anche se il doc non
+      // ha serviceType (vecchie pulizie), così il pannello mostra il prezzo manuale.
+      setEditingServiceType(cleaning.serviceType || (cleaning.status === "PENDING_APPROVAL" ? "SGROSSO" : "STANDARD"));
       setEditingPrice(cleaning.price || null);
       setEditingSgrossoReason(cleaning.sgrossoReason || "");
       setEditingSgrossoNotes(cleaning.sgrossoNotes || "");
