@@ -594,12 +594,21 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
 
   // 🔔 APRI MODAL PULIZIA DA URL (per notifiche)
   useEffect(() => {
-    if (openCleaningId) {
+    // 🔧 Robustezza notifiche: col mount lento (~6s) o navigazione SPA,
+    // useSearchParams può non riportare subito il parametro. Leggiamo anche
+    // da window.location come fallback, così l'apertura non si perde.
+    let effOpenId = openCleaningId;
+    if (!effOpenId && typeof window !== 'undefined') {
+      try { effOpenId = new URLSearchParams(window.location.search).get('openCleaning'); } catch {}
+    }
+    if (effOpenId) {
+      const idToOpen: string = effOpenId;
+      console.log('🔓 [openCleaning] richiesta apertura pulizia da notifica:', idToOpen);
       // Carica i dati della pulizia da Firestore
       const loadCleaningFromId = async () => {
         try {
           const { doc, getDoc } = await import('firebase/firestore');
-          const cleaningDoc = await getDoc(doc(db, 'cleanings', openCleaningId));
+          const cleaningDoc = await getDoc(doc(db, 'cleanings', idToOpen));
           
           if (cleaningDoc.exists()) {
             const data = cleaningDoc.data() as Record<string, any>;
@@ -661,11 +670,14 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
               holidayName: data.holidayName || null,
             };
             
+            console.log('🔓 [openCleaning] pulizia caricata, apro la modale. status =', cleaning.status);
             setDetailCleaning(cleaning);
             setShowDetailModal(true);
             
             // Rimuovi il parametro dalla URL
             router.replace('/dashboard', { scroll: false });
+          } else {
+            console.warn('🔓 [openCleaning] pulizia NON trovata in Firestore:', idToOpen);
           }
         } catch (error) {
           console.error('Errore caricamento pulizia da URL:', error);
