@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { collection, query, where, onSnapshot, Timestamp } from "firebase/firestore";
+import { collection, query, where, getDocsFromServer, Timestamp } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 
 interface Property {
@@ -417,6 +417,7 @@ export default function ManualBookingForm({
   const [error, setError] = useState("");
   const [existingBookings, setExistingBookings] = useState<ExistingBooking[]>([]);
   const [loadingBookings, setLoadingBookings] = useState(false);
+  const [bookingsOffline, setBookingsOffline] = useState(false);
   const [propertySearch, setPropertySearch] = useState("");
   const [showPropertyDropdown, setShowPropertyDropdown] = useState(false);
 
@@ -424,34 +425,57 @@ export default function ManualBookingForm({
   const maxGuests = selectedProperty?.maxGuests || 0;
   const hasProperty = !!propertyId && !!selectedProperty;
 
-  // Listener realtime prenotazioni per proprietà selezionata
+  // Carica prenotazioni della proprietà selezionata DAL SERVER (no cache).
+  // ──────────────────────────────────────────────────────────────────────
+  // Firestore usa persistentLocalCache (IndexedDB): con onSnapshot, quando il
+  // client è offline o la cache è disallineata, venivano servite prenotazioni
+  // GIÀ CANCELLATE sul server → giorni "Occupato" fantasma e falso avviso di
+  // sovrapposizione (mentre il salvataggio andava a buon fine, perché il server
+  // legge i dati veri). getDocsFromServer FORZA la lettura dal backend e bypassa
+  // la cache, quindi occupazione e overlap riflettono sempre la realtà.
+  // Se siamo offline (lettura server fallita) non mostriamo occupazione fasulla:
+  // nessun avviso, e il server ricontrolla comunque l'overlap al salvataggio.
   useEffect(() => {
     if (!propertyId || !isOpen) {
       setExistingBookings([]);
+      setBookingsOffline(false);
       return;
     }
+    let cancelled = false;
     setLoadingBookings(true);
+    setBookingsOffline(false);
     const q = query(collection(db, "bookings"), where("propertyId", "==", propertyId));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const bookings: ExistingBooking[] = snapshot.docs
-        .map(doc => {
-          const data = doc.data() as Record<string, any>;
-          return {
-            id: doc.id,
-            guestName: data.guestName || data.guest_name || "Ospite",
-            checkIn: data.checkIn instanceof Timestamp ? data.checkIn.toDate() : new Date(data.checkIn),
-            checkOut: data.checkOut instanceof Timestamp ? data.checkOut.toDate() : new Date(data.checkOut),
-            status: data.status || "UPCOMING",
-            source: data.source || ""
-          };
-        })
-        // Filtra: escludi blocchi iCal (stessa logica del calendario principale)
-        .filter(b => !isBlockedEntry(b.guestName || "", b.source));
-      bookings.sort((a, b) => a.checkIn.getTime() - b.checkIn.getTime());
-      setExistingBookings(bookings);
-      setLoadingBookings(false);
-    }, () => setLoadingBookings(false));
-    return () => unsubscribe();
+    getDocsFromServer(q)
+      .then((snapshot) => {
+        if (cancelled) return;
+        const bookings: ExistingBooking[] = snapshot.docs
+          .map(doc => {
+            const data = doc.data() as Record<string, any>;
+            return {
+              id: doc.id,
+              guestName: data.guestName || data.guest_name || "Ospite",
+              checkIn: data.checkIn instanceof Timestamp ? data.checkIn.toDate() : new Date(data.checkIn),
+              checkOut: data.checkOut instanceof Timestamp ? data.checkOut.toDate() : new Date(data.checkOut),
+              status: data.status || "UPCOMING",
+              source: data.source || ""
+            };
+          })
+          // Escludi prenotazioni cancellate e blocchi iCal (non sono occupazioni reali)
+          .filter(b => (b.status || "").toUpperCase() !== "CANCELLED")
+          .filter(b => !isBlockedEntry(b.guestName || "", b.source));
+        bookings.sort((a, b) => a.checkIn.getTime() - b.checkIn.getTime());
+        setExistingBookings(bookings);
+        setLoadingBookings(false);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        // Offline o errore di rete: non ci fidiamo della cache → niente occupazione,
+        // niente avviso fantasma. Segnaliamo lo stato all'utente.
+        setExistingBookings([]);
+        setBookingsOffline(true);
+        setLoadingBookings(false);
+      });
+    return () => { cancelled = true; };
   }, [propertyId, isOpen]);
 
   useEffect(() => {
@@ -489,6 +513,7 @@ export default function ManualBookingForm({
       setGuestName(""); setGuestEmail(""); setGuestPhone("");
       setNotes(""); setCreateCleaning(true); setError("");
       setExistingBookings([]);
+      setBookingsOffline(false);
       setPropertySearch(""); setShowPropertyDropdown(false);
     }
   }, [isOpen, preselectedPropertyId]);
@@ -641,6 +666,14 @@ export default function ManualBookingForm({
                 onSelectCheckIn={setCheckIn} onSelectCheckOut={setCheckOut}
                 existingBookings={existingBookings} loading={loadingBookings}
               />
+              {bookingsOffline && (
+                <div className="mt-2 p-2.5 bg-slate-50 border border-slate-200 rounded-xl flex items-start gap-2">
+                  <span className="text-sm flex-shrink-0">📶</span>
+                  <p className="text-[11px] text-slate-600 font-medium">
+                    Connessione assente: l'occupazione non è mostrata. Puoi creare la prenotazione lo stesso — il server verificherà eventuali sovrapposizioni al salvataggio.
+                  </p>
+                </div>
+              )}
             </div>
           ) : (
             <div className="py-6 text-center">
