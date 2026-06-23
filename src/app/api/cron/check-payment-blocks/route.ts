@@ -123,8 +123,14 @@ export async function GET(request: NextRequest) {
     const cleaningsByPropMonth = new Map<string, number>();
     const completedCleaningIds = new Set<string>();
     cleaningsSnap.docs.forEach(doc => {
-      completedCleaningIds.add(doc.id);
       const data = doc.data();
+      // 🔧 ALLINEAMENTO PAGINA: una pulizia esclusa dalla fatturazione
+      // (excludedFromBilling) NON va conteggiata né considerata "completata"
+      // ai fini del collegamento ordini — esattamente come computeMonthDebt.
+      // Senza questo il cron sommava servizi che la pagina non fattura →
+      // falso residuo → blocco ingiusto.
+      if (data.excludedFromBilling === true) return;
+      completedCleaningIds.add(doc.id);
       const propId = data.propertyId;
       const date = data.scheduledDate?.toDate?.();
       if (!propId || !date) return;
@@ -140,6 +146,9 @@ export async function GET(request: NextRequest) {
     ordersSnap.docs.forEach(doc => {
       const data = doc.data();
       if (data.status === "CANCELLED") return;
+      // 🔧 ALLINEAMENTO PAGINA: un ordine escluso dalla fatturazione non conta
+      // (computeMonthDebt lo salta). Senza questo veniva sommato → falso debito.
+      if (data.excludedFromBilling === true) return;
       const isDelivered = data.status === "DELIVERED";
       const isLinkedToCompleted = data.cleaningId && completedCleaningIds.has(data.cleaningId);
       if (!isDelivered && !isLinkedToCompleted) return;
@@ -170,7 +179,18 @@ export async function GET(request: NextRequest) {
         });
       }
       if (data.deliveryFee && data.deliveryFeeEnabled !== false) total += data.deliveryFee;
-      total = data.totalPriceOverride ?? total;
+      if (data.bedMaking && data.bedMakingFee) total += data.bedMakingFee;
+      // 🔧 CAUSA RADICE DEI BLOCCHI FANTASMA:
+      // La pagina admin (useRealtimePayments) e la fonte di verità
+      // (computeMonthDebt) usano il TOTALE CONGELATO dell'ordine
+      // (`calculatedTotal` = quanto è stato fatturato), NON il ricalcolo dagli
+      // items coi prezzi vivi dell'inventario. Qui il cron ricalcolava dagli
+      // items → numero diverso dalla pagina → falso residuo → blocco di clienti
+      // che avevano saldato. Precedenza IDENTICA alla pagina:
+      //   override manuale → calculatedTotal → ricalcolo items (solo fallback
+      //   per ordini legacy privi del campo).
+      const storedTotal = typeof data.calculatedTotal === "number" ? data.calculatedTotal : undefined;
+      total = data.totalPriceOverride ?? storedTotal ?? total;
 
       const m = date.getMonth() + 1;
       const y = date.getFullYear();
