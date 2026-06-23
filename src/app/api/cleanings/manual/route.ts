@@ -599,10 +599,15 @@ export async function POST(request: Request) {
       scheduledTime: scheduledTime || "10:00",
       guestsCount: guestsCount,
       guestsConfirmed: true, // Ospiti inseriti manualmente = confermati
-      status: "SCHEDULED",
+      // 🔧 Sgrosso del proprietario → resta IN ATTESA finché l'admin non approva
+      // (prima nasceva SCHEDULED = attivo, saltando l'approvazione).
+      status: (type === "SGROSSO" && isPendingApproval === true) ? "PENDING_APPROVAL" : "SCHEDULED",
       type: type,
       notes: notes || "",
-      price: cleaningPrice || property.cleaningPrice || 0,
+      // 🔧 Sgrosso in attesa = prezzo DA DEFINIRE (0). Prima `cleaningPrice || ...`
+      // trattava lo 0 inviato dal proprietario come "mancante" e ci infilava il
+      // prezzo base da contratto, applicando una tariffa senza approvazione.
+      price: (type === "SGROSSO" && isPendingApproval === true) ? 0 : (cleaningPrice || property.cleaningPrice || 0),
       contractPrice: property.cleaningPrice || 0,
       ...(holidayFee > 0 ? { holidayFee, holidayName } : {}),
       // 🔥 FIX: Salva se la pulizia ha un ordine biancheria collegato
@@ -692,7 +697,7 @@ export async function POST(request: Request) {
           relatedEntityName: property.name,
           actionRequired: true,
           status: "UNREAD",
-          link: "/dashboard/calendario/pulizie",
+          link: `/dashboard?openCleaning=${cleaningId}`,
           createdAt: Timestamp.now(),
           updatedAt: Timestamp.now(),
         });
