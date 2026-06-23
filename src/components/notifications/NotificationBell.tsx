@@ -164,6 +164,7 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
     setIsOpen(false);
     const notifData = n as any;
     const link = resolveNotificationLink({ link: n.link, type: n.type, relatedEntityId: n.relatedEntityId, relatedEntityType: n.relatedEntityType, relatedType: notifData.relatedType, relatedId: notifData.relatedId, recipientRole: n.recipientRole });
+    console.log('🔔 [notifClick] tipo:', n.type, '| link salvato:', n.link, '| link risolto:', link, '| relatedEntityId:', n.relatedEntityId);
     if (link) router.push(link);
   };
 
