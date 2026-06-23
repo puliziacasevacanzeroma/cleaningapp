@@ -614,6 +614,8 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
   const [editingSgrossoReason, setEditingSgrossoReason] = useState<SgrossoReasonCode | "">("");
   const [editingSgrossoNotes, setEditingSgrossoNotes] = useState<string>("");
   const [savingPriceService, setSavingPriceService] = useState(false);
+  // ✅ Modale di successo approvazione sgrosso (in linea con la grafica del sito)
+  const [approvalSuccess, setApprovalSuccess] = useState<{ price: number; property: string } | null>(null);
   
   // Servizi Extra (aggiunti durante pulizia)
   const [extraServices, setExtraServices] = useState<{name: string; price: number}[]>([]);
@@ -4506,10 +4508,10 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
       {showPriceServiceModal && isAdmin && (
         <div className="fixed inset-0 z-[10000] bg-black/50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden max-h-[90vh] overflow-y-auto">
-            <div className="bg-gradient-to-r from-blue-500 to-indigo-500 px-6 py-5">
+            <div className={`px-6 py-5 ${isApprovalMode ? 'bg-gradient-to-r from-purple-500 to-purple-700' : 'bg-gradient-to-r from-blue-500 to-indigo-500'}`}>
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center">
-                  <span className="text-2xl">💰</span>
+                  <span className="text-2xl">{isApprovalMode ? '🔧' : '💰'}</span>
                 </div>
                 <div>
                   <h3 className="text-lg font-bold text-white">{isApprovalMode ? 'Approva Richiesta Sgrosso' : 'Modifica Servizio'}</h3>
@@ -4717,8 +4719,8 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
 
                       setShowPriceServiceModal(false);
                       if (wasPendingApproval) {
-                        alert('✅ Sgrosso approvato! Prezzo definito e pulizia attivata.');
-                        onSuccess?.();
+                        // Mostra la modale di successo on-brand (no alert del browser)
+                        setApprovalSuccess({ price: editingPrice || contractPrice, property: (cleaning as any)?.propertyName || '' });
                       } else {
                         alert('✅ Servizio e prezzo aggiornati!');
                       }
@@ -4744,6 +4746,53 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ✅ MODALE SUCCESSO APPROVAZIONE SGROSSO (in linea con la grafica del sito) */}
+      {approvalSuccess && (
+        <div className="fixed inset-0 z-[10001] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden" style={{ animation: 'caScaleIn 0.4s cubic-bezier(0.34,1.56,0.64,1) forwards' }}>
+            <div className="px-6 pt-8 pb-12 text-center relative bg-gradient-to-br from-emerald-500 to-teal-600">
+              <div className="w-16 h-16 rounded-2xl bg-white/20 backdrop-blur mx-auto flex items-center justify-center mb-4">
+                <svg className="w-8 h-8 text-white" viewBox="0 0 24 24" fill="none">
+                  <path d="M5 13L9 17L19 7" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ strokeDasharray: 50, strokeDashoffset: 50, animation: 'caCheckDraw 0.5s ease 0.3s forwards' }} />
+                </svg>
+              </div>
+              <h3 className="text-xl font-bold text-white" style={{ animation: 'caFadeIn 0.4s ease 0.5s both' }}>Sgrosso Approvato!</h3>
+              <p className="text-sm text-white/80 mt-1" style={{ animation: 'caFadeIn 0.4s ease 0.65s both' }}>Pulizia attivata e prezzo definito</p>
+            </div>
+            <div className="bg-white px-6 pt-6 pb-6 -mt-4 rounded-t-3xl relative">
+              <div className="space-y-3" style={{ animation: 'caSlideUp 0.5s ease 0.3s both' }}>
+                <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
+                  <div className="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center flex-shrink-0">
+                    <span className="text-xl">🔧</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-slate-800 truncate">{approvalSuccess.property || 'Pulizia'}</p>
+                    <p className="text-xs text-slate-500">Sgrosso approvato</p>
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    <p className="text-[10px] text-emerald-500 uppercase tracking-wide">Prezzo</p>
+                    <p className="text-sm font-bold text-emerald-700">€{(approvalSuccess.price || 0).toFixed(2)}</p>
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => { setApprovalSuccess(null); onSuccess?.(); }}
+                className="w-full mt-4 py-3.5 text-white rounded-xl font-bold shadow-lg bg-gradient-to-r from-emerald-500 to-teal-500 shadow-emerald-500/25 transition-colors hover:from-emerald-600 hover:to-teal-600"
+                style={{ animation: 'caFadeIn 0.4s ease 0.8s both' }}
+              >
+                Perfetto!
+              </button>
+            </div>
+          </div>
+          <style>{`
+            @keyframes caScaleIn { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+            @keyframes caCheckDraw { from { stroke-dashoffset: 50; } to { stroke-dashoffset: 0; } }
+            @keyframes caFadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+            @keyframes caSlideUp { from { transform: translateY(30px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+          `}</style>
         </div>
       )}
 
