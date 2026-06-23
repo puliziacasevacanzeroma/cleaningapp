@@ -465,10 +465,10 @@ export const BookingCreateSchema = z.object({
   checkOut: isoDateString,
   guests: z.number().int().min(1).max(100).optional(),
   guestName: z.string().trim().max(200).optional(),
-  guestEmail: z.string().trim().max(200).optional(),
-  guestPhone: z.string().trim().max(50).optional(),
+  guestEmail: z.string().trim().max(200).nullable().optional(),
+  guestPhone: z.string().trim().max(50).nullable().optional(),
   source: z.string().trim().max(100).optional().default("manual"),
-  notes: z.string().trim().max(2000).optional(),
+  notes: z.string().trim().max(2000).nullable().optional(),
 }).passthrough();
 export type BookingCreateInput = z.infer<typeof BookingCreateSchema>;
 
