@@ -665,6 +665,19 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
     return () => { cancelled = true; };
   }, [isOpen, isAdmin, cleaning?.id]);
   const isReadOnly = userRole === "OPERATORE";
+
+  // ✅ Auto-apri il pannello prezzo/servizio quando un admin apre una RICHIESTA
+  // SGROSSO in attesa (arrivo da notifica): atterra dritto sull'inserimento del
+  // prezzo per approvare. Scatta una sola volta per apertura della modale.
+  const autoOpenedApprovalRef = useRef(false);
+  useEffect(() => {
+    if (!isOpen) { autoOpenedApprovalRef.current = false; return; }
+    if (autoOpenedApprovalRef.current) return;
+    if (userRole === "ADMIN" && cleaning?.status === "PENDING_APPROVAL" && cleaning?.serviceType === "SGROSSO") {
+      autoOpenedApprovalRef.current = true;
+      setShowPriceServiceModal(true);
+    }
+  }, [isOpen, userRole, cleaning?.status, cleaning?.serviceType]);
   const isCompleted = cleaning?.status === "COMPLETED" || cleaning?.status === "completed" || cleaning?.status === "VERIFIED" || cleaning?.status === "verified";
 
   // ═══════════════════════════════════════════════════════════════
@@ -1376,12 +1389,6 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
       alert("Per 'Altro' devi specificare il motivo nelle note");
       return;
     }
-
-    // ✅ Per APPROVARE uno sgrosso in attesa, l'admin deve definire un prezzo > 0
-    if (isAdmin && cleaning.status === "PENDING_APPROVAL" && (customPrice === null || customPrice <= 0)) {
-      alert("Inserisci il prezzo dello sgrosso per approvare la richiesta");
-      return;
-    }
     
     // 🔥 Controllo IN_PROGRESS: se la data è cambiata e la pulizia è in corso, chiedi conferma
     const cleaningOriginalDate = cleaning.date instanceof Date ? cleaning.date : new Date(cleaning.date);
@@ -1601,20 +1608,6 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
           updateData.sgrossoReason = null;
           updateData.sgrossoNotes = null;
           updateData.sgrossoReasonLabel = null;
-        }
-
-        // ✅ APPROVAZIONE RICHIESTA SGROSSO: la pulizia era PENDING_APPROVAL
-        // (creata dal proprietario, in attesa). Con il salvataggio admin e il
-        // prezzo definito ora, diventa attiva (SCHEDULED/ASSIGNED) e perde il
-        // flag di attesa. Questo è il momento dell'approvazione.
-        if (cleaning.status === "PENDING_APPROVAL") {
-          const hasOperatorApprove = (cleaning as any).operatorId || (cleaning.operators && cleaning.operators.length > 0);
-          updateData.status = hasOperatorApprove ? "ASSIGNED" : "SCHEDULED";
-          updateData.isPendingApproval = false;
-          updateData.price = effectiveCleaningPrice;
-          updateData.priceModified = true;
-          updateData.approvedAt = new Date();
-          updateData.approvedBy = user?.id || "admin";
         }
       }
       
@@ -4683,6 +4676,18 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                         updateData.sgrossoNotes = "";
                       }
 
+                      // ✅ APPROVAZIONE: se la pulizia era in attesa (richiesta sgrosso
+                      // del proprietario), definire il prezzo qui la APPROVA: diventa
+                      // attiva e perde il flag di attesa.
+                      const wasPendingApproval = cleaning?.status === "PENDING_APPROVAL";
+                      if (wasPendingApproval) {
+                        const hasOperatorAppr = (cleaning as any)?.operatorId || (cleaning?.operators && cleaning.operators.length > 0);
+                        updateData.status = hasOperatorAppr ? "ASSIGNED" : "SCHEDULED";
+                        updateData.isPendingApproval = false;
+                        updateData.approvedAt = new Date();
+                        updateData.approvedBy = user?.id || "admin";
+                      }
+
                       await updateDoc(cleaningRef, updateData);
 
                       // Aggiorna stati locali
@@ -4692,7 +4697,12 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                       setSgrossoNotes(editingSgrossoNotes);
 
                       setShowPriceServiceModal(false);
-                      alert('✅ Servizio e prezzo aggiornati!');
+                      if (wasPendingApproval) {
+                        alert('✅ Sgrosso approvato! Prezzo definito e pulizia attivata.');
+                        onSuccess?.();
+                      } else {
+                        alert('✅ Servizio e prezzo aggiornati!');
+                      }
                     } catch (error) {
                       console.error('Errore salvataggio:', error);
                       alert('❌ Errore nel salvataggio');
