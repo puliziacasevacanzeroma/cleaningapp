@@ -1034,7 +1034,14 @@ export default function NewCleaningModal({
   }, [effectivePrice, linenTotal, formData.requestType, formData.createLinenOrder, formData.applyDeliveryFee, isSgrosso, isProprietario, bedMakingFee]);
 
   const filteredItems = useMemo(() => activeCategory === "all" ? allInventoryItems : allInventoryItems.filter(item => item.category === activeCategory), [allInventoryItems, activeCategory]);
-  const canProceedToStep2 = formData.propertyId && formData.scheduledDate && (formData.requestType === "linen_only" ? !selectedProperty?.usesOwnLinen : selectedServiceType);
+  // 🔧 FIX vicolo cieco Sgrosso: il selettore "Motivo Sgrosso *" sta nello
+  // Step 1, ma la validazione che lo pretende scattava solo allo Step 2
+  // ("Invia Richiesta") → l'utente arrivava allo Step 2 senza motivo e restava
+  // bloccato senza poterlo inserire (il campo era rimasto indietro). Ora il
+  // passaggio allo Step 2 richiede il motivo (e le note se motivo === ALTRO),
+  // così il campo va compilato dove è, prima di proseguire.
+  const sgrossoReasonOk = !isSgrosso || (!!sgrossoReason && (sgrossoReason !== "ALTRO" || sgrossoNotes.trim().length > 0));
+  const canProceedToStep2 = formData.propertyId && formData.scheduledDate && (formData.requestType === "linen_only" ? !selectedProperty?.usesOwnLinen : selectedServiceType) && sgrossoReasonOk;
   const guestsValid = formData.guestsCount > 0;
 
   // 🆕 Calcola validazione biancheria
