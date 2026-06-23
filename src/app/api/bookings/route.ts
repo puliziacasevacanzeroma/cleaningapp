@@ -151,9 +151,7 @@ export async function GET(req: NextRequest) {
     const status = searchParams.get('status');
 
     // Carica prenotazioni
-    // @ts-expect-error TODO-FIX: TS2339 Property 'get' does not exist on type '"bookings"'.
-    const bookingsSnap = await adminDb.collection('bookings'.get());
-    // @ts-expect-error TODO-FIX: TS2551 Property 'docs' does not exist on type 'CollectionReference<DocumentData, Docume...
+    const bookingsSnap = await adminDb.collection('bookings').get();
     let bookings = bookingsSnap.docs.map(d => ({ id: d.id, ...(d.data() as Record<string, any>) }));
 
     // Se PROPRIETARIO, filtra solo le sue proprietà
