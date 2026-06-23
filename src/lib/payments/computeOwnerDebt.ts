@@ -196,6 +196,14 @@ export async function computeOwnerDebt(
       createdAt: o.createdAt,
       items: o.items,
       totalPriceOverride: o.totalPriceOverride,
+      // 🔧 CAUSA RADICE: il campo SALVATO `calculatedTotal` (totale congelato a
+      // quanto fatturato, = valore della pagina Pagamenti) va passato a
+      // computeMonthDebt, che lo preferisce al ricalcolo dagli items. Senza
+      // questo, computeOwnerDebt ricalcolava dagli items (prezzi vivi) e
+      // divergeva dalla pagina → il "Lucchetto automatico" congelava un totale
+      // più alto del fatturato (es. Ariele marzo: 2710,38 invece di 2589,32)
+      // → debito fantasma e blocco. Stesso campo letto da useOwnerDebts.
+      calculatedTotal: o.calculatedTotal,
       deliveryFee: o.deliveryFee,
       deliveryFeeEnabled: o.deliveryFeeEnabled,
       bedMaking: o.bedMaking,
