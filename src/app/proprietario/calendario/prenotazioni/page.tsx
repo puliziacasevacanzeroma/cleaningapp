@@ -37,6 +37,12 @@ export default function CalendarioPrenotazioniPage() {
           name: (doc.data() as Record<string, any>).name || "",
           address: (doc.data() as Record<string, any>).address || "",
           imageUrl: (doc.data() as Record<string, any>).imageUrl || "",
+          // 🔧 FIX stepper ospiti bloccato su "max 0" in area proprietario:
+          // ManualBookingForm calcola `maxGuests = selectedProperty?.maxGuests || 0`,
+          // ma questo mapping non passava il campo → ogni proprietà arrivava con
+          // maxGuests undefined → "max 0" → pulsanti +/- disabilitati. La pagina
+          // admin includeva già il campo, per questo da admin funzionava.
+          maxGuests: (doc.data() as Record<string, any>).maxGuests || 0,
         }));
       setProperties(props);
     });
