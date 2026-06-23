@@ -672,8 +672,13 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
   const autoOpenedApprovalRef = useRef(false);
   useEffect(() => {
     if (!isOpen) { autoOpenedApprovalRef.current = false; return; }
+    if (userRole === "ADMIN") {
+      console.log('🟣 [sgrossoApprovo] status=', cleaning?.status, '| serviceType=', cleaning?.serviceType, '| price=', cleaning?.price, '| isPendingApproval=', (cleaning as any)?.isPendingApproval, '| requestedByRole=', (cleaning as any)?.requestedByRole);
+    }
     if (autoOpenedApprovalRef.current) return;
-    if (userRole === "ADMIN" && cleaning?.status === "PENDING_APPROVAL" && cleaning?.serviceType === "SGROSSO") {
+    const isSgrossoReq = cleaning?.serviceType === "SGROSSO";
+    const isPending = cleaning?.status === "PENDING_APPROVAL" || (cleaning as any)?.isPendingApproval === true;
+    if (userRole === "ADMIN" && isSgrossoReq && isPending) {
       autoOpenedApprovalRef.current = true;
       setShowPriceServiceModal(true);
     }
