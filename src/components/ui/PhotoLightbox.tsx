@@ -3,20 +3,15 @@
 import { useState, useEffect, useCallback, useRef, type TouchEvent as RTouchEvent } from "react";
 
 /* ═══════════════════════════════════════════════════════════════
-   PhotoLightbox v5 — RISOLVE foto 4284x5712 da Firebase
-   
-   PROBLEMA TROVATO DAL DEBUG:
-   - Le foto sono 4284x5712 (24 megapixel!)
-   - Il browser impiega 6+ secondi a decodificarle
-   - Durante la decodifica il main thread si blocca
-   - Il flag "transitioning" restava true e bloccava i touch
-   
-   SOLUZIONE:
-   1. Ridimensiona le foto con OffscreenCanvas/canvas → max 1200px
-   2. Crea un blob URL locale che il browser può renderizzare senza lag
-   3. Usa scroll-snap nativo CSS per lo swipe (il browser gestisce tutto)
-   4. ZERO JavaScript per il tracking touch → nessun blocco possibile
-   5. Cache aggressiva dei blob URL ridimensionati
+   PhotoLightbox v7 — carosello con SWIPE + PINCH-ZOOM + PAN inline
+
+   - Swipe orizzontale tra le foto (gestito a mano via transform,
+     niente scroll nativo → nessun conflitto col gesto di zoom)
+   - Pizzica per zoomare la foto corrente, trascina per spostarti,
+     doppio-tap per zoom rapido (1× ↔ 2.5×, fino a 5×)
+   - touch-action: none → controlliamo noi ogni gesto
+   - Foto ridimensionate a 1200px per caricamento veloce; la foto che
+     zoomi viene aggiornata a piena risoluzione in background (progressivo)
    ═══════════════════════════════════════════════════════════════ */
 
 interface PhotoLightboxProps {
@@ -27,34 +22,26 @@ interface PhotoLightboxProps {
   propertyName?: string;
 }
 
-// ─── Cache globale per immagini ridimensionate ───
-const resizedCache = new Map<string, string>(); // url originale → blob URL ridimensionato
+// Cache globale per immagini ridimensionate
+const resizedCache = new Map<string, string>();
+const MAX_DISPLAY_SIZE = 1200; // px
 
-const MAX_DISPLAY_SIZE = 1200; // px — più che sufficiente per qualsiasi mobile
-
-/**
- * Scarica l'immagine, la ridimensiona a max 1200px via canvas,
- * restituisce un blob URL leggero che il browser renderizza istantaneamente
- */
 function resizeImage(src: string): Promise<string> {
-  // Se già in cache, ritorna subito
   if (resizedCache.has(src)) return Promise.resolve(resizedCache.get(src)!);
 
   return new Promise((resolve) => {
     const img = new Image();
     img.crossOrigin = "anonymous";
-    
+
     img.onload = () => {
       let { naturalWidth: w, naturalHeight: h } = img;
 
-      // Se già piccola, usa l'originale
       if (w <= MAX_DISPLAY_SIZE && h <= MAX_DISPLAY_SIZE) {
         resizedCache.set(src, src);
         resolve(src);
         return;
       }
 
-      // Calcola nuove dimensioni
       if (w > h) {
         h = Math.round((h * MAX_DISPLAY_SIZE) / w);
         w = MAX_DISPLAY_SIZE;
@@ -63,15 +50,14 @@ function resizeImage(src: string): Promise<string> {
         h = MAX_DISPLAY_SIZE;
       }
 
-      // Ridimensiona via canvas
       const canvas = document.createElement("canvas");
       canvas.width = w;
       canvas.height = h;
       const ctx = canvas.getContext("2d");
       if (!ctx) { resolve(src); return; }
-      
+
       ctx.drawImage(img, 0, 0, w, h);
-      
+
       canvas.toBlob(
         (blob) => {
           if (!blob) { resolve(src); return; }
@@ -84,18 +70,11 @@ function resizeImage(src: string): Promise<string> {
       );
     };
 
-    img.onerror = () => {
-      // Fallback: usa l'originale
-      resolve(src);
-    };
-
+    img.onerror = () => resolve(src);
     img.src = src;
   });
 }
 
-/**
- * Pre-processa un array di foto: le ridimensiona tutte in parallelo
- */
 async function preprocessPhotos(urls: string[]): Promise<string[]> {
   return Promise.all(urls.map(resizeImage));
 }
@@ -109,38 +88,131 @@ export function PhotoLightbox({
 }: PhotoLightboxProps) {
   const [index, setIndex] = useState(initialIndex);
   const [entered, setEntered] = useState(false);
-  // Foto ridimensionate pronte per il display
   const [displayPhotos, setDisplayPhotos] = useState<string[]>([]);
   const [processing, setProcessing] = useState(true);
-  // ── Zoom: foto a piena risoluzione aperta in overlay dedicato (pinch/pan/doppio-tap) ──
-  const [zoomIndex, setZoomIndex] = useState<number | null>(null);
+  const [zoomed, setZoomed] = useState(false); // solo per UI (nasconde frecce/hint)
 
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const scrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const programmaticScroll = useRef(false);
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const trackRef = useRef<HTMLDivElement>(null);
+
+  const indexRef = useRef(initialIndex);
+
+  // Zoom della slide corrente
+  const scaleRef = useRef(1);
+  const txRef = useRef(0);
+  const tyRef = useRef(0);
+
+  // Stato del gesto
+  const mode = useRef<"idle" | "swipe" | "pinch" | "pan">("idle");
+  const startX = useRef(0);
+  const startY = useRef(0);
+  const startTrackX = useRef(0);
+  const startDist = useRef(1);
+  const startScale = useRef(1);
+  const startTx = useRef(0);
+  const startTy = useRef(0);
+  const lastTap = useRef(0);
+  const movedRef = useRef(false);
+  const upgraded = useRef<Set<number>>(new Set());
+
+  const getWidth = () => viewportRef.current?.clientWidth || (typeof window !== "undefined" ? window.innerWidth : 1) || 1;
+  const getHeight = () => viewportRef.current?.clientHeight || (typeof window !== "undefined" ? window.innerHeight : 1) || 1;
+
+  const currentImg = (): HTMLImageElement | null => {
+    const track = trackRef.current;
+    if (!track) return null;
+    const slide = track.children[indexRef.current] as HTMLElement | undefined;
+    return slide ? (slide.querySelector("img") as HTMLImageElement | null) : null;
+  };
+
+  const positionTrack = (i: number, animate: boolean) => {
+    const track = trackRef.current;
+    if (!track) return;
+    track.style.transition = animate ? "transform 0.3s cubic-bezier(0.22,0.61,0.36,1)" : "none";
+    track.style.transform = `translate3d(${-i * getWidth()}px,0,0)`;
+  };
+
+  const applyZoom = (animate: boolean) => {
+    const img = currentImg();
+    if (!img) return;
+    img.style.transition = animate ? "transform 0.18s ease" : "none";
+    img.style.transform = `translate3d(${txRef.current}px, ${tyRef.current}px, 0) scale(${scaleRef.current})`;
+  };
+
+  const syncZoomedFlag = () => {
+    const z = scaleRef.current > 1.02;
+    setZoomed((prev) => (prev !== z ? z : prev));
+  };
+
+  const resetZoom = (animate: boolean) => {
+    scaleRef.current = 1;
+    txRef.current = 0;
+    tyRef.current = 0;
+    applyZoom(animate);
+    syncZoomedFlag();
+  };
+
+  const clampPan = () => {
+    const img = currentImg();
+    const w = getWidth();
+    const h = getHeight();
+    const iw = (img?.clientWidth || w) * scaleRef.current;
+    const ih = (img?.clientHeight || h) * scaleRef.current;
+    const maxX = Math.max(0, (iw - w) / 2);
+    const maxY = Math.max(0, (ih - h) / 2);
+    if (txRef.current > maxX) txRef.current = maxX;
+    if (txRef.current < -maxX) txRef.current = -maxX;
+    if (tyRef.current > maxY) tyRef.current = maxY;
+    if (tyRef.current < -maxY) tyRef.current = -maxY;
+  };
+
+  // Quando zoomi, carica l'originale a piena risoluzione e sostituiscilo (progressivo)
+  const upgradeCurrentToFullRes = () => {
+    const i = indexRef.current;
+    if (upgraded.current.has(i)) return;
+    const hi = photos[i];
+    const img = currentImg();
+    if (!img || !hi) return;
+    if (img.src === hi) { upgraded.current.add(i); return; }
+    const pre = new Image();
+    pre.onload = () => {
+      const cur = currentImg();
+      if (cur && indexRef.current === i) cur.src = hi;
+      upgraded.current.add(i);
+    };
+    pre.src = hi;
+  };
+
+  const goTo = useCallback((i: number) => {
+    const n = photos.length;
+    if (i < 0 || i >= n) { positionTrack(indexRef.current, true); return; }
+    resetZoom(false); // azzera lo zoom della slide che lasciamo
+    indexRef.current = i;
+    setIndex(i);
+    positionTrack(i, true);
+  }, [photos.length]);
+
+  const doClose = useCallback(() => {
+    setEntered(false);
+    setTimeout(onClose, 200);
+  }, [onClose]);
 
   // ── Open lifecycle ──
   useEffect(() => {
     if (isOpen) {
       setIndex(initialIndex);
+      indexRef.current = initialIndex;
+      scaleRef.current = 1; txRef.current = 0; tyRef.current = 0;
+      setZoomed(false);
       setEntered(false);
       setProcessing(true);
+      upgraded.current = new Set();
       document.body.style.overflow = "hidden";
 
-      // Pre-processa tutte le foto (ridimensiona in background)
       preprocessPhotos(photos).then((resized) => {
         setDisplayPhotos(resized);
         setProcessing(false);
-        requestAnimationFrame(() => {
-          setEntered(true);
-          // Scroll alla foto iniziale
-          const el = scrollRef.current;
-          if (el) {
-            programmaticScroll.current = true;
-            el.scrollTo({ left: initialIndex * el.clientWidth, behavior: "instant" as ScrollBehavior });
-            setTimeout(() => { programmaticScroll.current = false; }, 50);
-          }
-        });
+        requestAnimationFrame(() => setEntered(true));
       });
     } else {
       setEntered(false);
@@ -149,48 +221,162 @@ export function PhotoLightbox({
     return () => { document.body.style.overflow = ""; };
   }, [isOpen, initialIndex, photos]);
 
+  // ── Posiziona il track quando le foto sono pronte ──
+  useEffect(() => {
+    if (!processing && displayPhotos.length > 0) {
+      positionTrack(indexRef.current, false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [processing, displayPhotos.length]);
+
+  // ── Resize / rotazione schermo ──
+  useEffect(() => {
+    if (!isOpen) return;
+    const onResize = () => { resetZoom(false); positionTrack(indexRef.current, false); };
+    window.addEventListener("resize", onResize);
+    window.addEventListener("orientationchange", onResize);
+    return () => {
+      window.removeEventListener("resize", onResize);
+      window.removeEventListener("orientationchange", onResize);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
+
   // ── Keyboard ──
   useEffect(() => {
     if (!isOpen) return;
     const fn = (e: KeyboardEvent) => {
       if (e.key === "Escape") doClose();
-      if (e.key === "ArrowRight") scrollToIndex(index + 1);
-      if (e.key === "ArrowLeft") scrollToIndex(index - 1);
+      if (e.key === "ArrowRight") goTo(indexRef.current + 1);
+      if (e.key === "ArrowLeft") goTo(indexRef.current - 1);
     };
     window.addEventListener("keydown", fn);
     return () => window.removeEventListener("keydown", fn);
-  }, [isOpen, index]);
+  }, [isOpen, goTo, doClose]);
 
-  // ── Scroll snap detection (track current photo) ──
-  const handleScroll = useCallback(() => {
-    if (programmaticScroll.current) return;
-    if (scrollTimerRef.current) clearTimeout(scrollTimerRef.current);
-    scrollTimerRef.current = setTimeout(() => {
-      const el = scrollRef.current;
-      if (!el) return;
-      const w = el.clientWidth;
-      if (w === 0) return;
-      const newIndex = Math.round(el.scrollLeft / w);
-      if (newIndex >= 0 && newIndex < photos.length) {
-        setIndex(newIndex);
+  // ═══════════════════════════
+  //  GESTI TOUCH
+  // ═══════════════════════════
+  const onTouchStart = (e: RTouchEvent<HTMLDivElement>) => {
+    const t = e.touches;
+    movedRef.current = false;
+    if (t.length === 2) {
+      mode.current = "pinch";
+      const dx = t[0].clientX - t[1].clientX;
+      const dy = t[0].clientY - t[1].clientY;
+      startDist.current = Math.hypot(dx, dy) || 1;
+      startScale.current = scaleRef.current;
+      startTx.current = txRef.current;
+      startTy.current = tyRef.current;
+    } else if (t.length === 1) {
+      const now = Date.now();
+      const isDouble = now - lastTap.current < 280;
+      lastTap.current = now;
+
+      if (isDouble) {
+        if (scaleRef.current > 1) {
+          resetZoom(true);
+        } else {
+          scaleRef.current = 2.5;
+          clampPan();
+          applyZoom(true);
+          syncZoomedFlag();
+          upgradeCurrentToFullRes();
+        }
+        mode.current = "idle";
+        return;
       }
-    }, 60);
-  }, [photos.length]);
 
-  const scrollToIndex = useCallback((i: number) => {
-    if (i < 0 || i >= photos.length) return;
-    const el = scrollRef.current;
-    if (!el) return;
-    programmaticScroll.current = true;
-    el.scrollTo({ left: i * el.clientWidth, behavior: "smooth" });
-    setIndex(i);
-    setTimeout(() => { programmaticScroll.current = false; }, 400);
-  }, [photos.length]);
+      if (scaleRef.current > 1) {
+        mode.current = "pan";
+        startX.current = t[0].clientX;
+        startY.current = t[0].clientY;
+        startTx.current = txRef.current;
+        startTy.current = tyRef.current;
+      } else {
+        mode.current = "swipe";
+        startX.current = t[0].clientX;
+        startY.current = t[0].clientY;
+        startTrackX.current = -indexRef.current * getWidth();
+      }
+    }
+  };
 
-  const doClose = useCallback(() => {
-    setEntered(false);
-    setTimeout(onClose, 200);
-  }, [onClose]);
+  const onTouchMove = (e: RTouchEvent<HTMLDivElement>) => {
+    const t = e.touches;
+    movedRef.current = true;
+
+    if (mode.current === "pinch" && t.length === 2) {
+      const dx = t[0].clientX - t[1].clientX;
+      const dy = t[0].clientY - t[1].clientY;
+      const dist = Math.hypot(dx, dy);
+      let s = startScale.current * (dist / startDist.current);
+      if (s < 1) s = 1;
+      if (s > 5) s = 5;
+      scaleRef.current = s;
+      clampPan();
+      applyZoom(false);
+    } else if (mode.current === "pan" && t.length === 1) {
+      txRef.current = startTx.current + (t[0].clientX - startX.current);
+      tyRef.current = startTy.current + (t[0].clientY - startY.current);
+      clampPan();
+      applyZoom(false);
+    } else if (mode.current === "swipe" && t.length === 1) {
+      const dx = t[0].clientX - startX.current;
+      const track = trackRef.current;
+      if (track) {
+        track.style.transition = "none";
+        track.style.transform = `translate3d(${startTrackX.current + dx}px,0,0)`;
+      }
+    }
+  };
+
+  const onTouchEnd = (e: RTouchEvent<HTMLDivElement>) => {
+    const remaining = e.touches.length;
+
+    if (mode.current === "swipe") {
+      const endX = e.changedTouches[0]?.clientX ?? startX.current;
+      const dx = endX - startX.current;
+      const threshold = Math.min(80, getWidth() * 0.18);
+      if (dx <= -threshold && indexRef.current < photos.length - 1) goTo(indexRef.current + 1);
+      else if (dx >= threshold && indexRef.current > 0) goTo(indexRef.current - 1);
+      else positionTrack(indexRef.current, true);
+      mode.current = "idle";
+      return;
+    }
+
+    if (mode.current === "pinch") {
+      if (scaleRef.current <= 1.02) {
+        resetZoom(true);
+      } else {
+        clampPan();
+        applyZoom(true);
+        upgradeCurrentToFullRes();
+      }
+      syncZoomedFlag();
+      if (remaining === 1) {
+        // un dito ancora a terra → passa a pan se zoomato
+        mode.current = scaleRef.current > 1 ? "pan" : "idle";
+        const r = e.touches[0];
+        startX.current = r.clientX;
+        startY.current = r.clientY;
+        startTx.current = txRef.current;
+        startTy.current = tyRef.current;
+      } else {
+        mode.current = "idle";
+      }
+      return;
+    }
+
+    if (mode.current === "pan") {
+      if (remaining === 0) {
+        clampPan();
+        applyZoom(true);
+        mode.current = "idle";
+      }
+      return;
+    }
+  };
 
   // ═══════════════════════════
   //  RENDER
@@ -219,31 +405,18 @@ export function PhotoLightbox({
               {propertyName || "Foto Pulizia"}
             </p>
             <p className="text-white/50 text-xs">
-              {index + 1} di {photos.length} · tocca la foto per zoomare
+              {index + 1} di {photos.length}{zoomed ? " · zoom" : " · pizzica per zoomare"}
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
-          {!processing && displayPhotos.length > 0 && (
-            <button
-              onClick={() => setZoomIndex(index)}
-              aria-label="Zoom"
-              className="w-10 h-10 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center text-white active:scale-90 transition-transform"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M21 21l-4.35-4.35M11 8v6M8 11h6M19 11a8 8 0 11-16 0 8 8 0 0116 0z" />
-              </svg>
-            </button>
-          )}
-          <button
-            onClick={doClose}
-            className="w-10 h-10 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center text-white active:scale-90 transition-transform"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
+        <button
+          onClick={doClose}
+          className="w-10 h-10 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center text-white active:scale-90 transition-transform flex-shrink-0"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
       </div>
 
       {/* PROCESSING INDICATOR */}
@@ -256,56 +429,57 @@ export function PhotoLightbox({
         </div>
       )}
 
-      {/* SCROLL-SNAP SLIDES — il browser gestisce tutto lo swipe */}
+      {/* CAROSELLO (swipe + pinch + pan gestiti a mano) */}
       {!processing && displayPhotos.length > 0 && (
         <div
-          ref={scrollRef}
-          onScroll={handleScroll}
-          className="flex-1 flex overflow-x-auto scrollbar-hide"
+          ref={viewportRef}
+          className="flex-1 overflow-hidden relative"
           style={{
-            scrollSnapType: "x mandatory",
-            WebkitOverflowScrolling: "touch",
-            scrollbarWidth: "none",
-            msOverflowStyle: "none",
+            touchAction: "none",
             opacity: entered ? 1 : 0,
             transition: "opacity 0.2s ease",
           }}
+          onTouchStart={onTouchStart}
+          onTouchMove={onTouchMove}
+          onTouchEnd={onTouchEnd}
         >
-          {displayPhotos.map((src, i) => (
-            <div
-              key={i}
-              className="flex-shrink-0 flex items-center justify-center"
-              style={{
-                width: "100vw",
-                height: "100%",
-                scrollSnapAlign: "start",
-                scrollSnapStop: "always",
-              }}
-            >
-              <img
-                src={src}
-                alt={`Foto ${i + 1}`}
-                draggable={false}
-                onClick={() => setZoomIndex(i)}
-                decoding="async"
-                className="max-w-full max-h-full object-contain select-none cursor-zoom-in"
-                style={{
-                  WebkitUserSelect: "none",
-                  userSelect: "none",
-                  WebkitTouchCallout: "none",
-                }}
-              />
-            </div>
-          ))}
+          <div
+            ref={trackRef}
+            className="flex h-full"
+            style={{ width: "100%", height: "100%", willChange: "transform" }}
+          >
+            {displayPhotos.map((src, i) => (
+              <div
+                key={i}
+                className="flex-shrink-0 flex items-center justify-center"
+                style={{ width: "100%", height: "100%" }}
+              >
+                <img
+                  src={src}
+                  alt={`Foto ${i + 1}`}
+                  draggable={false}
+                  decoding="async"
+                  className="max-w-full max-h-full object-contain select-none"
+                  style={{
+                    transformOrigin: "center center",
+                    willChange: "transform",
+                    WebkitUserSelect: "none",
+                    userSelect: "none",
+                    WebkitTouchCallout: "none",
+                  }}
+                />
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
-      {/* Desktop arrows */}
-      {!processing && photos.length > 1 && (
+      {/* Frecce desktop (nascoste se zoomato) */}
+      {!processing && photos.length > 1 && !zoomed && (
         <>
           {index > 0 && (
             <button
-              onClick={() => scrollToIndex(index - 1)}
+              onClick={() => goTo(index - 1)}
               className="hidden md:flex absolute left-3 top-1/2 -translate-y-1/2 z-20 w-12 h-12 rounded-full bg-black/40 backdrop-blur-sm items-center justify-center text-white hover:bg-black/60 active:scale-90 transition-all"
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -315,7 +489,7 @@ export function PhotoLightbox({
           )}
           {index < photos.length - 1 && (
             <button
-              onClick={() => scrollToIndex(index + 1)}
+              onClick={() => goTo(index + 1)}
               className="hidden md:flex absolute right-3 top-1/2 -translate-y-1/2 z-20 w-12 h-12 rounded-full bg-black/40 backdrop-blur-sm items-center justify-center text-white hover:bg-black/60 active:scale-90 transition-all"
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -335,13 +509,12 @@ export function PhotoLightbox({
           paddingBottom: "max(env(safe-area-inset-bottom, 0px), 16px)",
         }}
       >
-        {/* Progress dots */}
         {photos.length > 1 && photos.length <= 15 && (
           <div className="flex justify-center gap-1.5 mb-3">
             {photos.map((_, i) => (
               <button
                 key={i}
-                onClick={() => scrollToIndex(i)}
+                onClick={() => goTo(i)}
                 className="transition-all duration-200 rounded-full"
                 style={{
                   width: i === index ? 24 : 7,
@@ -361,24 +534,10 @@ export function PhotoLightbox({
           </div>
         )}
 
-        {/* Thumbnail strip */}
         {photos.length > 1 && !processing && (
-          <ThumbStrip
-            photos={displayPhotos}
-            current={index}
-            onTap={scrollToIndex}
-          />
+          <ThumbStrip photos={displayPhotos} current={index} onTap={goTo} />
         )}
       </div>
-
-      {/* ZOOM OVERLAY (pinch / doppio-tap / trascina) — foto a piena risoluzione */}
-      {zoomIndex !== null && (
-        <ZoomView
-          lowSrc={displayPhotos[zoomIndex] || photos[zoomIndex]}
-          highSrc={photos[zoomIndex]}
-          onClose={() => setZoomIndex(null)}
-        />
-      )}
     </div>
   );
 }
@@ -419,147 +578,6 @@ function ThumbStrip({ photos, current, onTap }: { photos: string[]; current: num
           <img src={p} alt="" draggable={false} loading="lazy" className="w-full h-full object-cover" />
         </button>
       ))}
-    </div>
-  );
-}
-
-// ─── Zoom view: singola foto a PIENA RISOLUZIONE con pinch / doppio-tap / trascina ───
-function ZoomView({ lowSrc, highSrc, onClose }: { lowSrc: string; highSrc: string; onClose: () => void }) {
-  const [shownSrc, setShownSrc] = useState(lowSrc);
-  const imgRef = useRef<HTMLImageElement>(null);
-
-  const scale = useRef(1);
-  const tx = useRef(0);
-  const ty = useRef(0);
-
-  const mode = useRef<"none" | "pan" | "pinch">("none");
-  const startDist = useRef(1);
-  const startScale = useRef(1);
-  const startX = useRef(0);
-  const startY = useRef(0);
-  const startTx = useRef(0);
-  const startTy = useRef(0);
-  const lastTap = useRef(0);
-
-  const apply = () => {
-    const img = imgRef.current;
-    if (img) img.style.transform = `translate(${tx.current}px, ${ty.current}px) scale(${scale.current})`;
-  };
-
-  const clampScale = () => {
-    if (scale.current < 1) { scale.current = 1; tx.current = 0; ty.current = 0; }
-    if (scale.current > 5) scale.current = 5;
-  };
-
-  const onTouchStart = (e: RTouchEvent<HTMLDivElement>) => {
-    if (e.touches.length === 2) {
-      mode.current = "pinch";
-      const dx = e.touches[0].clientX - e.touches[1].clientX;
-      const dy = e.touches[0].clientY - e.touches[1].clientY;
-      startDist.current = Math.hypot(dx, dy) || 1;
-      startScale.current = scale.current;
-    } else if (e.touches.length === 1) {
-      // doppio-tap → zoom in/out
-      const now = Date.now();
-      if (now - lastTap.current < 300) {
-        if (scale.current > 1) { scale.current = 1; tx.current = 0; ty.current = 0; }
-        else { scale.current = 2.5; }
-        clampScale(); apply();
-        lastTap.current = 0;
-      } else {
-        lastTap.current = now;
-      }
-      mode.current = scale.current > 1 ? "pan" : "none";
-      startX.current = e.touches[0].clientX;
-      startY.current = e.touches[0].clientY;
-      startTx.current = tx.current;
-      startTy.current = ty.current;
-    }
-  };
-
-  const onTouchMove = (e: RTouchEvent<HTMLDivElement>) => {
-    if (mode.current === "pinch" && e.touches.length === 2) {
-      const dx = e.touches[0].clientX - e.touches[1].clientX;
-      const dy = e.touches[0].clientY - e.touches[1].clientY;
-      const dist = Math.hypot(dx, dy);
-      scale.current = startScale.current * (dist / startDist.current);
-      clampScale(); apply();
-    } else if (mode.current === "pan" && e.touches.length === 1 && scale.current > 1) {
-      tx.current = startTx.current + (e.touches[0].clientX - startX.current);
-      ty.current = startTy.current + (e.touches[0].clientY - startY.current);
-      apply();
-    }
-  };
-
-  const onTouchEnd = (e: RTouchEvent<HTMLDivElement>) => {
-    if (e.touches.length === 0) {
-      clampScale(); apply();
-      mode.current = "none";
-    } else if (e.touches.length === 1) {
-      mode.current = scale.current > 1 ? "pan" : "none";
-      startX.current = e.touches[0].clientX;
-      startY.current = e.touches[0].clientY;
-      startTx.current = tx.current;
-      startTy.current = ty.current;
-    }
-  };
-
-  const onDoubleClick = () => {
-    if (scale.current > 1) { scale.current = 1; tx.current = 0; ty.current = 0; }
-    else { scale.current = 2.5; }
-    clampScale(); apply();
-  };
-
-  // Progressivo: mostra subito la versione leggera (già in cache → istantanea),
-  // poi carica l'originale a piena risoluzione e lo sostituisce senza sfarfallio.
-  // Lo scroll dello sfondo è già bloccato dalla galleria: qui NON tocchiamo body.
-  useEffect(() => {
-    setShownSrc(lowSrc);
-    if (!highSrc || highSrc === lowSrc) return;
-    const hi = new Image();
-    hi.onload = () => setShownSrc(highSrc);
-    hi.src = highSrc;
-    return () => { hi.onload = null; };
-  }, [lowSrc, highSrc]);
-
-  return (
-    <div className="fixed inset-0 z-[10000] bg-black flex flex-col" style={{ touchAction: "none" }}>
-      <div className="flex-shrink-0 flex items-center justify-between px-4 py-3">
-        <p className="text-white/70 text-xs">Pizzica o doppio-tap per zoomare · trascina per spostarti</p>
-        <button
-          onClick={onClose}
-          aria-label="Chiudi zoom"
-          className="w-10 h-10 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center text-white active:scale-90 transition-transform"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-      </div>
-      <div
-        className="flex-1 overflow-hidden flex items-center justify-center relative"
-        style={{ touchAction: "none" }}
-        onTouchStart={onTouchStart}
-        onTouchMove={onTouchMove}
-        onTouchEnd={onTouchEnd}
-        onDoubleClick={onDoubleClick}
-      >
-        <img
-          ref={imgRef}
-          src={shownSrc}
-          alt="Zoom"
-          draggable={false}
-          decoding="async"
-          className="max-w-full max-h-full object-contain select-none"
-          style={{
-            transformOrigin: "center center",
-            willChange: "transform",
-            WebkitUserSelect: "none",
-            userSelect: "none",
-            WebkitTouchCallout: "none",
-          }}
-        />
-      </div>
     </div>
   );
 }
