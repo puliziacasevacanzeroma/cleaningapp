@@ -125,6 +125,13 @@ export function PhotoLightbox({
     return slide ? (slide.querySelector("img") as HTMLImageElement | null) : null;
   };
 
+  // Centro del viewport in coordinate schermo (per zoomare verso il punto toccato)
+  const viewportCenter = () => {
+    const r = viewportRef.current?.getBoundingClientRect();
+    if (!r) return { cx: getWidth() / 2, cy: getHeight() / 2 };
+    return { cx: r.left + r.width / 2, cy: r.top + r.height / 2 };
+  };
+
   const positionTrack = (i: number, animate: boolean) => {
     const track = trackRef.current;
     if (!track) return;
@@ -277,7 +284,14 @@ export function PhotoLightbox({
         if (scaleRef.current > 1) {
           resetZoom(true);
         } else {
-          scaleRef.current = 2.5;
+          // Zoom verso il PUNTO toccato (non verso il centro)
+          const { cx, cy } = viewportCenter();
+          const dx = t[0].clientX - cx;
+          const dy = t[0].clientY - cy;
+          const s1 = 2.5;
+          scaleRef.current = s1;
+          txRef.current = dx * (1 - s1); // s0=1, tx0=0 → dx*(1-s1)
+          tyRef.current = dy * (1 - s1);
           clampPan();
           applyZoom(true);
           syncZoomedFlag();
@@ -307,13 +321,22 @@ export function PhotoLightbox({
     movedRef.current = true;
 
     if (mode.current === "pinch" && t.length === 2) {
-      const dx = t[0].clientX - t[1].clientX;
-      const dy = t[0].clientY - t[1].clientY;
-      const dist = Math.hypot(dx, dy);
-      let s = startScale.current * (dist / startDist.current);
-      if (s < 1) s = 1;
-      if (s > 5) s = 5;
-      scaleRef.current = s;
+      const dx2 = t[0].clientX - t[1].clientX;
+      const dy2 = t[0].clientY - t[1].clientY;
+      const dist = Math.hypot(dx2, dy2);
+      let s1 = startScale.current * (dist / startDist.current);
+      if (s1 < 1) s1 = 1;
+      if (s1 > 5) s1 = 5;
+      // Punto medio tra le dita → zoom verso lì (focal point) e segue le dita
+      const { cx, cy } = viewportCenter();
+      const mx = (t[0].clientX + t[1].clientX) / 2;
+      const my = (t[0].clientY + t[1].clientY) / 2;
+      const fdx = mx - cx;
+      const fdy = my - cy;
+      const r = s1 / startScale.current;
+      scaleRef.current = s1;
+      txRef.current = fdx * (1 - r) + r * startTx.current;
+      tyRef.current = fdy * (1 - r) + r * startTy.current;
       clampPan();
       applyZoom(false);
     } else if (mode.current === "pan" && t.length === 1) {
