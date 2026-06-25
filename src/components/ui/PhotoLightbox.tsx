@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, type TouchEvent as RTouchEvent } from "react";
 
 /* ═══════════════════════════════════════════════════════════════
    PhotoLightbox v5 — RISOLVE foto 4284x5712 da Firebase
@@ -112,6 +112,8 @@ export function PhotoLightbox({
   // Foto ridimensionate pronte per il display
   const [displayPhotos, setDisplayPhotos] = useState<string[]>([]);
   const [processing, setProcessing] = useState(true);
+  // ── Zoom: foto a piena risoluzione aperta in overlay dedicato (pinch/pan/doppio-tap) ──
+  const [zoomIndex, setZoomIndex] = useState<number | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const scrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -217,18 +219,31 @@ export function PhotoLightbox({
               {propertyName || "Foto Pulizia"}
             </p>
             <p className="text-white/50 text-xs">
-              {index + 1} di {photos.length}
+              {index + 1} di {photos.length} · tocca la foto per zoomare
             </p>
           </div>
         </div>
-        <button
-          onClick={doClose}
-          className="w-10 h-10 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center text-white active:scale-90 transition-transform"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {!processing && displayPhotos.length > 0 && (
+            <button
+              onClick={() => setZoomIndex(index)}
+              aria-label="Zoom"
+              className="w-10 h-10 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center text-white active:scale-90 transition-transform"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M21 21l-4.35-4.35M11 8v6M8 11h6M19 11a8 8 0 11-16 0 8 8 0 0116 0z" />
+              </svg>
+            </button>
+          )}
+          <button
+            onClick={doClose}
+            className="w-10 h-10 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center text-white active:scale-90 transition-transform"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       {/* PROCESSING INDICATOR */}
@@ -271,7 +286,9 @@ export function PhotoLightbox({
                 src={src}
                 alt={`Foto ${i + 1}`}
                 draggable={false}
-                className="max-w-full max-h-full object-contain select-none"
+                onClick={() => setZoomIndex(i)}
+                decoding="async"
+                className="max-w-full max-h-full object-contain select-none cursor-zoom-in"
                 style={{
                   WebkitUserSelect: "none",
                   userSelect: "none",
@@ -353,6 +370,15 @@ export function PhotoLightbox({
           />
         )}
       </div>
+
+      {/* ZOOM OVERLAY (pinch / doppio-tap / trascina) — foto a piena risoluzione */}
+      {zoomIndex !== null && (
+        <ZoomView
+          lowSrc={displayPhotos[zoomIndex] || photos[zoomIndex]}
+          highSrc={photos[zoomIndex]}
+          onClose={() => setZoomIndex(null)}
+        />
+      )}
     </div>
   );
 }
@@ -393,6 +419,147 @@ function ThumbStrip({ photos, current, onTap }: { photos: string[]; current: num
           <img src={p} alt="" draggable={false} loading="lazy" className="w-full h-full object-cover" />
         </button>
       ))}
+    </div>
+  );
+}
+
+// ─── Zoom view: singola foto a PIENA RISOLUZIONE con pinch / doppio-tap / trascina ───
+function ZoomView({ lowSrc, highSrc, onClose }: { lowSrc: string; highSrc: string; onClose: () => void }) {
+  const [shownSrc, setShownSrc] = useState(lowSrc);
+  const imgRef = useRef<HTMLImageElement>(null);
+
+  const scale = useRef(1);
+  const tx = useRef(0);
+  const ty = useRef(0);
+
+  const mode = useRef<"none" | "pan" | "pinch">("none");
+  const startDist = useRef(1);
+  const startScale = useRef(1);
+  const startX = useRef(0);
+  const startY = useRef(0);
+  const startTx = useRef(0);
+  const startTy = useRef(0);
+  const lastTap = useRef(0);
+
+  const apply = () => {
+    const img = imgRef.current;
+    if (img) img.style.transform = `translate(${tx.current}px, ${ty.current}px) scale(${scale.current})`;
+  };
+
+  const clampScale = () => {
+    if (scale.current < 1) { scale.current = 1; tx.current = 0; ty.current = 0; }
+    if (scale.current > 5) scale.current = 5;
+  };
+
+  const onTouchStart = (e: RTouchEvent<HTMLDivElement>) => {
+    if (e.touches.length === 2) {
+      mode.current = "pinch";
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      startDist.current = Math.hypot(dx, dy) || 1;
+      startScale.current = scale.current;
+    } else if (e.touches.length === 1) {
+      // doppio-tap → zoom in/out
+      const now = Date.now();
+      if (now - lastTap.current < 300) {
+        if (scale.current > 1) { scale.current = 1; tx.current = 0; ty.current = 0; }
+        else { scale.current = 2.5; }
+        clampScale(); apply();
+        lastTap.current = 0;
+      } else {
+        lastTap.current = now;
+      }
+      mode.current = scale.current > 1 ? "pan" : "none";
+      startX.current = e.touches[0].clientX;
+      startY.current = e.touches[0].clientY;
+      startTx.current = tx.current;
+      startTy.current = ty.current;
+    }
+  };
+
+  const onTouchMove = (e: RTouchEvent<HTMLDivElement>) => {
+    if (mode.current === "pinch" && e.touches.length === 2) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      const dist = Math.hypot(dx, dy);
+      scale.current = startScale.current * (dist / startDist.current);
+      clampScale(); apply();
+    } else if (mode.current === "pan" && e.touches.length === 1 && scale.current > 1) {
+      tx.current = startTx.current + (e.touches[0].clientX - startX.current);
+      ty.current = startTy.current + (e.touches[0].clientY - startY.current);
+      apply();
+    }
+  };
+
+  const onTouchEnd = (e: RTouchEvent<HTMLDivElement>) => {
+    if (e.touches.length === 0) {
+      clampScale(); apply();
+      mode.current = "none";
+    } else if (e.touches.length === 1) {
+      mode.current = scale.current > 1 ? "pan" : "none";
+      startX.current = e.touches[0].clientX;
+      startY.current = e.touches[0].clientY;
+      startTx.current = tx.current;
+      startTy.current = ty.current;
+    }
+  };
+
+  const onDoubleClick = () => {
+    if (scale.current > 1) { scale.current = 1; tx.current = 0; ty.current = 0; }
+    else { scale.current = 2.5; }
+    clampScale(); apply();
+  };
+
+  // Progressivo: mostra subito la versione leggera (già in cache → istantanea),
+  // poi carica l'originale a piena risoluzione e lo sostituisce senza sfarfallio.
+  // Lo scroll dello sfondo è già bloccato dalla galleria: qui NON tocchiamo body.
+  useEffect(() => {
+    setShownSrc(lowSrc);
+    if (!highSrc || highSrc === lowSrc) return;
+    const hi = new Image();
+    hi.onload = () => setShownSrc(highSrc);
+    hi.src = highSrc;
+    return () => { hi.onload = null; };
+  }, [lowSrc, highSrc]);
+
+  return (
+    <div className="fixed inset-0 z-[10000] bg-black flex flex-col" style={{ touchAction: "none" }}>
+      <div className="flex-shrink-0 flex items-center justify-between px-4 py-3">
+        <p className="text-white/70 text-xs">Pizzica o doppio-tap per zoomare · trascina per spostarti</p>
+        <button
+          onClick={onClose}
+          aria-label="Chiudi zoom"
+          className="w-10 h-10 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center text-white active:scale-90 transition-transform"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      <div
+        className="flex-1 overflow-hidden flex items-center justify-center relative"
+        style={{ touchAction: "none" }}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+        onDoubleClick={onDoubleClick}
+      >
+        <img
+          ref={imgRef}
+          src={shownSrc}
+          alt="Zoom"
+          draggable={false}
+          decoding="async"
+          className="max-w-full max-h-full object-contain select-none"
+          style={{
+            transformOrigin: "center center",
+            willChange: "transform",
+            WebkitUserSelect: "none",
+            userSelect: "none",
+            WebkitTouchCallout: "none",
+          }}
+        />
+      </div>
     </div>
   );
 }
