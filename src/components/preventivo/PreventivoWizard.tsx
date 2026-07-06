@@ -170,6 +170,48 @@ function Icona({ nome, mini }: { nome: string; mini?: boolean }) {
   );
 }
 
+
+// ─── Componenti stabili (FUORI dal componente: mai ricreati, il focus resta) ───
+
+function CampoBox({ label, children }: { label: string; children: React.ReactNode }) {
+  return <div className="pv-campo"><label>{label}</label>{children}</div>;
+}
+
+function SceltaGriglia<T,>({ opzioni, selezionato, onSel }: {
+  opzioni: { v: T; ic: string; t: string; s?: string }[];
+  selezionato: T | null;
+  onSel: (v: T) => void;
+}) {
+  return (
+    <div className="pv-scelte">
+      {opzioni.map((o) => (
+        <div key={String(o.v)} className={"pv-scelta" + (selezionato === o.v ? " sel" : "")} onClick={() => onSel(o.v)}>
+          <Icona nome={o.ic} />
+          <b>{o.t}</b>
+          {o.s && <span>{o.s}</span>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ContatoreRiga({ icona, titolo, sotto, valore, min, onCambia }: {
+  icona: string; titolo: string; sotto: string; valore: number; min: number;
+  onCambia: (delta: number) => void;
+}) {
+  return (
+    <div className="pv-contatore">
+      <Icona nome={icona} />
+      <div className="lab"><b>{titolo}</b><span>{sotto}</span></div>
+      <div className="btns">
+        <button type="button" onClick={() => onCambia(-1)}>−</button>
+        <span className="val">{valore}</span>
+        <button type="button" onClick={() => onCambia(1)}>+</button>
+      </div>
+    </div>
+  );
+}
+
 // ─────────────────────────── Componente ───────────────────────────
 
 type NomeStep =
@@ -189,6 +231,8 @@ export function PreventivoWizard() {
   const fileInput = useRef<HTMLInputElement>(null);
 
   const set = <K extends keyof Stato>(k: K, v: Stato[K]) => setStato((s) => ({ ...s, [k]: v }));
+  const bump = (campo: "matrimoniali" | "singoli" | "divani" | "bagni" | "ospiti" | "singole" | "doppie", min: number) =>
+    (d: number) => set(campo, Math.min(20, Math.max(min, stato[campo] + d)));
 
   const flusso = useMemo<NomeStep[]>(() => {
     if (stato.tipo === "hotel") return ["tipo", "contattiHotel", "fineHotel"];
@@ -315,48 +359,6 @@ export function PreventivoWizard() {
 
   // ─────────────────────────── UI helpers ───────────────────────────
 
-  function Scelte<K extends keyof Stato>({ campo, opzioni, avanza }: {
-    campo: K;
-    opzioni: { v: Stato[K]; ic: string; t: string; s?: string }[];
-    avanza: boolean;
-  }) {
-    return (
-      <div className="pv-scelte">
-        {opzioni.map((o) => (
-          <div
-            key={String(o.v)}
-            className={"pv-scelta" + (stato[campo] === o.v ? " sel" : "")}
-            onClick={() => scegli(campo, o.v, avanza)}
-          >
-            <Icona nome={o.ic} />
-            <b>{o.t}</b>
-            {o.s && <span>{o.s}</span>}
-          </div>
-        ))}
-      </div>
-    );
-  }
-
-  function Contatore({ campo, icona, titolo, sotto, min }: {
-    campo: "matrimoniali" | "singoli" | "divani" | "bagni" | "ospiti" | "singole" | "doppie";
-    icona: string; titolo: string; sotto: string; min: number;
-  }) {
-    return (
-      <div className="pv-contatore">
-        <Icona nome={icona} />
-        <div className="lab"><b>{titolo}</b><span>{sotto}</span></div>
-        <div className="btns">
-          <button type="button" onClick={() => set(campo, Math.max(min, stato[campo] - 1))}>−</button>
-          <span className="val">{stato[campo]}</span>
-          <button type="button" onClick={() => set(campo, Math.min(20, stato[campo] + 1))}>+</button>
-        </div>
-      </div>
-    );
-  }
-
-  const Campo = ({ label, children }: { label: string; children: React.ReactNode }) => (
-    <div className="pv-campo"><label>{label}</label>{children}</div>
-  );
 
   // ─────────────────────────── Steps ───────────────────────────
 
@@ -365,7 +367,7 @@ export function PreventivoWizard() {
       case "tipo": return (<>
         <h1>Che struttura gestisci?</h1>
         <p className="pv-sotto">Il preventivo si adatta al tuo tipo di attività.</p>
-        <Scelte campo="tipo" avanza opzioni={[
+        <SceltaGriglia selezionato={stato.tipo} onSel={(v) => scegli("tipo", v, true)} opzioni={[
           { v: "casa", ic: "casa", t: "Casa vacanze", s: "Un appartamento in affitto breve" },
           { v: "case", ic: "case", t: "Più case vacanze", s: "Gestisci due o più unità" },
           { v: "bnb", ic: "bnb", t: "B&B / Affittacamere", s: "Camere con ospiti in rotazione" },
@@ -376,25 +378,25 @@ export function PreventivoWizard() {
       case "taglio": return (<>
         <h1>Com'è fatto l'appartamento?</h1>
         <p className="pv-sotto">{stato.tipo === "case" ? "Partiamo dalla prima unità: le altre le vediamo insieme dopo." : "Scegli il taglio e indica i metri quadri."}</p>
-        <Scelte campo="taglio" avanza={false} opzioni={[
+        <SceltaGriglia selezionato={stato.taglio} onSel={(v) => scegli("taglio", v, false)} opzioni={[
           { v: "mono", ic: "mono", t: "Monolocale", s: "Una stanza unica + bagno · fino a ~45 mq" },
           { v: "bilo", ic: "bilo", t: "Bilocale", s: "Camera + soggiorno · ~45–65 mq" },
           { v: "trilo", ic: "trilo", t: "Trilocale", s: "2 camere + soggiorno · ~65–90 mq" },
           { v: "quadri", ic: "quadri", t: "Quadrilocale", s: "3 camere + soggiorno · ~90–120 mq" },
         ]} />
-        <Campo label="Metri quadri (indicativi)">
+        <CampoBox label="Metri quadri (indicativi)">
           <input type="number" inputMode="numeric" placeholder="es. 65" min={15} max={400}
             value={stato.mq ?? ""} onChange={(e) => set("mq", parseInt(e.target.value) || null)} />
-        </Campo>
+        </CampoBox>
       </>);
 
       case "letti": return (<>
         <h1>Quanti posti letto prepariamo?</h1>
         <p className="pv-sotto">Conta tutti i letti che vanno rifatti a ogni cambio ospite.</p>
         <div className="pv-contatori">
-          <Contatore campo="matrimoniali" icona="matrimoniale" titolo="Letti matrimoniali" sotto="Compresi francesi e piazza e mezza" min={0} />
-          <Contatore campo="singoli" icona="singolo" titolo="Letti singoli" sotto="Anche a castello: conta ogni posto" min={0} />
-          <Contatore campo="divani" icona="divano" titolo="Divani letto" sotto="Da aprire e preparare" min={0} />
+          <ContatoreRiga icona="matrimoniale" titolo="Letti matrimoniali" sotto="Compresi francesi e piazza e mezza" valore={stato.matrimoniali} min={0} onCambia={bump("matrimoniali", 0)} />
+          <ContatoreRiga icona="singolo" titolo="Letti singoli" sotto="Anche a castello: conta ogni posto" valore={stato.singoli} min={0} onCambia={bump("singoli", 0)} />
+          <ContatoreRiga icona="divano" titolo="Divani letto" sotto="Da aprire e preparare" valore={stato.divani} min={0} onCambia={bump("divani", 0)} />
         </div>
       </>);
 
@@ -402,14 +404,14 @@ export function PreventivoWizard() {
         <h1>Quanti bagni ci sono?</h1>
         <p className="pv-sotto">Contiamo anche i bagni di servizio.</p>
         <div className="pv-contatori">
-          <Contatore campo="bagni" icona="bagno" titolo="Bagni" sotto="WC, lavandino, doccia o vasca" min={1} />
+          <ContatoreRiga icona="bagno" titolo="Bagni" sotto="WC, lavandino, doccia o vasca" valore={stato.bagni} min={1} onCambia={bump("bagni", 1)} />
         </div>
       </>);
 
       case "cucina": return (<>
         <h1>Com'è la cucina?</h1>
         <p className="pv-sotto">Un vano in più è tempo di lavoro in più: contiamolo bene.</p>
-        <Scelte campo="cucina" avanza opzioni={[
+        <SceltaGriglia selezionato={stato.cucina} onSel={(v) => scegli("cucina", v, true)} opzioni={[
           { v: "angolo", ic: "angolo", t: "Angolo cottura", s: "Fornelli e divano nella stessa stanza" },
           { v: "sep", ic: "cucinaSep", t: "Cucina separata", s: "Una stanza a parte con fornelli e frigo" },
           { v: "abit", ic: "cucinaAbit", t: "Cucina abitabile", s: "Grande: fornelli, frigo e tavolo da pranzo" },
@@ -419,7 +421,7 @@ export function PreventivoWizard() {
       case "esterno": return (<>
         <h1>Spazi esterni da pulire?</h1>
         <p className="pv-sotto">Conta solo se c'è arredo di cui prenderci cura.</p>
-        <Scelte campo="esterno" avanza opzioni={[
+        <SceltaGriglia selezionato={stato.esterno} onSel={(v) => scegli("esterno", v, true)} opzioni={[
           { v: "no", ic: "nienteEsterno", t: "Nessuno", s: "Solo finestre o un piccolo affaccio" },
           { v: "balcone", ic: "balcone", t: "Balcone arredato", s: "Ringhiera con tavolino, sedie o piante" },
           { v: "terrazzo", ic: "terrazzo", t: "Terrazzo", s: "Ombrellone e tavolo per mangiare fuori" },
@@ -430,7 +432,7 @@ export function PreventivoWizard() {
       case "biancheria": return (<>
         <h1>Vuoi anche la biancheria?</h1>
         <p className="pv-sotto">La portiamo pulita e ritiriamo la sporca: consegna inclusa.</p>
-        <Scelte campo="vuoleBiancheria" avanza opzioni={[
+        <SceltaGriglia selezionato={stato.vuoleBiancheria} onSel={(v) => scegli("vuoleBiancheria", v, true)} opzioni={[
           { v: true, ic: "biancheriaSi", t: "Sì, pensateci voi", s: "Lenzuola, teli e accessori a noleggio" },
           { v: false, ic: "biancheriaNo", t: "No, la gestisco io", s: "Solo il servizio di pulizia" },
         ]} />
@@ -440,14 +442,14 @@ export function PreventivoWizard() {
         <h1>Per quanti ospiti al massimo?</h1>
         <p className="pv-sotto">Prepariamo un set bagno completo per ciascuno: telo corpo, viso e bidet.</p>
         <div className="pv-contatori">
-          <Contatore campo="ospiti" icona="ospiti" titolo="Ospiti massimi" sotto="La capienza del tuo annuncio" min={1} />
+          <ContatoreRiga icona="ospiti" titolo="Ospiti massimi" sotto="La capienza del tuo annuncio" valore={stato.ospiti} min={1} onCambia={bump("ospiti", 1)} />
         </div>
       </>);
 
       case "kit": return (<>
         <h1>Kit di cortesia per gli ospiti?</h1>
         <p className="pv-sotto">Doccia-shampoo, sapone e crema corpo: il tocco da hotel che gli ospiti citano nelle recensioni.</p>
-        <Scelte campo="vuoleKit" avanza opzioni={[
+        <SceltaGriglia selezionato={stato.vuoleKit} onSel={(v) => scegli("vuoleKit", v, true)} opzioni={[
           { v: true, ic: "kitSi", t: "Sì, aggiungilo", s: "Un set completo per ogni ospite" },
           { v: false, ic: "kitNo", t: "No, grazie", s: "Magari più avanti" },
         ]} />
@@ -457,22 +459,22 @@ export function PreventivoWizard() {
         <h1>Quante camere ha la struttura?</h1>
         <p className="pv-sotto">Prezzi a camera per la pulizia al checkout. Il resto lo definiamo insieme.</p>
         <div className="pv-contatori">
-          <Contatore campo="singole" icona="singola" titolo="Camere singole" sotto="Pulizia completa a checkout" min={0} />
-          <Contatore campo="doppie" icona="doppia" titolo="Camere doppie" sotto="Pulizia completa a checkout" min={0} />
+          <ContatoreRiga icona="singola" titolo="Camere singole" sotto="Pulizia completa a checkout" valore={stato.singole} min={0} onCambia={bump("singole", 0)} />
+          <ContatoreRiga icona="doppia" titolo="Camere doppie" sotto="Pulizia completa a checkout" valore={stato.doppie} min={0} onCambia={bump("doppie", 0)} />
         </div>
       </>);
 
       case "zona": return (<>
         <h1>Dove si trova la struttura?</h1>
         <p className="pv-sotto">Ci serve per organizzare il giro e confermarti la copertura.</p>
-        <Campo label="Quartiere / zona">
+        <CampoBox label="Quartiere / zona">
           <input placeholder="es. Trastevere, Prati, Aurelio…" value={stato.zona}
             onChange={(e) => set("zona", e.target.value)} />
-        </Campo>
-        <Campo label="CAP">
+        </CampoBox>
+        <CampoBox label="CAP">
           <input placeholder="es. 00165" maxLength={5} inputMode="numeric" value={stato.cap}
             onChange={(e) => set("cap", e.target.value.replace(/[^0-9]/g, ""))} />
-        </Campo>
+        </CampoBox>
       </>);
 
       case "foto": return (<>
@@ -502,9 +504,9 @@ export function PreventivoWizard() {
       case "contatti": return (<>
         <h1>Ultimo passo: dove ti mandiamo il preventivo?</h1>
         <p className="pv-sotto">Lo vedi subito qui e te lo inviamo anche via email.</p>
-        <Campo label="Nome"><input value={stato.nome} autoComplete="name" placeholder="Il tuo nome" onChange={(e) => set("nome", e.target.value)} /></Campo>
-        <Campo label="Email"><input type="email" value={stato.email} autoComplete="email" placeholder="nome@esempio.it" onChange={(e) => set("email", e.target.value)} /></Campo>
-        <Campo label="Telefono"><input type="tel" value={stato.telefono} autoComplete="tel" placeholder="Per confermarti la disponibilità" onChange={(e) => set("telefono", e.target.value)} /></Campo>
+        <CampoBox label="Nome"><input value={stato.nome} autoComplete="name" placeholder="Il tuo nome" onChange={(e) => set("nome", e.target.value)} /></CampoBox>
+        <CampoBox label="Email"><input type="email" value={stato.email} autoComplete="email" placeholder="nome@esempio.it" onChange={(e) => set("email", e.target.value)} /></CampoBox>
+        <CampoBox label="Telefono"><input type="tel" value={stato.telefono} autoComplete="tel" placeholder="Per confermarti la disponibilità" onChange={(e) => set("telefono", e.target.value)} /></CampoBox>
         <label className="pv-consenso">
           <input type="checkbox" checked={stato.consensoNewsletter} onChange={(e) => set("consensoNewsletter", e.target.checked)} />
           <span>Voglio ricevere ogni tanto consigli utili per host e novità sul servizio. (Facoltativo: il preventivo lo ricevi comunque.)</span>
@@ -515,14 +517,14 @@ export function PreventivoWizard() {
       case "contattiHotel": return (<>
         <h1>Per gli hotel prepariamo un'offerta su misura.</h1>
         <p className="pv-sotto">Troppi fattori per un calcolo automatico onesto: lasciaci i contatti e ti richiamiamo entro 24 ore.</p>
-        <Campo label="Nome struttura"><input value={stato.nomeStruttura} placeholder="Nome dell'hotel" onChange={(e) => set("nomeStruttura", e.target.value)} /></Campo>
-        <Campo label="Nome referente"><input value={stato.nome} onChange={(e) => set("nome", e.target.value)} /></Campo>
-        <Campo label="Email"><input type="email" value={stato.email} onChange={(e) => set("email", e.target.value)} /></Campo>
-        <Campo label="Telefono"><input type="tel" value={stato.telefono} onChange={(e) => set("telefono", e.target.value)} /></Campo>
+        <CampoBox label="Nome struttura"><input value={stato.nomeStruttura} placeholder="Nome dell'hotel" onChange={(e) => set("nomeStruttura", e.target.value)} /></CampoBox>
+        <CampoBox label="Nome referente"><input value={stato.nome} onChange={(e) => set("nome", e.target.value)} /></CampoBox>
+        <CampoBox label="Email"><input type="email" value={stato.email} onChange={(e) => set("email", e.target.value)} /></CampoBox>
+        <CampoBox label="Telefono"><input type="tel" value={stato.telefono} onChange={(e) => set("telefono", e.target.value)} /></CampoBox>
         {erroreInvio && <div className="pv-errore">{erroreInvio}</div>}
       </>);
 
-      case "risultato": return <Risultato />;
+      case "risultato": return renderRisultato();
       case "fineHotel": return (
         <div className="pv-ris">
           <span className="pv-etich">RICHIESTA INVIATA</span>
@@ -535,7 +537,7 @@ export function PreventivoWizard() {
     }
   }
 
-  function Risultato() {
+  function renderRisultato() {
     if (!risposta) return null;
     const { quote: q, copertura } = risposta;
     const eur = (v: number) => "€ " + v.toFixed(2).replace(".", ",");
@@ -616,8 +618,43 @@ export function PreventivoWizard() {
     : prossimo === "fineHotel" ? "Invia richiesta →"
     : "Avanti →";
 
+  const ETICHETTE: Partial<Record<NomeStep, string>> = {
+    tipo: "Struttura", taglio: "Appartamento", letti: "Posti letto", bagni: "Bagni",
+    cucina: "Cucina", esterno: "Esterni", biancheria: "Biancheria", ospiti: "Ospiti",
+    kit: "Kit cortesia", camere: "Camere", zona: "Zona", foto: "Foto",
+    contatti: "Contatti", contattiHotel: "Contatti",
+  };
+  const stepsVisibili = flusso.filter((s) => s !== "risultato" && s !== "fineHotel");
+
   return (
     <div className="pv-widget">
+      <aside className="pv-side">
+        <div className="pv-side-top">
+          <div className="pv-brand">
+            <span dangerouslySetInnerHTML={{ __html: `<svg viewBox="0 0 32 32"><path d="M4 15 16 5l12 10" stroke="#fff" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 14v11h16V14" stroke="#fff" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 25v-6h8v6" stroke="#E8C9A8" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>` }} />
+            Puliziacasevacanze.it
+          </div>
+          <div className="pv-side-claim">Il preventivo per la tua struttura, in due minuti.</div>
+          <ol className="pv-steps">
+            {stepsVisibili.map((s, i) => {
+              const st = finale ? "done" : i < idx ? "done" : i === idx ? "cur" : "todo";
+              return (
+                <li key={s} className={st}>
+                  <span className="dot">{st === "done" ? "✓" : i + 1}</span>
+                  {ETICHETTE[s]}
+                </li>
+              );
+            })}
+          </ol>
+        </div>
+        <div className="pv-trust">
+          <span>✓ Sopralluogo gratuito e senza impegno</span>
+          <span>✓ Operativi 365 giorni l'anno, festivi inclusi</span>
+          <span>✓ Ti rispondiamo in giornata</span>
+        </div>
+      </aside>
+
+      <div className="pv-main">
       <div className="pv-head">
         <div className="pv-brand">
           <span dangerouslySetInnerHTML={{ __html: `<svg viewBox="0 0 32 32"><path d="M4 15 16 5l12 10" stroke="#fff" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 14v11h16V14" stroke="#fff" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 25v-6h8v6" stroke="#E8C9A8" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>` }} />
@@ -637,6 +674,7 @@ export function PreventivoWizard() {
           <button className="pv-btn avanti" onClick={avanti} disabled={!valido(step) || invio}>{labelAvanti}</button>
         </div>
       )}
+      </div>
     </div>
   );
 }
