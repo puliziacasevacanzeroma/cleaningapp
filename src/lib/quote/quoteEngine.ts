@@ -1,6 +1,8 @@
 /**
  * quoteEngine.ts — Motore di calcolo preventivi Puliziacasevacanze.it
- * v1 — parametri congelati e validati con Ariele il 06/07/2026 (prototipo HTML v6)
+ * v2 — 07/07/2026: multi-unità (-5% da 2), camere B&B a persone (+3 oltre la 2ª),
+ *      aree comuni (in loco / uscita dedicata a mq), passaggio infra-soggiorno.
+ * v1 — parametri base congelati il 06/07/2026 (prototipo HTML v6)
  *
  * REGOLE:
  * - Modulo PURO: nessun import da Firebase/Next, nessun side effect.
@@ -64,7 +66,10 @@ export const ENGINE = {
   biancheria: { matrimoniale: 5.60, singolo: 4.30, setOspite: 3.80, tappetino: 1.00, canavaccio: 1.50 },
   /** doccia-shampoo 0,48 + sapone mani 0,28 + body lotion 0,50 (listino OKIKO) */
   kitCortesia: 1.26,
-  bnb: { singola: 25, doppia: 28, rifacimentoLetto: 10, uscita: 10 },
+  bnb: { singola: 25, doppia: 28, personaExtra: 3, rifacimentoLetto: 10, uscita: 10 },
+  areaComune: { sogliaMq: 20, inLocoBase: 8, inLocoMqExtra: 0.5, dedicataBase: 20, dedicataMqExtra: 0.8 },
+  passaggio: { uscita: 10, perLetto: 10 },
+  scontoMultiUnita: { daUnita: 2, percento: 5 },
   MQ_MAX: 120,
   MQ_TRILO_GRANDE: 75,
   /** soglie oltre le quali il taglio dichiarato viene promosso al superiore */
@@ -142,6 +147,107 @@ export type EsitoCopertura = 'coperta' | 'in_valutazione';
  */
 export function verificaCopertura(cap: string, capCoperti: string[]): EsitoCopertura {
   return capCoperti.includes(cap.trim()) ? 'coperta' : 'in_valutazione';
+}
+
+// ────────────────── v2: Più case vacanze (somma + sconto) ──────────────────
+
+export interface QuoteMultiResult extends QuoteResult {
+  unitaDettaglio: { min: number; max: number; suMisura: boolean }[];
+  scontoPercento: number;
+}
+
+export function calcolaCase(unita: DatiCasa[]): QuoteMultiResult {
+  const dettagli = unita.map(calcolaCasa);
+  const vuoto = { min: 0, max: 0, puntuale: 0, biancheria: 0, kit: 0 };
+  if (dettagli.some((d) => d.suMisura) || unita.length === 0) {
+    return { suMisura: true, ...vuoto, unitaDettaglio: dettagli.map(d => ({ min: d.min, max: d.max, suMisura: d.suMisura })), scontoPercento: 0 };
+  }
+  let sommaPulizia = dettagli.reduce((a, d) => a + d.puntuale, 0);
+  const sconto = unita.length >= ENGINE.scontoMultiUnita.daUnita ? ENGINE.scontoMultiUnita.percento : 0;
+  if (sconto > 0) sommaPulizia = sommaPulizia * (1 - sconto / 100);
+  const biancheria = round2(dettagli.reduce((a, d) => a + d.biancheria, 0));
+  const kit = round2(dettagli.reduce((a, d) => a + d.kit, 0));
+  const { min, max } = range(sommaPulizia);
+  return {
+    suMisura: false, min, max, puntuale: round2(sommaPulizia), biancheria, kit,
+    unitaDettaglio: dettagli.map(d => ({ min: d.min, max: d.max, suMisura: d.suMisura })),
+    scontoPercento: sconto,
+  };
+}
+
+// ────────────────── v2: B&B a camere dinamiche + extra ──────────────────
+
+export interface CameraBnb { persone: number }
+export type FrequenzaBnb = 'checkout' | 'giornaliera';
+export type AreaComune = 'no' | 'inloco' | 'dedicata';
+
+export interface DatiBnbV2 {
+  camere: CameraBnb[];
+  frequenza: FrequenzaBnb;
+  areaComune: AreaComune;
+  areaComuneMq: number;
+  vuoleKit: boolean;
+}
+
+/** Prezzo camera a checkout: 1 persona 25, 2 persone 28, +3 a persona oltre la 2ª */
+export function prezzoCamera(persone: number): number {
+  const p = Math.max(1, Math.floor(persone));
+  if (p === 1) return ENGINE.bnb.singola;
+  return ENGINE.bnb.doppia + (p - 2) * ENGINE.bnb.personaExtra;
+}
+
+/** Area comune GIÀ in loco (aggiunta a un passaggio esistente) */
+export function prezzoAreaComuneInLoco(mq: number): number {
+  const a = ENGINE.areaComune;
+  return round2(a.inLocoBase + Math.max(0, mq - a.sogliaMq) * a.inLocoMqExtra);
+}
+/** Area comune in USCITA DEDICATA (solo lei, senza camere) */
+export function prezzoAreaComuneDedicata(mq: number): number {
+  const a = ENGINE.areaComune;
+  return round2(a.dedicataBase + Math.max(0, mq - a.sogliaMq) * a.dedicataMqExtra);
+}
+
+export interface QuoteBnbV2 extends QuoteResult {
+  /** rifacimento letti giornaliero, PER USCITA (assunzione: 1 letto per camera) */
+  rifacimentoGiornaliero: number;
+  /** area comune: per passaggio (inloco) o per uscita (dedicata); 0 se 'no' */
+  areaComuneImporto: number;
+  areaComuneTipo: AreaComune;
+}
+
+export function calcolaBnbV2(d: DatiBnbV2): QuoteBnbV2 {
+  const tot = d.camere.reduce((a, c) => a + prezzoCamera(c.persone), 0);
+  const persone = d.camere.reduce((a, c) => a + Math.max(1, c.persone), 0);
+  const kit = d.vuoleKit ? round2(persone * ENGINE.kitCortesia) : 0;
+  const rifacimento = d.frequenza === 'giornaliera'
+    ? round2(ENGINE.bnb.uscita + d.camere.length * ENGINE.bnb.rifacimentoLetto)
+    : 0;
+  const areaComuneImporto =
+    d.areaComune === 'inloco' ? prezzoAreaComuneInLoco(d.areaComuneMq)
+    : d.areaComune === 'dedicata' ? prezzoAreaComuneDedicata(d.areaComuneMq)
+    : 0;
+  const { min, max } = range(tot);
+  return {
+    suMisura: false, min, max, puntuale: tot, biancheria: 0, kit,
+    rifacimentoGiornaliero: rifacimento,
+    areaComuneImporto, areaComuneTipo: d.areaComune,
+  };
+}
+
+// ────────────────── v2: Passaggio infra-soggiorno (case) ──────────────────
+
+/** Rifacimento letti + eventuale cambio biancheria e ricarica kit DURANTE il soggiorno */
+export function calcolaPassaggioSoggiorno(d: DatiCasa): { totale: number; uscita: number; letti: number; biancheria: number; kit: number } {
+  const lettiTot = d.matrimoniali + d.singoli + d.divani;
+  const uscita = ENGINE.passaggio.uscita;
+  const letti = lettiTot * ENGINE.passaggio.perLetto;
+  let biancheria = 0;
+  if (d.vuoleBiancheria) {
+    const b = ENGINE.biancheria;
+    biancheria = round2(d.matrimoniali * b.matrimoniale + (d.singoli + d.divani) * b.singolo + d.ospiti * b.setOspite + d.bagni * b.tappetino + b.canavaccio);
+  }
+  const kit = d.vuoleKit ? round2(d.ospiti * ENGINE.kitCortesia) : 0;
+  return { totale: round2(uscita + letti + biancheria + kit), uscita, letti, biancheria, kit };
 }
 
 // ─────────────────────────── Formattazione ───────────────────────────
