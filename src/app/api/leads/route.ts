@@ -15,8 +15,8 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { adminDb } from '~/lib/firebase/admin';
 import { requireAdmin } from '~/lib/api-auth';
 import { resend, FROM_EMAIL, isResendConfigured, logResendWarning } from '~/lib/email/config';
-import { calcolaCasa, calcolaBnb, verificaCopertura, formatEuro } from '~/lib/quote/quoteEngine';
-import type { DatiCasa, DatiBnb, QuoteResult, TipoStruttura } from '~/lib/quote/quoteEngine';
+import { calcolaCasa, calcolaCase, calcolaBnbV2, calcolaPassaggioSoggiorno, verificaCopertura, formatEuro } from '~/lib/quote/quoteEngine';
+import type { DatiCasa, DatiBnbV2, QuoteResult, QuoteMultiResult, QuoteBnbV2, TipoStruttura, CameraBnb } from '~/lib/quote/quoteEngine';
 import { getCoveredCaps } from '~/lib/quote/coverageZones';
 
 export const runtime = 'nodejs';
@@ -31,7 +31,15 @@ interface LeadBody {
   dryRun?: boolean;
   tipo: TipoStruttura;
   casa?: Partial<DatiCasa>;
-  bnb?: Partial<DatiBnb>;
+  unita?: Partial<DatiCasa>[];
+  passaggioSoggiorno?: boolean;
+  bnbV2?: {
+    camere?: { persone?: number }[];
+    frequenza?: 'checkout' | 'giornaliera';
+    areaComune?: 'no' | 'inloco' | 'dedicata';
+    areaComuneMq?: number;
+    vuoleKit?: boolean;
+  };
   zona: string;
   cap: string;
   nome: string;
@@ -54,8 +62,9 @@ function valida(body: LeadBody): { ok: true } | { ok: false; errore: string } {
   if (str(body.nome, 80).length < 2) return { ok: false, errore: 'Nome mancante' };
   if (!/.+@.+\..+/.test(str(body.email, 120))) return { ok: false, errore: 'Email non valida' };
   if (str(body.telefono, 20).replace(/\D/g, '').length < 8) return { ok: false, errore: 'Telefono non valido' };
-  if ((body.tipo === 'casa' || body.tipo === 'case') && !body.casa) return { ok: false, errore: 'Dati appartamento mancanti' };
-  if (body.tipo === 'bnb' && !body.bnb) return { ok: false, errore: 'Dati struttura mancanti' };
+  if (body.tipo === 'casa' && !body.casa) return { ok: false, errore: 'Dati appartamento mancanti' };
+  if (body.tipo === 'case' && (!Array.isArray(body.unita) || body.unita.length < 1)) return { ok: false, errore: 'Dati unit\u00e0 mancanti' };
+  if (body.tipo === 'bnb' && (!body.bnbV2 || !Array.isArray(body.bnbV2.camere) || body.bnbV2.camere.length < 1)) return { ok: false, errore: 'Dati camere mancanti' };
   return { ok: true };
 }
 
@@ -78,7 +87,7 @@ function normalizzaCasa(c: Partial<DatiCasa>): DatiCasa {
 
 // ─────────────────────────────── Email ───────────────────────────────
 
-function emailCliente(nome: string, q: QuoteResult, tipo: TipoStruttura): { subject: string; html: string } {
+function emailCliente(nome: string, q: QuoteResult, tipo: TipoStruttura, extra?: { scontoPercento?: number; rifacimentoGiornaliero?: number; areaComuneImporto?: number; areaComuneTipo?: string; passaggio?: { totale: number } | null }): { subject: string; html: string } {
   const blu = '#3D5A73', scuro = '#2A4257', rame = '#B0764A';
   const prezzo = q.suMisura || tipo === 'hotel'
     ? '<p style="font-size:17px">La tua struttura merita un\u2019offerta costruita su misura: <b>ti ricontattiamo entro 24 ore</b>.</p>'
@@ -89,7 +98,11 @@ function emailCliente(nome: string, q: QuoteResult, tipo: TipoStruttura): { subj
          <div style="display:inline-block;border:1px solid rgba(255,255,255,.4);border-radius:99px;padding:5px 14px;font-size:13px;margin-top:10px">stima massima \u20ac ${q.max}</div>
        </div>`
        + (q.biancheria ? `<p>Biancheria a noleggio (a cambio, consegna e ritiro inclusi): <b>${formatEuro(q.biancheria)}</b></p>` : '')
-       + (q.kit ? `<p>Kit di cortesia ospiti: <b>${formatEuro(q.kit)}</b></p>` : '');
+       + (q.kit ? `<p>Kit di cortesia ospiti: <b>${formatEuro(q.kit)}</b></p>` : '')
+       + (extra?.scontoPercento ? `<p>Sconto multi-unit\u00e0: <b>-${extra.scontoPercento}%</b> gi\u00e0 applicato</p>` : '')
+       + (extra?.rifacimentoGiornaliero ? `<p>Rifacimento letti giornaliero: <b>${formatEuro(extra.rifacimentoGiornaliero)}</b> a uscita</p>` : '')
+       + (extra?.areaComuneImporto ? `<p>Aree comuni: <b>${formatEuro(extra.areaComuneImporto)}</b> ${extra.areaComuneTipo === 'dedicata' ? 'a uscita dedicata' : 'quando siamo gi\u00e0 in struttura'}</p>` : '')
+       + (extra?.passaggio ? `<p>Servizio durante il soggiorno: <b>${formatEuro(extra.passaggio.totale)}</b> a passaggio</p>` : '');
   return {
     subject: 'Il tuo preventivo \u2014 Puliziacasevacanze.it',
     html: `<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;color:#22333F">
@@ -131,19 +144,31 @@ export async function POST(request: NextRequest) {
   if (!v.ok) return NextResponse.json({ ok: false, errore: v.errore }, { status: 400 });
 
   // Ricalcolo SERVER-SIDE: i numeri del browser non contano nulla.
-  let quote: QuoteResult;
+  let quote: QuoteResult | QuoteMultiResult | QuoteBnbV2;
   let datiStruttura: Record<string, unknown> = {};
-  if (body.tipo === 'casa' || body.tipo === 'case') {
+  let passaggio: ReturnType<typeof calcolaPassaggioSoggiorno> | null = null;
+
+  if (body.tipo === 'casa') {
     const casa = normalizzaCasa(body.casa!);
     quote = calcolaCasa(casa);
+    if (body.passaggioSoggiorno === true) passaggio = calcolaPassaggioSoggiorno(casa);
     datiStruttura = { ...casa };
+  } else if (body.tipo === 'case') {
+    const unita = body.unita!.slice(0, 8).map(normalizzaCasa);
+    quote = calcolaCase(unita);
+    if (body.passaggioSoggiorno === true && unita.length > 0) passaggio = calcolaPassaggioSoggiorno(unita[0]!);
+    datiStruttura = { unita };
   } else if (body.tipo === 'bnb') {
-    const bnb: DatiBnb = {
-      singole: int(body.bnb!.singole, 0, 50),
-      doppie: int(body.bnb!.doppie, 0, 50),
-      vuoleKit: body.bnb!.vuoleKit === true,
+    const b = body.bnbV2!;
+    const camere: CameraBnb[] = (b.camere ?? []).slice(0, 15).map((c) => ({ persone: int(c?.persone, 1, 6) }));
+    const bnb: DatiBnbV2 = {
+      camere,
+      frequenza: b.frequenza === 'giornaliera' ? 'giornaliera' : 'checkout',
+      areaComune: b.areaComune === 'inloco' || b.areaComune === 'dedicata' ? b.areaComune : 'no',
+      areaComuneMq: int(b.areaComuneMq, 0, 500),
+      vuoleKit: b.vuoleKit === true,
     };
-    quote = calcolaBnb(bnb);
+    quote = calcolaBnbV2(bnb);
     datiStruttura = { ...bnb };
   } else {
     quote = { suMisura: true, min: 0, max: 0, puntuale: 0, biancheria: 0, kit: 0 };
@@ -159,7 +184,13 @@ export async function POST(request: NextRequest) {
     quote: {
       suMisura: quote.suMisura, min: quote.min, max: quote.max,
       puntuale: quote.puntuale, biancheria: quote.biancheria, kit: quote.kit,
-      taglioEffettivo: quote.taglioEffettivo ?? null,
+      taglioEffettivo: (quote as QuoteResult).taglioEffettivo ?? null,
+      scontoPercento: (quote as QuoteMultiResult).scontoPercento ?? 0,
+      unitaDettaglio: (quote as QuoteMultiResult).unitaDettaglio ?? null,
+      rifacimentoGiornaliero: (quote as QuoteBnbV2).rifacimentoGiornaliero ?? 0,
+      areaComuneImporto: (quote as QuoteBnbV2).areaComuneImporto ?? 0,
+      areaComuneTipo: (quote as QuoteBnbV2).areaComuneTipo ?? 'no',
+      passaggio,
     },
     zona: str(body.zona, 80),
     cap,
@@ -178,7 +209,7 @@ export async function POST(request: NextRequest) {
     updatedAt: FieldValue.serverTimestamp(),
   };
 
-  const mailCliente = emailCliente(leadDoc.contatti.nome, quote, body.tipo);
+  const mailCliente = emailCliente(leadDoc.contatti.nome, quote, body.tipo, leadDoc.quote);
   const mailAdmin = emailAdmin(leadDoc, quote);
 
   // ── DRY RUN: mostra tutto, non scrive niente ──
@@ -213,7 +244,7 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({
     ok: true,
     leadId: ref.id,
-    quote: { suMisura: quote.suMisura, min: quote.min, max: quote.max, biancheria: quote.biancheria, kit: quote.kit },
+    quote: leadDoc.quote,
     copertura,
   });
 }
