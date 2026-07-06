@@ -38,7 +38,7 @@
 
 /* scelte a card */
 .pv-scelte{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-@media (min-width:520px){.pv-scelte{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}}
+@media (min-width:520px){.pv-scelte{grid-template-columns:repeat(auto-fit,minmax(138px,1fr))}}
 .pv-scelta{background:#fff;border:2px solid #E3E9EE;border-radius:16px;padding:14px 10px 12px;text-align:center;cursor:pointer;
   box-shadow:var(--ombra-sm);transition:transform .22s cubic-bezier(.3,1.4,.5,1),box-shadow .22s,border-color .18s;
   user-select:none;position:relative}
@@ -222,7 +222,7 @@
   .pv-body{padding:52px 56px 24px;display:flex;flex-direction:column;max-width:860px;margin:0}
   .pv-step h1{font-size:27px}
   .pv-sotto{font-size:15px;margin-bottom:24px}
-  .pv-scelte{grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px}
+  .pv-scelte{grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:14px}
   .pv-scelta{padding:18px 12px 15px}
   .pv-contatori{max-width:560px}
   .pv-campo input{max-width:480px}
