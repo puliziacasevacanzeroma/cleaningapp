@@ -10,7 +10,7 @@
   --ombra-sm:0 1px 2px rgba(34,51,63,.06),0 4px 10px rgba(34,51,63,.07);
   --ombra-md:0 3px 6px rgba(34,51,63,.08),0 12px 28px rgba(34,51,63,.12);
   min-height:100dvh;display:flex;align-items:stretch;justify-content:center;
-  padding:0;
+  padding:0;overflow-x:clip;max-width:100vw;
   background:var(--fondo);
   background-image:radial-gradient(circle at 15% 10%,rgba(61,90,115,.07),transparent 45%),radial-gradient(circle at 85% 90%,rgba(176,118,74,.06),transparent 45%);
   color:var(--inchiostro);
@@ -18,7 +18,7 @@
   -webkit-tap-highlight-color:transparent;
 }
 
-.pv-widget{width:100%;background:#fff;border-radius:0;overflow:visible;display:flex;flex-direction:column;
+.pv-widget{width:100%;background:#fff;border-radius:0;overflow-x:clip;display:flex;flex-direction:column;
   min-height:100dvh;box-shadow:none}
 .pv-head{background:linear-gradient(135deg,var(--blu-scuro),var(--blu));color:#fff;padding:18px 24px 16px}
 .pv-brand{display:flex;align-items:center;gap:9px;font-weight:800;font-size:16px}
@@ -277,3 +277,26 @@
 }
 
 .pv-nome-unita{color:var(--blu);font-weight:700}
+
+
+/* ═══ v7: contatori e camere che NON sbordano su mobile ═══ */
+.pv-main{min-width:0}
+.pv-contatore{min-width:0}
+.pv-contatore .lab{overflow:hidden}
+.pv-contatore .lab b,.pv-contatore .lab span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+@media (max-width:560px){
+  .pv-contatore{flex-wrap:wrap;gap:6px 10px;padding:12px 12px 10px;position:relative}
+  .pv-contatore .pv-ic{width:52px;height:38px}
+  .pv-contatore .lab{flex:1 1 calc(100% - 66px)}
+  .pv-contatore .lab b{font-size:13.5px}
+  .pv-contatore .lab span{font-size:11px}
+  .pv-contatore .btns{flex:1 1 100%;justify-content:flex-end;gap:8px}
+  .pv-contatore button{width:40px;height:40px;font-size:19px}
+  .pv-contatore .val{min-width:44px;font-size:16px}
+  .pv-rimuovi{
+    position:absolute;top:8px;right:8px;margin:0;
+    width:28px!important;height:28px!important;font-size:15px!important;line-height:28px!important;
+  }
+  .pv-unita-riga .desc{white-space:normal}
+}
