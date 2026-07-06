@@ -71,6 +71,7 @@ function valida(body: LeadBody): { ok: true } | { ok: false; errore: string } {
 function normalizzaCasa(c: Partial<DatiCasa>): DatiCasa {
   const tagli = ['mono', 'bilo', 'trilo', 'quadri'];
   return {
+    nome: str(c.nome, 60),
     taglio: tagli.includes(c.taglio as string) ? (c.taglio as DatiCasa['taglio']) : 'mono',
     mq: int(c.mq, 15, 400),
     matrimoniali: int(c.matrimoniali, 0, 20),
@@ -187,6 +188,7 @@ export async function POST(request: NextRequest) {
       taglioEffettivo: (quote as QuoteResult).taglioEffettivo ?? null,
       scontoPercento: (quote as QuoteMultiResult).scontoPercento ?? 0,
       unitaDettaglio: (quote as QuoteMultiResult).unitaDettaglio ?? null,
+      camereDettaglio: (quote as QuoteBnbV2).camereDettaglio ?? null,
       rifacimentoGiornaliero: (quote as QuoteBnbV2).rifacimentoGiornaliero ?? 0,
       areaComuneImporto: (quote as QuoteBnbV2).areaComuneImporto ?? 0,
       areaComuneTipo: (quote as QuoteBnbV2).areaComuneTipo ?? 'no',

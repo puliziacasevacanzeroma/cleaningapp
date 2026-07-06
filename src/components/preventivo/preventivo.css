@@ -275,3 +275,5 @@
   .pv-step h1,.pv-sotto{text-align:left}
   .pv-campo{max-width:none}
 }
+
+.pv-nome-unita{color:var(--blu);font-weight:700}

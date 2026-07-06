@@ -103,12 +103,15 @@ console.log('\n\u2500\u2500 v2: B&B COMPLETO \u2500\u2500');
   check('Rifacimento giornaliero 3 letti = \u20ac40/uscita', r.rifacimentoGiornaliero===40, String(r.rifacimentoGiornaliero));
   check('Area dedicata 30mq = \u20ac28/uscita', r.areaComuneImporto===28);
   check('Kit 7 ospiti = \u20ac8,82', r.kit===8.82, String(r.kit));
+  check('Dettaglio camere: 28+28+31', r.camereDettaglio.map(c=>c.prezzo).join('+')==='28+28+31', r.camereDettaglio.map(c=>c.prezzo).join('+'));
+  check('Etichetta tripla', r.camereDettaglio[2]!.etichetta==='Tripla');
 }
 
 console.log('\n\u2500\u2500 v2: PI\u00d9 CASE VACANZE \u2500\u2500');
 {
   const bilo: DatiCasa = { ...base, taglio:'bilo', mq:55, matrimoniali:1, singoli:1 };
-  const r = calcolaCase([bilo, bilo]);
+  const r = calcolaCase([{ ...bilo, nome:'Casa Trastevere' }, bilo]);
+  check('Nomi unit\u00e0 nel dettaglio', r.unitaDettaglio[0]!.nome==='Casa Trastevere' && r.unitaDettaglio[1]!.nome==='Unit\u00e0 2', r.unitaDettaglio.map(u=>u.nome).join('/'));
   check('2 bilocali: 90 -5% = 85,50 \u2192 range 85\u2013100', r.puntuale===85.5 && r.min===85 && r.max===100 && r.scontoPercento===5, `${r.puntuale}/${r.min}-${r.max}/${r.scontoPercento}%`);
   const solo = calcolaCase([bilo]);
   check('1 unit\u00e0 sola: nessuno sconto', solo.scontoPercento===0 && solo.puntuale===45);

@@ -18,6 +18,8 @@ export type TipoCucina = 'angolo' | 'sep' | 'abit';
 export type TipoEsterno = 'no' | 'balcone' | 'terrazzo' | 'terrazzoGrande';
 
 export interface DatiCasa {
+  /** nome dell'unità (facoltativo, usato per multi-unità: es. "Casa Trastevere") */
+  nome?: string;
   taglio: Taglio;
   mq: number;
   matrimoniali: number;
@@ -152,7 +154,7 @@ export function verificaCopertura(cap: string, capCoperti: string[]): EsitoCoper
 // ────────────────── v2: Più case vacanze (somma + sconto) ──────────────────
 
 export interface QuoteMultiResult extends QuoteResult {
-  unitaDettaglio: { min: number; max: number; suMisura: boolean }[];
+  unitaDettaglio: { nome: string; min: number; max: number; suMisura: boolean }[];
   scontoPercento: number;
 }
 
@@ -160,7 +162,7 @@ export function calcolaCase(unita: DatiCasa[]): QuoteMultiResult {
   const dettagli = unita.map(calcolaCasa);
   const vuoto = { min: 0, max: 0, puntuale: 0, biancheria: 0, kit: 0 };
   if (dettagli.some((d) => d.suMisura) || unita.length === 0) {
-    return { suMisura: true, ...vuoto, unitaDettaglio: dettagli.map(d => ({ min: d.min, max: d.max, suMisura: d.suMisura })), scontoPercento: 0 };
+    return { suMisura: true, ...vuoto, unitaDettaglio: dettagli.map((d, i) => ({ nome: unita[i]?.nome || 'Unit\u00e0 ' + (i + 1), min: d.min, max: d.max, suMisura: d.suMisura })), scontoPercento: 0 };
   }
   let sommaPulizia = dettagli.reduce((a, d) => a + d.puntuale, 0);
   const sconto = unita.length >= ENGINE.scontoMultiUnita.daUnita ? ENGINE.scontoMultiUnita.percento : 0;
@@ -170,7 +172,7 @@ export function calcolaCase(unita: DatiCasa[]): QuoteMultiResult {
   const { min, max } = range(sommaPulizia);
   return {
     suMisura: false, min, max, puntuale: round2(sommaPulizia), biancheria, kit,
-    unitaDettaglio: dettagli.map(d => ({ min: d.min, max: d.max, suMisura: d.suMisura })),
+    unitaDettaglio: dettagli.map((d, i) => ({ nome: unita[i]?.nome || 'Unit\u00e0 ' + (i + 1), min: d.min, max: d.max, suMisura: d.suMisura })),
     scontoPercento: sconto,
   };
 }
@@ -208,6 +210,8 @@ export function prezzoAreaComuneDedicata(mq: number): number {
 }
 
 export interface QuoteBnbV2 extends QuoteResult {
+  /** dettaglio per camera: tipo leggibile e prezzo a checkout */
+  camereDettaglio: { persone: number; etichetta: string; prezzo: number }[];
   /** rifacimento letti giornaliero, PER USCITA (assunzione: 1 letto per camera) */
   rifacimentoGiornaliero: number;
   /** area comune: per passaggio (inloco) o per uscita (dedicata); 0 se 'no' */
@@ -215,8 +219,20 @@ export interface QuoteBnbV2 extends QuoteResult {
   areaComuneTipo: AreaComune;
 }
 
+export function etichettaCamera(persone: number): string {
+  if (persone <= 1) return 'Singola';
+  if (persone === 2) return 'Doppia/Matrimoniale';
+  if (persone === 3) return 'Tripla';
+  return persone + ' persone';
+}
+
 export function calcolaBnbV2(d: DatiBnbV2): QuoteBnbV2 {
-  const tot = d.camere.reduce((a, c) => a + prezzoCamera(c.persone), 0);
+  const camereDettaglio = d.camere.map((c) => ({
+    persone: Math.max(1, c.persone),
+    etichetta: etichettaCamera(c.persone),
+    prezzo: prezzoCamera(c.persone),
+  }));
+  const tot = camereDettaglio.reduce((a, c) => a + c.prezzo, 0);
   const persone = d.camere.reduce((a, c) => a + Math.max(1, c.persone), 0);
   const kit = d.vuoleKit ? round2(persone * ENGINE.kitCortesia) : 0;
   const rifacimento = d.frequenza === 'giornaliera'
@@ -229,6 +245,7 @@ export function calcolaBnbV2(d: DatiBnbV2): QuoteBnbV2 {
   const { min, max } = range(tot);
   return {
     suMisura: false, min, max, puntuale: tot, biancheria: 0, kit,
+    camereDettaglio,
     rifacimentoGiornaliero: rifacimento,
     areaComuneImporto, areaComuneTipo: d.areaComune,
   };

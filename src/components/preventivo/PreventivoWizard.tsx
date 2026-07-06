@@ -23,6 +23,7 @@ type Frequenza = "checkout" | "giornaliera";
 type AreaComune = "no" | "inloco" | "dedicata";
 
 interface UnitaCasa {
+  nome: string;
   taglio: Taglio | null;
   mq: number | null;
   matrimoniali: number;
@@ -34,6 +35,7 @@ interface UnitaCasa {
   ospiti: number;
 }
 const UNITA_VUOTA: UnitaCasa = {
+  nome: "",
   taglio: null, mq: null, matrimoniali: 1, singoli: 0, divani: 0,
   bagni: 1, cucina: null, esterno: null, ospiti: 2,
 };
@@ -72,7 +74,8 @@ interface QuoteRisposta {
   suMisura: boolean; min: number; max: number;
   biancheria: number; kit: number;
   scontoPercento?: number;
-  unitaDettaglio?: { min: number; max: number }[];
+  unitaDettaglio?: { nome: string; min: number; max: number }[];
+  camereDettaglio?: { persone: number; etichetta: string; prezzo: number }[];
   rifacimentoGiornaliero?: number;
   areaComuneImporto?: number;
   areaComuneTipo?: AreaComune;
@@ -275,7 +278,7 @@ export function PreventivoWizard() {
     const u = stato.unita;
     switch (nome) {
       case "tipo": return !!stato.tipo;
-      case "taglio": return !!u.taglio && !!u.mq;
+      case "taglio": return !!u.taglio && !!u.mq && (stato.tipo !== "case" || u.nome.trim().length > 1);
       case "letti": return u.matrimoniali + u.singoli + u.divani > 0;
       case "cucina": return !!u.cucina;
       case "esterno": return !!u.esterno;
@@ -362,7 +365,7 @@ export function PreventivoWizard() {
     setInvio(true); setErroreInvio(null);
     try {
       const unitaPayload = (u: UnitaCasa) => ({
-        taglio: u.taglio, mq: u.mq,
+        nome: u.nome, taglio: u.taglio, mq: u.mq,
         matrimoniali: u.matrimoniali, singoli: u.singoli, divani: u.divani,
         bagni: u.bagni, cucina: u.cucina, esterno: u.esterno,
         vuoleBiancheria: stato.vuoleBiancheria === true,
@@ -420,7 +423,7 @@ export function PreventivoWizard() {
 
   function renderStep() {
     const u = stato.unita;
-    const suffUnita = stato.tipo === "case" ? ` — Unità ${numeroUnitaCorrente}` : "";
+    const suffUnita = stato.tipo === "case" ? ` — ${stato.unita.nome.trim() || `Unit\u00e0 ${numeroUnitaCorrente}`}` : "";
     switch (step) {
       case "tipo": return (<>
         <h1>Che struttura gestisci?</h1>
@@ -436,6 +439,12 @@ export function PreventivoWizard() {
       case "taglio": return (<>
         <h1>Com'è fatto l'appartamento?{suffUnita}</h1>
         <p className="pv-sotto">Scegli il taglio e indica i metri quadri.</p>
+        {stato.tipo === "case" && (
+          <CampoBox label={`Nome della casa (per riconoscerla nel preventivo)`}>
+            <input placeholder={`es. Casa Trastevere, Appartamento Prati…`} maxLength={60}
+              value={u.nome} onChange={(e) => setU("nome", e.target.value)} />
+          </CampoBox>
+        )}
         <SceltaGriglia selezionato={u.taglio} onSel={(v) => setU("taglio", v)} opzioni={[
           { v: "mono" as Taglio, ic: "mono", t: "Monolocale", s: "Una stanza unica + bagno · fino a ~45 mq" },
           { v: "bilo" as Taglio, ic: "bilo", t: "Bilocale", s: "Camera + soggiorno · ~45–65 mq" },
@@ -505,7 +514,7 @@ export function PreventivoWizard() {
             {tutte.map((un, i) => (
               <div key={i} className="pv-unita-riga">
                 <span className="num">{i + 1}</span>
-                <span className="desc">{un.taglio ? nomi[un.taglio] : "—"} · {un.mq ?? "?"} mq · {un.matrimoniali + un.singoli + un.divani} letti · {un.bagni} {un.bagni === 1 ? "bagno" : "bagni"}</span>
+                <span className="desc"><b className="pv-nome-unita">{un.nome || `Unit\u00e0 ${i + 1}`}</b> — {un.taglio ? nomi[un.taglio] : "\u2014"} · {un.mq ?? "?"} mq · {un.matrimoniali + un.singoli + un.divani} letti · {un.bagni} {un.bagni === 1 ? "bagno" : "bagni"}</span>
               </div>
             ))}
           </div>
@@ -723,9 +732,13 @@ export function PreventivoWizard() {
         </div>
 
         <div className="pv-righe">
-          {q.unitaDettaglio && q.unitaDettaglio.length > 1
+          {q.camereDettaglio && q.camereDettaglio.length > 0
+            ? q.camereDettaglio.map((c, i) => (
+                <div className="pv-riga" key={i}><Icona nome="camera" mini /><div className="txt">Camera {i + 1} — {c.etichetta}<small>{c.persone} {c.persone === 1 ? "persona" : "persone"} · pulizia a checkout</small></div><b>€ {c.prezzo}</b></div>
+              ))
+            : q.unitaDettaglio && q.unitaDettaglio.length > 1
             ? q.unitaDettaglio.map((u, i) => (
-                <div className="pv-riga" key={i}><Icona nome="casa" mini /><div className="txt">Unità {i + 1}<small>pulizia a cambio ospite</small></div><b>da € {u.min}</b></div>
+                <div className="pv-riga" key={i}><Icona nome="casa" mini /><div className="txt">{u.nome}<small>pulizia a cambio ospite</small></div><b>da € {u.min}</b></div>
               ))
             : <div className="pv-riga"><Icona nome="casa" mini /><div className="txt">Pulizia completa<small>a ogni cambio ospite</small></div><b>da € {q.min}</b></div>}
           {q.biancheria > 0 && <div className="pv-riga"><Icona nome="biancheriaSi" mini /><div className="txt">Biancheria a noleggio<small>consegna e ritiro inclusi</small></div><b>+ {eur(q.biancheria)}</b></div>}
