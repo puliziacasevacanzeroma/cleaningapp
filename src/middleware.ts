@@ -11,6 +11,7 @@ const PUBLIC_ROUTES = [
   "/privacy",
   "/terms",
   "/guida",
+  "/preventivo", // v2: widget preventivi pubblico
 ];
 
 // ─── Route onboarding ───
@@ -34,6 +35,8 @@ const PUBLIC_API_PATTERNS = [
   // protetti da cronSecret nel route stesso (oppure auth admin per uso manuale)
   /^\/api\/debug\/test-payment-warning$/,
   /^\/api\/debug\/test-payment-suspension$/,
+  // v2: widget preventivi — POST pubblico; GET/PATCH protetti da requireAdmin nel route stesso
+  /^\/api\/leads$/,
 ];
 
 // ─── API solo admin ───
@@ -142,7 +145,7 @@ export async function middleware(request: NextRequest) {
   if (pathname.startsWith("/api/cron/")) {
     return NextResponse.next();
   }
-  
+
   if (pathname.startsWith("/api/")) {
     const rateLimitResult = await checkRateLimit(request);
     if (!rateLimitResult.allowed) {
