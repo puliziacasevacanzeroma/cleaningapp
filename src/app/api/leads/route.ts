@@ -18,6 +18,8 @@ import { resend, FROM_EMAIL, isResendConfigured, logResendWarning } from '~/lib/
 import { calcolaCasa, calcolaCase, calcolaBnbV2, calcolaPassaggioSoggiorno, verificaCopertura, formatEuro } from '~/lib/quote/quoteEngine';
 import type { DatiCasa, DatiBnbV2, QuoteResult, QuoteMultiResult, QuoteBnbV2, TipoStruttura, CameraBnb } from '~/lib/quote/quoteEngine';
 import { getCoveredCaps } from '~/lib/quote/coverageZones';
+import { buildEmailPreventivo } from '~/lib/email/emailPreventivo';
+import { buildPreventivoPdf } from '~/lib/email/preventivoPdf';
 
 export const runtime = 'nodejs';
 
@@ -87,35 +89,6 @@ function normalizzaCasa(c: Partial<DatiCasa>): DatiCasa {
 }
 
 // ─────────────────────────────── Email ───────────────────────────────
-
-function emailCliente(nome: string, q: QuoteResult, tipo: TipoStruttura, extra?: { scontoPercento?: number; rifacimentoGiornaliero?: number; areaComuneImporto?: number; areaComuneTipo?: string; passaggio?: { totale: number } | null }): { subject: string; html: string } {
-  const blu = '#3D5A73', scuro = '#2A4257', rame = '#B0764A';
-  const prezzo = q.suMisura || tipo === 'hotel'
-    ? '<p style="font-size:17px">La tua struttura merita un\u2019offerta costruita su misura: <b>ti ricontattiamo entro 24 ore</b>.</p>'
-    : `<div style="background:${scuro};color:#fff;border-radius:14px;padding:26px;text-align:center;margin:18px 0">
-         <div style="font-size:12px;letter-spacing:2px;opacity:.85">PULIZIA A OGNI CAMBIO OSPITE</div>
-         <div style="font-size:14px;margin-top:10px">a partire da</div>
-         <div style="font-size:46px;font-weight:800;line-height:1.1">\u20ac ${q.min}</div>
-         <div style="display:inline-block;border:1px solid rgba(255,255,255,.4);border-radius:99px;padding:5px 14px;font-size:13px;margin-top:10px">stima massima \u20ac ${q.max}</div>
-       </div>`
-       + (q.biancheria ? `<p>Biancheria a noleggio (a cambio, consegna e ritiro inclusi): <b>${formatEuro(q.biancheria)}</b></p>` : '')
-       + (q.kit ? `<p>Kit di cortesia ospiti: <b>${formatEuro(q.kit)}</b></p>` : '')
-       + (extra?.scontoPercento ? `<p>Sconto multi-unit\u00e0: <b>-${extra.scontoPercento}%</b> gi\u00e0 applicato</p>` : '')
-       + (extra?.rifacimentoGiornaliero ? `<p>Rifacimento letti giornaliero: <b>${formatEuro(extra.rifacimentoGiornaliero)}</b> a uscita</p>` : '')
-       + (extra?.areaComuneImporto ? `<p>Aree comuni: <b>${formatEuro(extra.areaComuneImporto)}</b> ${extra.areaComuneTipo === 'dedicata' ? 'a uscita dedicata' : 'quando siamo gi\u00e0 in struttura'}</p>` : '')
-       + (extra?.passaggio ? `<p>Servizio durante il soggiorno: <b>${formatEuro(extra.passaggio.totale)}</b> a passaggio</p>` : '');
-  return {
-    subject: 'Il tuo preventivo \u2014 Puliziacasevacanze.it',
-    html: `<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;color:#22333F">
-      <h2 style="color:${blu}">Ciao ${nome},</h2>
-      <p>grazie per la richiesta! Ecco il preventivo indicativo per la tua struttura:</p>
-      ${prezzo}
-      <p style="font-size:13px;color:#7A8A96">Prezzi al netto di IVA. Il preventivo definitivo te lo confermiamo dopo un <b>sopralluogo gratuito e senza impegno</b>: prima di iniziare firmiamo insieme condizioni e costi.</p>
-      <p>Ti contattiamo al pi\u00f9 presto per fissare il sopralluogo. Se preferisci anticiparci: <a href="tel:+393927830017" style="color:${rame}"><b>392 783 0017</b></a></p>
-      <p style="color:${blu}"><b>Puliziacasevacanze.it</b><br><span style="font-size:12px;color:#7A8A96">Pulizie e noleggio biancheria per case vacanze, B&B e affittacamere a Roma \u2014 365 giorni l\u2019anno</span></p>
-    </div>`,
-  };
-}
 
 function emailAdmin(doc: Record<string, unknown>, q: QuoteResult): { subject: string; html: string } {
   const c = doc.contatti as { nome: string; email: string; telefono: string };
@@ -211,7 +184,13 @@ export async function POST(request: NextRequest) {
     updatedAt: FieldValue.serverTimestamp(),
   };
 
-  const mailCliente = emailCliente(leadDoc.contatti.nome, quote, body.tipo, leadDoc.quote);
+  const mailCliente = buildEmailPreventivo({
+    nome: leadDoc.contatti.nome,
+    tipo: body.tipo,
+    zona: leadDoc.zona,
+    copertura,
+    quote: leadDoc.quote as Parameters<typeof buildEmailPreventivo>[0]['quote'],
+  });
   const mailAdmin = emailAdmin(leadDoc, quote);
 
   // ── DRY RUN: mostra tutto, non scrive niente ──
@@ -229,12 +208,44 @@ export async function POST(request: NextRequest) {
   }
 
   // ── Scrittura vera ──
+  // Numero preventivo progressivo (come i preventivi manuali: N/ANNO)
+  let numeroPreventivo = '';
+  try {
+    const counterRef = adminDb.collection('counters').doc('preventivi');
+    const n = await adminDb.runTransaction(async (t) => {
+      const snap = await t.get(counterRef);
+      const prossimo = ((snap.data()?.n as number) ?? 282) + 1; // riparte dal tuo ultimo manuale
+      t.set(counterRef, { n: prossimo }, { merge: true });
+      return prossimo;
+    });
+    numeroPreventivo = n + '/' + new Date().getFullYear();
+  } catch (err) {
+    console.error('[leads] Contatore preventivi non disponibile:', err);
+    numeroPreventivo = 'W-' + Date.now().toString().slice(-6);
+  }
+  (leadDoc as Record<string, unknown>).numeroPreventivo = numeroPreventivo;
+
   const ref = await adminDb.collection('leads').add(leadDoc);
 
   // Email best-effort: un errore email non deve far fallire il lead.
   if (isResendConfigured() && resend) {
     try {
-      await resend.emails.send({ from: FROM_EMAIL, to: leadDoc.contatti.email, subject: mailCliente.subject, html: mailCliente.html });
+      let attachments: { filename: string; content: Buffer }[] | undefined;
+      try {
+        const pdf = await buildPreventivoPdf({
+          nome: leadDoc.contatti.nome,
+          tipo: body.tipo,
+          zona: leadDoc.zona,
+          copertura,
+          quote: leadDoc.quote as Parameters<typeof buildPreventivoPdf>[0]['quote'],
+          numeroPreventivo,
+          dataIt: new Date().toLocaleDateString('it-IT'),
+        });
+        attachments = [{ filename: 'Preventivo_N' + numeroPreventivo.replace('/', '-') + '_Puliziacasevacanze.pdf', content: pdf }];
+      } catch (err) {
+        console.error('[leads] PDF non generato, email inviata senza allegato:', err);
+      }
+      await resend.emails.send({ from: FROM_EMAIL, to: leadDoc.contatti.email, subject: mailCliente.subject, html: mailCliente.html, attachments });
       await resend.emails.send({ from: FROM_EMAIL, to: LEADS_NOTIFY_EMAIL, subject: mailAdmin.subject, html: mailAdmin.html });
     } catch (err) {
       console.error('[leads] Invio email fallito (lead salvato comunque):', err);
