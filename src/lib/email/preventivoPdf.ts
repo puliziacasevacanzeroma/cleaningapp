@@ -281,7 +281,7 @@ interface PuliziaOpts {
   prezzo?: Prezzo;             // se presente: box prezzo singolo
   notaPrezzo?: string[];       // righe dentro il box
   senzaPrezzo?: boolean;       // multi: il prezzo sta nella pagina strutture
-  rimando?: string[];          // testo nel box al posto del prezzo (es. rinvio al tariffario)
+  cardIncluso?: boolean;       // card "incluso in ogni uscita" al posto del box prezzo
   notaFondo?: string;
 }
 
@@ -311,25 +311,41 @@ function pagePulizia(doc: Doc, a: Assets, o: PuliziaOpts) {
     spacedText(doc, o.sottotitolo.toUpperCase(), 136.7, 37.8, { align: "center", charSpace: 2 });
   }
 
-  // sottotitolo centrato verticalmente tra il titolo e l'inizio dell'elenco
-  const listStart = 72;
-  const titleBottom = o.sottotitolo ? 40 : 33;
-  const subMid = (titleBottom + listStart) / 2;
+  // ── ritmo verticale equidistante ─────────────────────────────
+  // Misuro prima l'altezza reale dell'elenco, poi distribuisco lo
+  // stesso respiro g tra: titolo→sottotitolo, sottotitolo→elenco,
+  // elenco→zona prezzo/card.
+  const bx = 80.9, maxW = 104, lh = 6.35, cs = 0.9;
+  doc.setFontSize(10.3);
+  let advance = 0;
+  const wrapped: string[][] = o.bullets.map((b, i) => {
+    doc.setFont("Montserrat", o.bulletsItalicIdx?.includes(i) ? "bolditalic" : "bold");
+    const lines = wrapSpaced(doc, "- " + b, maxW, cs);
+    advance += lines.length * lh;
+    return lines;
+  });
+  advance += (o.bullets.length - 1) * 6.25;
+
+  const titleBottom = o.sottotitolo ? 41 : 33;
+  const hasZone = !o.senzaPrezzo && o.prezzo !== undefined || o.cardIncluso || o.mq || o.bagni || o.postiLetto;
+  const zoneTopEff = hasZone ? 199 : 266; // 199 = bordo alto delle pill rame sopra i box
+  const subBlockH = 15;
+  let g = (zoneTopEff - titleBottom - subBlockH - advance - 6.3) / 3;
+  g = Math.max(5, Math.min(20, g));
+
+  const subTop = titleBottom + g;
   setText(doc, BLUE);
   doc.setFont("LeagueSpartan", "bold");
   doc.setFontSize(13.3);
-  spacedText(doc, "IL PREVENTIVO INCLUDE LE", 136.2, subMid - 2.2, { align: "center", charSpace: 0.05 });
-  spacedText(doc, "SEGUENTI VOCI:", 136.2, subMid + 6.15, { align: "center", charSpace: 0.05 });
+  spacedText(doc, "IL PREVENTIVO INCLUDE LE", 136.2, subTop + 5.2, { align: "center", charSpace: 0.05 });
+  spacedText(doc, "SEGUENTI VOCI:", 136.2, subTop + 13.55, { align: "center", charSpace: 0.05 });
 
-  // bullet list (metrica calibrata sul riferimento)
+  // bullet list (metrica del riferimento, posizione bilanciata)
   setText(doc, BLACK);
   doc.setFontSize(10.3);
-  const bx = 80.9, maxW = 104, lh = 6.35, cs = 0.9;
-  let y = listStart;
-  o.bullets.forEach((b, i) => {
-    const italic = o.bulletsItalicIdx?.includes(i);
-    doc.setFont("Montserrat", italic ? "bolditalic" : "bold");
-    const lines = wrapSpaced(doc, "- " + b, maxW, cs);
+  let y = subTop + subBlockH + g + 4.8;
+  wrapped.forEach((lines, i) => {
+    doc.setFont("Montserrat", o.bulletsItalicIdx?.includes(i) ? "bolditalic" : "bold");
     lines.forEach((ln, j) => {
       doc.text(ln, j === 0 ? bx : bx + 2.2, y, { charSpace: cs });
       y += lh;
@@ -345,8 +361,8 @@ function pagePulizia(doc: Doc, a: Assets, o: PuliziaOpts) {
   // box prezzo (solo se richiesto) oppure box di rimando
   if (!o.senzaPrezzo && o.prezzo !== undefined) {
     drawPriceBox(doc, o.prezzo, o.notaPrezzo);
-  } else if (o.rimando) {
-    drawRimandoBox(doc, o.rimando);
+  } else if (o.cardIncluso) {
+    drawInclusoCard(doc);
   }
 
   // nota a fondo pagina
@@ -410,34 +426,32 @@ function drawPriceBox(doc: Doc, prezzo: Prezzo, nota?: string[]) {
   for (const ln of lines) { spacedText(doc, ln, 169.4, y, { align: "center", charSpace: 1.1 }); y += 4.5; }
 }
 
-/** Box blu nella posizione del prezzo: rimanda alla pagina con i prezzi. */
-function drawRimandoBox(doc: Doc, righe: string[]) {
-  const bx = 137.1, by = 203.7, bw = 62.8, bh = 62.9;
+/** Card blu nella posizione del box prezzo: cosa e' sempre incluso in ogni uscita. */
+function drawInclusoCard(doc: Doc) {
+  const bx = 82.5, by = 203.7, bw = 117.4, bh = 62.9;
   setFill(doc, BLUE);
   doc.roundedRect(bx, by, bw, bh, 10, 10, "F");
   setFill(doc, COPPER);
-  doc.roundedRect(135, 199.4, 23.8, 12.6, 6.3, 6.3, "F");
+  doc.roundedRect(bx - 2, by - 4.3, 46, 12.6, 6.3, 6.3, "F");
   setText(doc, WHITE);
   doc.setFont("Montserrat", "bold");
-  doc.setFontSize(9);
-  spacedText(doc, "PREZZI", 146.9, 207.2, { align: "center", charSpace: 0.9 });
+  fitSpacedText(doc, "SEMPRE INCLUSO", bx + 21, by + 3.5, 42, { align: "center", charSpace: 0.9, size: 8.6 });
 
-  // freccia verso il basso/destra
-  setDraw(doc, WHITE);
-  doc.setLineWidth(1.6);
-  doc.setLineCap("round");
-  doc.setLineJoin("round");
-  const ax = bx + bw / 2, ay = by + 20;
-  doc.line(ax - 7, ay, ax + 7, ay);
-  doc.line(ax + 2, ay - 4.5, ax + 7, ay);
-  doc.line(ax + 2, ay + 4.5, ax + 7, ay);
+  fitSpacedText(doc, "IN OGNI USCITA, PER OGNI CASA", bx + bw / 2, by + 16.5, bw - 14, { align: "center", charSpace: 0.9, size: 10.5 });
 
-  doc.setFont("Montserrat", "bold");
-  doc.setFontSize(10);
-  let y = by + 33;
-  for (const ln of righe) {
-    spacedText(doc, ln, bx + bw / 2, y, { align: "center", charSpace: 0.7 });
-    y += 5.6;
+  const voci = [
+    "Prodotti per la pulizia e attrezzature",
+    "2 rotoli di carta igienica per bagno",
+    "1 cioccolatino di benvenuto per ospite",
+  ];
+  let vy = by + 28;
+  for (const v of voci) {
+    drawCheck(doc, bx + 12, vy - 1.4, 3.6);
+    doc.setFont("Montserrat", "medium");
+    setText(doc, WHITE);
+    doc.setFontSize(9.2);
+    doc.text(v, bx + 19, vy, { charSpace: 0.15 });
+    vy += 11.5;
   }
 }
 
@@ -1182,49 +1196,42 @@ function pageTariffaHotel(doc: Doc, a: Assets) {
 function pageGestionale(doc: Doc, a: Assets) {
   pageHeader(doc, "IL GESTIONALE INCLUSO", "La tua dashboard, sempre con te");
 
-  // ── telefono a sinistra: dentro va lo SCREENSHOT REALE della dashboard ──
-  const phX = 26, phY = 46, phW = 62, phH = 128;
-  setFill(doc, [40, 44, 50] as any);
-  doc.roundedRect(phX - 2.5, phY - 2.5, phW + 5, phH + 5, 9, 9, "F");
-  // schermo
-  if (a.gestPhone) {
+  /** Cornice telefono con la schermata INTERA (aspect-fit: niente tagli). */
+  const drawPhone = (b64: string, ratio: number, x: number, y: number, hgt: number) => {
+    const iw = hgt * ratio;
+    setFill(doc, [40, 44, 50] as any);
+    doc.roundedRect(x - 2, y - 2, iw + 4, hgt + 4, 6, 6, "F");
     doc.saveGraphicsState();
-    doc.roundedRect(phX, phY, phW, phH, 6, 6, null);
+    doc.roundedRect(x, y, iw, hgt, 4, 4, null);
     doc.clip();
     doc.discardPath();
-    const r = a.gestPhoneRatio || (phW / phH);
-    let dw = phW, dh = phW / r;
-    if (dh < phH) { dh = phH; dw = phH * r; }
-    doc.addImage(a.gestPhone, "PNG", phX - (dw - phW) / 2, phY - (dh - phH) / 2, dw, dh);
+    doc.addImage(b64, "JPEG", x, y, iw, hgt); // stesso ratio: nessun ritaglio
     doc.restoreGraphicsState();
-  } else {
-    // segnaposto neutro in attesa dello screenshot reale
-    setFill(doc, ROWALT);
-    doc.roundedRect(phX, phY, phW, phH, 6, 6, "F");
-    setText(doc, GRAYTXT);
-    doc.setFont("Montserrat", "bold");
-    doc.setFontSize(8);
-    spacedText(doc, "SCREENSHOT", phX + phW / 2, phY + phH / 2 - 2, { align: "center", charSpace: 1 });
-    spacedText(doc, "DASHBOARD", phX + phW / 2, phY + phH / 2 + 4, { align: "center", charSpace: 1 });
-  }
-  // notch
-  setFill(doc, [40, 44, 50] as any);
-  doc.roundedRect(phX + phW / 2 - 9, phY + 1.5, 18, 3.2, 1.6, 1.6, "F");
+    return iw;
+  };
 
-  // ── testo a destra: come funziona, in poche parole ──
-  const tx = 100, tw = W - 100 - 14;
+  // ── telefono grande a sinistra: schermata PULIZIE intera ──
+  const phY = 44, phH = 126;
+  const phRatio = a.gestPhoneRatio || 0.488;
+  const phW = phH * phRatio;
+  const phX = 24;
+  if (a.gestPhone) drawPhone(a.gestPhone, phRatio, phX, phY, phH);
+
+  // ── testo a destra ──
+  const tx = phX + phW + 14, tw = W - tx - 14;
   setText(doc, BLUE);
   doc.setFont("LeagueSpartan", "bold");
-  fitSpacedText(doc, "COME FUNZIONA,", tx, 56, tw, { charSpace: 0.3, size: 16 });
-  fitSpacedText(doc, "IN POCHE PAROLE", tx, 64, tw, { charSpace: 0.3, size: 16 });
+  fitSpacedText(doc, "COME FUNZIONA,", tx, 54, tw, { charSpace: 0.3, size: 15 });
+  fitSpacedText(doc, "IN POCHE PAROLE", tx, 62, tw, { charSpace: 0.3, size: 15 });
 
   const punti: Array<[string, string]> = [
     ["CI COLLEGHIAMO AI TUOI CALENDARI", "Airbnb e Booking: a ogni checkout la pulizia viene messa in automatico."],
     ["VEDI SEMPRE LE TUE PULIZIE", "Programmate, in corso e completate, con orari e biancheria."],
+    ["FOTO A FINE PULIZIA", "Al termine di ogni pulizia carichiamo le foto di come \u00E8 stata lasciata la casa."],
     ["RICHIEDI IL SERVIZIO IN UN TOCCO", "Pulizie extra, biancheria o modifiche direttamente dall'app."],
     ["ESTRATTO CONTO MENSILE", "Tutto in un unico documento chiaro, scaricabile in PDF."],
   ];
-  let py2 = 78;
+  let py2 = 75;
   for (const [tit, txt] of punti) {
     drawCheck(doc, tx + 4.5, py2 - 1.5, 4.5);
     setText(doc, BLUE);
@@ -1236,49 +1243,86 @@ function pageGestionale(doc: Doc, a: Assets) {
     const lines = wrapSpaced(doc, txt, tw - 12, 0.15);
     let ly = py2 + 6;
     for (const ln of lines) { doc.text(ln, tx + 12, ly, { charSpace: 0.15 }); ly += 4.6; }
-    py2 = ly + 7;
+    py2 = ly + 6.5;
   }
 
-  // ── card accesso incluso: a tutta larghezza, testo sempre dentro ──
+  // ── banda accesso incluso ──
   const bandY = Math.max(py2 + 2, phY + phH + 8);
-  card(doc, 14, bandY, W - 28, 20, COPPER);
+  card(doc, 14, bandY, W - 28, 18, COPPER);
   setText(doc, WHITE);
   doc.setFont("Montserrat", "bold");
-  fitSpacedText(doc, "ACCESSO INCLUSO NEL SERVIZIO \u2014 NESSUN COSTO AGGIUNTIVO", W / 2, bandY + 8.5, W - 44, { align: "center", charSpace: 1, size: 11 });
+  fitSpacedText(doc, "ACCESSO INCLUSO NEL SERVIZIO \u2014 NESSUN COSTO AGGIUNTIVO", W / 2, bandY + 8, W - 44, { align: "center", charSpace: 1, size: 10.5 });
   doc.setFont("Montserrat", "medium");
-  fitSpacedText(doc, "Attiviamo il tuo account alla firma del contratto.", W / 2, bandY + 15.5, W - 44, { align: "center", charSpace: 0.3, size: 9 });
+  fitSpacedText(doc, "Attiviamo il tuo account alla firma del contratto.", W / 2, bandY + 14.2, W - 44, { align: "center", charSpace: 0.3, size: 8.6 });
 
-  // ── tre schermate reali del gestionale in basso ──
-  const shotY = bandY + 26;
-  const shotH = H - 14 - shotY - 5;
-  const labels = ["CALENDARIO PULIZIE", "DETTAGLIO INTERVENTO", "ESTRATTO CONTO"];
-  const sw2 = (W - 28 - 12) / 3;
-  let sx2 = 14;
-  for (let i = 0; i < 3; i++) {
+  // ── tre mini-telefoni con le schermate INTERE ──
+  const labels = ["LA TUA DASHBOARD", "PRENOTAZIONI ICAL"];
+  const rowY = bandY + 24;
+  const miniH = H - 14 - rowY - 10;          // spazio per etichetta sotto
+  const miniW = miniH * 0.488;
+  const nMini = 2;
+  const gap = 24;
+  const totW = miniW * nMini + gap * (nMini - 1);
+  let mx = (W - totW) / 2;
+  for (let i = 0; i < nMini; i++) {
     const shot = a.gestShots[i];
-    if (shot) {
-      doc.saveGraphicsState();
-      doc.roundedRect(sx2, shotY, sw2, shotH - 7, 4, 4, null);
-      doc.clip();
-      doc.discardPath();
-      const r = a.gestShotRatios[i] || 1;
-      let dw = sw2, dh = sw2 / r;
-      if (dh < shotH - 7) { dh = shotH - 7; dw = dh * r; }
-      doc.addImage(shot, "PNG", sx2 - (dw - sw2) / 2, shotY - (dh - (shotH - 7)) / 2, dw, dh);
-      doc.restoreGraphicsState();
-    } else {
-      setFill(doc, ROWALT);
-      doc.roundedRect(sx2, shotY, sw2, shotH - 7, 4, 4, "F");
-      setText(doc, GRAYTXT);
-      doc.setFont("Montserrat", "bold");
-      doc.setFontSize(7);
-      spacedText(doc, "SCREENSHOT", sx2 + sw2 / 2, shotY + (shotH - 7) / 2 + 1, { align: "center", charSpace: 0.8 });
-    }
+    if (shot) drawPhone(shot, a.gestShotRatios[i] || 0.488, mx, rowY, miniH);
     setText(doc, BLUE);
     doc.setFont("Montserrat", "bold");
-    fitSpacedText(doc, labels[i], sx2 + sw2 / 2, shotY + shotH - 1.5, sw2 - 4, { align: "center", charSpace: 0.7, size: 7.5 });
-    sx2 += sw2 + 6;
+    fitSpacedText(doc, labels[i], mx + miniW / 2, H - 14 - 3, miniW + 18, { align: "center", charSpace: 0.7, size: 7.5 });
+    mx += miniW + gap;
   }
+
+  pageFooter(doc);
+}
+
+// Variante della pagina gestionale senza screenshot: solo contenuti
+// reali (testo + foto del servizio). Appena in public/preventivo/
+// compaiono gest_phone.png e gest_shot_1/2/3.png, il PDF passa da solo
+// al layout con il telefono e le schermate vere.
+function pageGestionaleTesto(doc: Doc, a: Assets) {
+  pageHeader(doc, "IL GESTIONALE INCLUSO", "La tua dashboard, sempre con te");
+
+  setText(doc, BLUE);
+  doc.setFont("LeagueSpartan", "bold");
+  fitSpacedText(doc, "COME FUNZIONA, IN POCHE PAROLE", W / 2, 46, W - 40, { align: "center", charSpace: 0.5, size: 17 });
+
+  const punti: Array<[string, string]> = [
+    ["CI COLLEGHIAMO AI TUOI CALENDARI", "Airbnb e Booking: a ogni checkout la pulizia viene messa in automatico, senza che tu debba scrivere a nessuno."],
+    ["VEDI SEMPRE LE TUE PULIZIE", "Programmate, in corso e completate, con orari e dettaglio della biancheria consegnata."],
+    ["RICHIEDI IL SERVIZIO IN UN TOCCO", "Pulizie extra, biancheria o modifiche direttamente dall'app, senza telefonate."],
+    ["ESTRATTO CONTO MENSILE", "Pulizie, biancheria e kit in un unico documento chiaro, scaricabile in PDF."],
+  ];
+  let cy = 58;
+  const cx = 14, cw = W - 28, chh = 27, cgap = 6;
+  for (const [tit, txt] of punti) {
+    card(doc, cx, cy, cw, chh);
+    drawCheck(doc, cx + 13, cy + chh / 2, 6);
+    setText(doc, BLUE);
+    doc.setFont("Montserrat", "bold");
+    fitSpacedText(doc, tit, cx + 25, cy + 10.5, cw - 32, { charSpace: 0.5, size: 11 });
+    setText(doc, DARK);
+    doc.setFont("Montserrat", "medium");
+    doc.setFontSize(9);
+    const lines = wrapSpaced(doc, txt, cw - 32, 0.15);
+    let ly = cy + 17.5;
+    for (const ln of lines.slice(0, 2)) { doc.text(ln, cx + 25, ly, { charSpace: 0.15 }); ly += 4.6; }
+    cy += chh + cgap;
+  }
+
+  // banda rame accesso incluso
+  cy += 2;
+  card(doc, cx, cy, cw, 20, COPPER);
+  setText(doc, WHITE);
+  doc.setFont("Montserrat", "bold");
+  fitSpacedText(doc, "ACCESSO INCLUSO NEL SERVIZIO \u2014 NESSUN COSTO AGGIUNTIVO", W / 2, cy + 8.5, cw - 16, { align: "center", charSpace: 1, size: 11 });
+  doc.setFont("Montserrat", "medium");
+  fitSpacedText(doc, "Attiviamo il tuo account alla firma del contratto.", W / 2, cy + 15.5, cw - 16, { align: "center", charSpace: 0.3, size: 9 });
+  cy += 26;
+
+  // foto reali del servizio a chiudere
+  const stripH = H - 14 - cy - 5;
+  if (stripH > 20) photoStrip(doc, a, cy, stripH, 14, W - 14, [1, 3, 5]);
 
   pageFooter(doc);
 }
@@ -1314,9 +1358,11 @@ function pagineComuni(doc: Doc, a: Assets) {
   // la pagina gestionale entra SOLO se esiste almeno lo screenshot del telefono:
   // mai segnaposto grigi in un preventivo reale.
   doc.addPage(); pagePercheNoi(doc, a);
-  if (a.gestPhone) { doc.addPage(); pageGestionale(doc, a); }
   doc.addPage(); pageListino(doc, a);
   doc.addPage(); pageKitCortesia(doc, a);
+  doc.addPage();
+  if (a.gestPhone) pageGestionale(doc, a);
+  else pageGestionaleTesto(doc, a);
   doc.addPage(); pageTermini(doc, a);
   doc.addPage(); pageContatti(doc, a);
 }
@@ -1379,8 +1425,8 @@ export async function generatePreventivoPdf(d: PreventivoPdfData): Promise<Buffe
       photo: a.photos[0],
       bullets: BULLETS_CASA,
       senzaPrezzo: true,
-      rimando: ["PREZZO PER SINGOLA", "STRUTTURA:", "VEDI PAGINA", "PRECEDENTE"],
-      notaFondo: "OGNI STRUTTURA HA IL SUO PREZZO PER USCITA (VEDI PAGINA PRECEDENTE). SONO SEMPRE INCLUSI I PRODOTTI PER LA PULIZIA, 2 ROTOLI DI CARTA IGENICA PER BAGNO E 1 CIOCCOLATINO PER OSPITE",
+      cardIncluso: true,
+      notaFondo: "I PREZZI PER SINGOLA STRUTTURA SONO NELLA PAGINA LE TUE STRUTTURE. IL NOLEGGIO BIANCHERIA NON E' INCLUSO NEI PREZZI DI PULIZIA.",
     });
   } else if (d.flow === "bnb") {
     doc.addPage();
