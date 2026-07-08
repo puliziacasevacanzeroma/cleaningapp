@@ -37,6 +37,7 @@ interface Assets {
   iconBed: string;
   okikoHero: string;
   strips: string[];
+  stripBed: string;
   contattiBig: string;
   gestPhone?: string;
   gestPhoneRatio?: number;
@@ -71,6 +72,7 @@ async function loadAssets(): Promise<Assets> {
     "icon_house.png", "icon_bath.png", "icon_bed.png",
     "okiko_hero.jpg",
     "strip_1.jpg", "strip_2.jpg", "strip_3.jpg", "strip_4.jpg", "strip_5.jpg", "strip_6.jpg",
+    "strip_bed.jpg",
     "contatti_big.jpg",
     "prod_doccia.jpg", "prod_body.jpg", "prod_set.jpg", "prod_cuffia.jpg", "prod_sapone.jpg", "prod_pantofole.jpg",
     "fonts/LeagueSpartan-Bold.ttf", "fonts/Montserrat-Regular.ttf", "fonts/Montserrat-Medium.ttf",
@@ -85,15 +87,16 @@ async function loadAssets(): Promise<Assets> {
     iconHouse: b[6], iconBath: b[7], iconBed: b[8],
     okikoHero: b[9],
     strips: [b[10], b[11], b[12], b[13], b[14], b[15]],
-    contattiBig: b[16],
-    prod: { doccia: b[17], body: b[18], set: b[19], cuffia: b[20], sapone: b[21], pantofole: b[22] },
+    stripBed: b[16],
+    contattiBig: b[17],
+    prod: { doccia: b[18], body: b[19], set: b[20], cuffia: b[21], sapone: b[22], pantofole: b[23] },
     gestPhone: gPhone?.b64,
     gestPhoneRatio: gPhone?.ratio,
     gestShots: gShots.map((g) => g?.b64),
     gestShotRatios: gShots.map((g) => g?.ratio || 1),
     fonts: {
-      "LeagueSpartan-Bold": b[23], "Montserrat-Regular": b[24], "Montserrat-Medium": b[25],
-      "Montserrat-Bold": b[26], "Montserrat-BoldItalic": b[27],
+      "LeagueSpartan-Bold": b[24], "Montserrat-Regular": b[25], "Montserrat-Medium": b[26],
+      "Montserrat-Bold": b[27], "Montserrat-BoldItalic": b[28],
     },
   };
 }
@@ -440,7 +443,7 @@ function drawInclusoCard(doc: Doc) {
   fitSpacedText(doc, "IN OGNI USCITA, PER OGNI CASA", bx + bw / 2, by + 16.5, bw - 14, { align: "center", charSpace: 0.9, size: 10.5 });
 
   const voci = [
-    "Prodotti per la pulizia e attrezzature",
+    "Prodotti per la pulizia inclusi",
     "2 rotoli di carta igienica per bagno",
     "1 cioccolatino di benvenuto per ospite",
   ];
@@ -485,7 +488,7 @@ function pagePercheNoi(doc: Doc, a: Assets) {
 
   // card servizi con check
   const servizi: Array<[string, string]> = [
-    ["SINCRONIZZAZIONE AUTOMATICA CALENDARI", "Colleghiamo i calendari Airbnb e Booking: ad ogni checkout la pulizia viene programmata da sola, senza che tu debba scrivere a nessuno."],
+    ["CI COLLEGHIAMO AI CALENDARI DELLE TUE CASE", "Il nostro gestionale legge i calendari Airbnb e Booking delle tue propriet\u00E0: a ogni checkout la pulizia si programma automaticamente, senza che tu debba avvisarci."],
     ["GESTIONALE PROPRIETARIO INCLUSO", "Dashboard personale con calendario pulizie, biancheria, estratto conto mensile e storico interventi, sempre consultabile."],
     ["BIANCHERIA FORMATO HOTEL", "Lenzuola e teli professionali sanificati, consegna e ritiro inclusi nel prezzo del noleggio."],
     ["CONTROLLO QUALIT\u00C0 A OGNI USCITA", "Ogni pulizia si chiude con la verifica di luci, acqua calda, riscaldamento e aria condizionata: la casa \u00E8 sempre pronta al check-in."],
@@ -530,7 +533,7 @@ const LISTINO_BIANCHERIA: VoceListino[] = [
 ];
 
 function pageListino(doc: Doc, a: Assets) {
-  pageHeader(doc, "LISTINO BIANCHERIA", "Tariffe per il singolo pezzo \u2014 da prendere in visione");
+  pageHeader(doc, "LISTINO BIANCHERIA", "Tariffe per il singolo pezzo");
 
   // tabella
   const tx = 24, tw = W - 48;
@@ -565,19 +568,19 @@ function pageListino(doc: Doc, a: Assets) {
   ty += 8;
 
   // card nota (come il box scuro del riferimento)
-  card(doc, 24, ty, W - 48, 34, BLUE);
+  card(doc, 24, ty, W - 48, 37, BLUE);
   setText(doc, WHITE);
   doc.setFont("Montserrat", "bold");
   doc.setFontSize(10.5);
   spacedText(doc, "NOTE E TERMINI SPECIALI", W / 2, ty + 9.5, { align: "center", charSpace: 1.4 });
   doc.setFont("Montserrat", "medium");
   doc.setFontSize(9);
-  const nota = "Il costo di consegna della biancheria pulita e il ritiro della biancheria sporca \u00E8 compreso nel prezzo. I prezzi indicati sono obbligatoriamente da associare al servizio di pulizia.";
+  const nota = "Consegna della biancheria pulita e ritiro della sporca sono compresi nel prezzo quando abbinati al servizio di pulizia. Su richiesta \u00E8 possibile anche la sola consegna di biancheria, al costo di \u20AC10 a consegna oltre al costo della biancheria.";
   const nlines = wrapSpaced(doc, nota, W - 76, 0.3);
   let ny = ty + 17;
   for (const ln of nlines) { spacedText(doc, ln, W / 2, ny, { align: "center", charSpace: 0.3 }); ny += 4.8; }
 
-  ty += 34 + 10;
+  ty += 37 + 8;
 
   // striscia foto in basso (orizzontali, soggetto intero)
   const ph = H - 14 - ty - 8;
@@ -589,6 +592,8 @@ function pageListino(doc: Doc, a: Assets) {
 // ═══════════════════════════════════════════════════════════════
 //  KIT DI CORTESIA — LINEA OKIKO, card prodotto vettoriali
 // ═══════════════════════════════════════════════════════════════
+
+const PRICE_BASELINE_OFFSET = 1.0; // baseline ottica nel badge (calibrata sul render)
 
 const PRODOTTI_OKIKO: Array<{ key: string; nome: string; desc: string; prezzo: string }> = [
   { key: "doccia", nome: "DOCCIA-SHAMPOO", desc: "Sapone vegetale da 15g in incarto colorato, privo di allergeni, per hotel e B&B.", prezzo: "0,48 \u20AC" },
@@ -624,36 +629,49 @@ function pageKitCortesia(doc: Doc, a: Assets) {
   const gx = 14, gw = (W - 28 - 12) / 3, gh = 74, ggap = 6;
   let px = gx, py = 96;
   PRODOTTI_OKIKO.forEach((p, i) => {
-    card(doc, px, py, gw, gh);
-    // foto prodotto (crop cover)
-    doc.saveGraphicsState();
-    doc.roundedRect(px + 3, py + 3, gw - 6, 34, 3, 3, null);
-    doc.clip();
-    doc.discardPath();
+    // card bianca con bordo sottile (pulizia da catalogo)
+    setFill(doc, WHITE);
+    doc.roundedRect(px, py, gw, gh, 4, 4, "F");
+    setDraw(doc, [223, 228, 233] as any);
+    doc.setLineWidth(0.4);
+    doc.roundedRect(px, py, gw, gh, 4, 4, "S");
+
+    // foto: prodotto INTERO su bianco puro, con respiro
+    const fy = py + 6, fh = 32;
     const r = 640 / 370;
-    const iw = gw - 6, ih = iw / r;
-    doc.addImage(a.prod[p.key], "JPEG", px + 3, py + 3 - (ih - 34) / 2, iw, ih);
-    doc.restoreGraphicsState();
+    let iw = gw - 12, ih = iw / r;
+    if (ih > fh) { ih = fh; iw = ih * r; }
+    doc.addImage(a.prod[p.key], "JPEG", px + (gw - iw) / 2, fy + (fh - ih) / 2, iw, ih);
+
+    // filo rame di separazione
+    setFill(doc, COPPER);
+    doc.roundedRect(px + gw / 2 - 6, py + 42.2, 12, 0.9, 0.45, 0.45, "F");
 
     setText(doc, BLUE);
     doc.setFont("Montserrat", "bold");
-    doc.setFontSize(9.5);
-    spacedText(doc, p.nome, px + gw / 2, py + 44, { align: "center", charSpace: 0.8 });
+    fitSpacedText(doc, p.nome, px + gw / 2, py + 48.5, gw - 10, { align: "center", charSpace: 1, size: 9.3 });
 
     setText(doc, GRAYTXT);
     doc.setFont("Montserrat", "medium");
-    doc.setFontSize(6.8);
-    const dl = wrapSpaced(doc, p.desc, gw - 10, 0.05);
-    let dy = py + 49.5;
-    for (const ln of dl.slice(0, 3)) { spacedText(doc, ln, px + gw / 2, dy, { align: "center", charSpace: 0.05 }); dy += 3.5; }
+    doc.setFontSize(6.7);
+    const dl = wrapSpaced(doc, p.desc, gw - 12, 0.05);
+    let dy = py + 53.5;
+    for (const ln of dl.slice(0, 3)) { spacedText(doc, ln, px + gw / 2, dy, { align: "center", charSpace: 0.05 }); dy += 3.4; }
 
-    // pill prezzo rame
-    setFill(doc, COPPER);
-    doc.roundedRect(px + gw / 2 - 13, py + gh - 11.5, 26, 8.4, 4.2, 4.2, "F");
-    setText(doc, WHITE);
+    // badge prezzo: pill rame con bordo, testo otticamente centrato
     doc.setFont("LeagueSpartan", "bold");
-    doc.setFontSize(11);
-    spacedText(doc, p.prezzo, px + gw / 2, py + gh - 5.6, { align: "center", charSpace: 0.3 });
+    doc.setFontSize(10);
+    const pTxt = p.prezzo;
+    const tW = spacedWidth(doc, pTxt, 0.5);
+    const pW = tW + 12, pH = 8.2;
+    const pX = px + gw / 2 - pW / 2, pY = py + gh - pH - 4;
+    setFill(doc, COPPER);
+    doc.roundedRect(pX, pY, pW, pH, pH / 2, pH / 2, "F");
+    setDraw(doc, [158, 104, 60] as any);
+    doc.setLineWidth(0.35);
+    doc.roundedRect(pX, pY, pW, pH, pH / 2, pH / 2, "S");
+    setText(doc, WHITE);
+    spacedText(doc, pTxt, px + gw / 2, pY + pH / 2 + PRICE_BASELINE_OFFSET, { align: "center", charSpace: 0.5 });
 
     px += gw + ggap;
     if ((i + 1) % 3 === 0) { px = gx; py += gh + ggap; }
@@ -662,7 +680,7 @@ function pageKitCortesia(doc: Doc, a: Assets) {
   // nota
   setText(doc, DARK);
   doc.setFont("Montserrat", "medium");
-  centeredNote(doc, "PREZZI PER SINGOLO PEZZO \u2014 LISTINO DA PRENDERE IN VISIONE, KIT COMPONIBILE SU RICHIESTA", py + 8, { size: 8.5, cs: 0.6 });
+  centeredNote(doc, "PREZZI PER SINGOLO PEZZO \u2014 COMPONI IL TUO KIT SCEGLIENDO I PRODOTTI CHE PREFERISCI", py + 8, { size: 8.5, cs: 0.6 });
 
   pageFooter(doc);
 }
@@ -775,6 +793,8 @@ export interface CasaDemo {
   mq?: number;
   bagni?: number;
   postiLetto?: number;
+  dettaglio1?: string;   // es. "Bilocale · 60 Mq · 2 bagni · 6 posti letto"
+  dettaglio2?: string;   // es. "1 matrimoniale · 1 singolo · cucina abitabile · balcone"
   prezzo: Prezzo;
 }
 
@@ -782,7 +802,7 @@ function pageStrutture(doc: Doc, a: Assets, case_: CasaDemo[], scontoPercento?: 
   pageHeader(doc, "LE TUE STRUTTURE", "Prezzo per singola struttura, per uscita");
 
   let cy = 42;
-  const cx = 14, cw = W - 28, chh = 34, cgap = 7;
+  const cx = 14, cw = W - 28, chh = 38, cgap = 7;
 
   case_.forEach((c, i) => {
     card(doc, cx, cy, cw, chh);
@@ -805,20 +825,25 @@ function pageStrutture(doc: Doc, a: Assets, case_: CasaDemo[], scontoPercento?: 
     doc.setFontSize(9);
     spacedText(doc, ("ZONA: " + c.zona).toUpperCase(), cx + 23, cy + 19.5, { charSpace: 1.2 });
 
-    // dati struttura
+    // caratteristiche complete dell'immobile
     setText(doc, GRAYTXT);
     doc.setFont("Montserrat", "medium");
-    doc.setFontSize(9);
-    const dati: string[] = [];
-    if (c.mq) dati.push(`${c.mq} Mq`);
-    if (c.bagni) dati.push(`${c.bagni} ${c.bagni === 1 ? "bagno" : "bagni"}`);
-    if (c.postiLetto) dati.push(`${c.postiLetto} posti letto`);
-    spacedText(doc, dati.join("  \u00B7  "), cx + 23, cy + 27.5, { charSpace: 0.4 });
+    doc.setFontSize(8.8);
+    let r1 = c.dettaglio1;
+    if (!r1) {
+      const dati: string[] = [];
+      if (c.mq) dati.push(`${c.mq} Mq`);
+      if (c.bagni) dati.push(`${c.bagni} ${c.bagni === 1 ? "bagno" : "bagni"}`);
+      if (c.postiLetto) dati.push(`${c.postiLetto} posti letto`);
+      r1 = dati.join("  \u00B7  ");
+    }
+    if (r1) fitSpacedText(doc, r1, cx + 23, cy + 27, cw - 85, { charSpace: 0.3, size: 8.8 });
+    if (c.dettaglio2) fitSpacedText(doc, c.dettaglio2, cx + 23, cy + 33, cw - 85, { charSpace: 0.3, size: 8.8 });
 
     // prezzo a destra su pill blu
     const pw = 42;
     setFill(doc, BLUE);
-    doc.roundedRect(cx + cw - pw - 7, cy + 6.5, pw, chh - 13, 6, 6, "F");
+    doc.roundedRect(cx + cw - pw - 7, cy + 8, pw, chh - 16, 6, 6, "F");
     setText(doc, WHITE);
     doc.setFont("LeagueSpartan", "bold");
     const ps = fmtPrezzo(c.prezzo);
@@ -850,7 +875,7 @@ function pageStrutture(doc: Doc, a: Assets, case_: CasaDemo[], scontoPercento?: 
   // nota
   setText(doc, DARK);
   doc.setFont("Montserrat", "bold");
-  let noteY = centeredNote(doc, "OGNI STRUTTURA HA IL SUO PREZZO PER USCITA \u2014 NESSUN FORFAIT: OGNI CASA PAGA SOLO LE PROPRIE USCITE.", cy + 6);
+  let noteY = centeredNote(doc, "OGNI STRUTTURA HA IL SUO PREZZO PER USCITA \u2014 NESSUN COSTO FISSO: OGNI CASA PAGA SOLO LE PROPRIE USCITE.", cy + 6);
   doc.setFont("Montserrat", "medium");
   noteY = centeredNote(doc, "I PREZZI NON INCLUDONO IL NOLEGGIO BIANCHERIA.", noteY + 0.8);
 
@@ -877,7 +902,7 @@ function pagePrezziCamere(doc: Doc, a: Assets, opts: {
   notaCard: string[];         // card spiegazione "paghi solo le camere pulite"
   volumeCard?: [string, string]; // [titolo, testo] per hotel
 }) {
-  pageHeader(doc, opts.titolo || "PREZZI PER CAMERA", "Prezzo per singola camera, per uscita \u2014 mai forfait");
+  pageHeader(doc, opts.titolo || "PREZZI PER CAMERA", "Prezzo per singola camera, per uscita \u2014 mai a corpo");
 
   // tabella tipologie
   const tx = 20, tw = W - 40;
@@ -991,7 +1016,7 @@ function pagePuliziaBnb(doc: Doc, a: Assets) {
         "Aspirazione e lavaggio dei pavimenti",
         "Ripristino dispenser, cortesie e dotazioni camera",
       ],
-      strip: 0,
+      strip: -1, // foto dedicata: rifacimento letto
     },
     {
       tit: "PULIZIA FERMATA",
@@ -1025,7 +1050,7 @@ function pagePuliziaBnb(doc: Doc, a: Assets) {
     doc.discardPath();
     let dw = 34, dh = 34 / 0.95;
     if (dh < bh) { dh = bh; dw = bh * 0.95; }
-    doc.addImage(a.strips[b.strip], "JPEG", 14 - (dw - 34) / 2, by - (dh - bh) / 2, dw, dh);
+    doc.addImage(b.strip === -1 ? a.stripBed : a.strips[b.strip], "JPEG", 14 - (dw - 34) / 2, by - (dh - bh) / 2, dw, dh);
     doc.restoreGraphicsState();
 
     // card testo
@@ -1075,7 +1100,7 @@ function pageServizioHotel(doc: Doc, a: Assets) {
         "Bagno in camera sanificato",
         "Controllo dotazioni e cortesie",
       ],
-      strip: 1,
+      strip: -1,
     },
     {
       tit: "RIASSETTO GIORNALIERO",
@@ -1108,7 +1133,7 @@ function pageServizioHotel(doc: Doc, a: Assets) {
     doc.discardPath();
     let dw = 34, dh = 34 / 0.95;
     if (dh < bh) { dh = bh; dw = bh * 0.95; }
-    doc.addImage(a.strips[b.strip], "JPEG", 14 - (dw - 34) / 2, by - (dh - bh) / 2, dw, dh);
+    doc.addImage(b.strip === -1 ? a.stripBed : a.strips[b.strip], "JPEG", 14 - (dw - 34) / 2, by - (dh - bh) / 2, dw, dh);
     doc.restoreGraphicsState();
 
     card(doc, 52, by, W - 52 - 14, bh);
@@ -1148,7 +1173,7 @@ function pageTariffaHotel(doc: Doc, a: Assets) {
 
   const steps: Array<[string, string, string]> = [
     ["1", "SOPRALLUOGO GRATUITO", "Visitiamo la struttura insieme: contiamo camere e tipologie, vediamo aree comuni, capiamo volumi, stagionalit\u00E0 e orari di rilascio che ti servono."],
-    ["2", "TARIFFA PER TIPOLOGIA DI CAMERA", "Costruiamo un prezzo per singola camera lavorata (singola, doppia, suite), con riassetto giornaliero e aree comuni come voci separate. Nessun forfait: paghi solo le camere effettivamente rifatte."],
+    ["2", "TARIFFA PER TIPOLOGIA DI CAMERA", "Costruiamo un prezzo per singola camera lavorata (singola, doppia, suite), con riassetto giornaliero e aree comuni come voci separate. Nessun costo fisso: paghi solo le camere effettivamente rifatte."],
     ["3", "CONTRATTO E SQUADRA DEDICATA", "Formalizziamo orari di rilascio, standard di controllo e referente unico. Fatturazione mensile a consuntivo, con report dettagliato dal gestionale."],
   ];
 
@@ -1256,7 +1281,7 @@ function pageGestionale(doc: Doc, a: Assets) {
   fitSpacedText(doc, "Attiviamo il tuo account alla firma del contratto.", W / 2, bandY + 14.2, W - 44, { align: "center", charSpace: 0.3, size: 8.6 });
 
   // ── tre mini-telefoni con le schermate INTERE ──
-  const labels = ["LA TUA DASHBOARD", "PRENOTAZIONI ICAL"];
+  const labels = ["LA TUA DASHBOARD", "CALENDARIO PRENOTAZIONI"];
   const rowY = bandY + 24;
   const miniH = H - 14 - rowY - 10;          // spazio per etichetta sotto
   const miniW = miniH * 0.488;
@@ -1376,6 +1401,8 @@ export interface PreventivoUnita {
   mq?: number;
   bagni?: number;
   postiLetto?: number;
+  dettaglio1?: string;        // es. "Bilocale · 60 Mq · 2 bagni · 6 posti letto"
+  dettaglio2?: string;        // es. "1 matrimoniale · 1 singolo · cucina abitabile · balcone"
   prezzo?: Prezzo;
 }
 
@@ -1418,6 +1445,8 @@ export async function generatePreventivoPdf(d: PreventivoPdfData): Promise<Buffe
       nome: u.nome || `Struttura ${i + 1}`,
       zona: u.zona || d.indirizzo,
       mq: u.mq, bagni: u.bagni, postiLetto: u.postiLetto,
+      dettaglio1: u.dettaglio1,
+      dettaglio2: u.dettaglio2,
       prezzo: u.prezzo ?? "SU MISURA",
     })), d.scontoPercento);
     doc.addPage();
@@ -1437,7 +1466,7 @@ export async function generatePreventivoPdf(d: PreventivoPdfData): Promise<Buffe
       extras: (d.extras || []).map((e) => ({ label: e.label, prezzo: e.prezzo })),
       notaCard: [
         "PAGHI SOLO LE CAMERE EFFETTIVAMENTE PULITE",
-        "Il prezzo \u00E8 per singola camera a checkout: nessun forfait mensile, nessun minimo. Se una camera non lavora, non la paghi.",
+        "Il prezzo \u00E8 per singola camera a checkout: nessun costo fisso mensile, nessun minimo. Se una camera non lavora, non la paghi.",
       ],
     });
   } else {
@@ -1460,9 +1489,11 @@ interface QuoteUnitLike {
   nome?: string; zona?: string;
   min?: number; max?: number; suMisura?: boolean;
   mq?: number; bagni?: number; postiLetto?: number; ospiti?: number;
+  taglio?: string; matrimoniali?: number; singoli?: number; divani?: number;
+  cucina?: string; esterno?: string;
 }
 interface QuoteCameraLike {
-  tipo?: string; label?: string; nome?: string;
+  tipo?: string; label?: string; nome?: string; etichetta?: string; persone?: number;
   prezzo?: number; min?: number; max?: number; suMisura?: boolean;
   quantita?: number; qty?: number; n?: number;
 }
@@ -1507,6 +1538,10 @@ function numOrUndef(...vals: unknown[]): number | undefined {
   return undefined;
 }
 
+const TAGLIO_LABEL: Record<string, string> = { mono: "Monolocale", bilo: "Bilocale", trilo: "Trilocale", triloGrande: "Trilocale grande", quadri: "Quadrilocale" };
+const CUCINA_LABEL: Record<string, string> = { angolo: "angolo cottura", sep: "cucina separata", abit: "cucina abitabile" };
+const ESTERNO_LABEL: Record<string, string> = { balcone: "balcone", terrazzo: "terrazzo", terrazzoGrande: "terrazzo grande" };
+
 /** Drop-in per la route /api/leads. */
 export async function buildPreventivoPdf(a: BuildPreventivoPdfArgs): Promise<Buffer> {
   const q = a.quote || {};
@@ -1531,28 +1566,51 @@ export async function buildPreventivoPdf(a: BuildPreventivoPdfArgs): Promise<Buf
   };
 
   if (flow === "bnb") {
-    data.camere = (q.camereDettaglio || []).map((c) => ({
-      label: c.tipo || c.label || c.nome || "Camera",
-      prezzo: prezzoDaRange(c),
-      quantita: c.quantita ?? c.qty ?? c.n,
-    }));
+    const gruppi: { label: string; prezzo: Prezzo; quantita: number }[] = [];
+    for (const c of q.camereDettaglio || []) {
+      const label = c.etichetta || c.tipo || c.label || c.nome ||
+        (typeof c.persone === "number" ? (c.persone === 1 ? "Singola" : c.persone === 2 ? "Doppia/Matrimoniale" : c.persone === 3 ? "Tripla" : `${c.persone} persone`) : "Camera");
+      const prezzo = prezzoDaRange(c);
+      const g = gruppi.find((x) => x.label === label && x.prezzo === prezzo);
+      if (g) g.quantita += c.quantita ?? c.qty ?? c.n ?? 1;
+      else gruppi.push({ label, prezzo, quantita: c.quantita ?? c.qty ?? c.n ?? 1 });
+    }
+    data.camere = gruppi;
     const extras: PreventivoExtra[] = (q.extras || []).map((e) => ({ label: e.label || e.nome || "Extra", prezzo: e.prezzo ?? 0 }));
     if (typeof q.fermata === "number" && !extras.some((e) => /fermata/i.test(e.label))) extras.push({ label: "Pulizia Fermata", prezzo: q.fermata });
     if (typeof q.areeComuni === "number" && !extras.some((e) => /comuni/i.test(e.label))) extras.push({ label: "Aree Comuni", prezzo: q.areeComuni });
     data.extras = extras;
     data.unita = [{}];
   } else if (flow === "multi") {
-    data.unita = (q.unitaDettaglio || []).map((u, i) => ({
-      nome: u.nome || `Struttura ${i + 1}`,
-      zona: u.zona || a.zona,
-      mq: numOrUndef(u.mq),
-      bagni: numOrUndef(u.bagni),
-      postiLetto: numOrUndef(u.postiLetto, u.ospiti),
-      prezzo: prezzoDaRange(u),
-    }));
+    data.unita = (q.unitaDettaglio || []).map((u, i) => {
+      // riga 1: taglio · mq · bagni · posti letto
+      const r1: string[] = [];
+      if (u.taglio && TAGLIO_LABEL[u.taglio]) r1.push(TAGLIO_LABEL[u.taglio]);
+      if (u.mq) r1.push(`${u.mq} Mq`);
+      if (u.bagni) r1.push(`${u.bagni} ${u.bagni === 1 ? "bagno" : "bagni"}`);
+      const pl = numOrUndef(u.postiLetto, u.ospiti);
+      if (pl) r1.push(`${pl} posti letto`);
+      // riga 2: composizione letti · cucina · esterni
+      const r2: string[] = [];
+      if (u.matrimoniali) r2.push(`${u.matrimoniali} matrimonial${u.matrimoniali === 1 ? "e" : "i"}`);
+      if (u.singoli) r2.push(`${u.singoli} singol${u.singoli === 1 ? "o" : "i"}`);
+      if (u.divani) r2.push(`${u.divani} divan${u.divani === 1 ? "o" : "i"} letto`);
+      if (u.cucina && CUCINA_LABEL[u.cucina]) r2.push(CUCINA_LABEL[u.cucina]);
+      if (u.esterno && ESTERNO_LABEL[u.esterno]) r2.push(ESTERNO_LABEL[u.esterno]);
+      return {
+        nome: u.nome || `Struttura ${i + 1}`,
+        zona: u.zona || a.zona,
+        mq: numOrUndef(u.mq),
+        bagni: numOrUndef(u.bagni),
+        postiLetto: pl,
+        dettaglio1: r1.join("  \u00B7  "),
+        dettaglio2: r2.join("  \u00B7  "),
+        prezzo: prezzoDaRange(u),
+      };
+    });
     if (!data.unita.length) data.unita = [{ prezzo: prezzoDaRange(q) }];
     data.scontoPercento = q.scontoPercento;
-    if (!data.indirizzo) data.indirizzo = `${data.unita.length} strutture`;
+    data.indirizzo = ""; // multi: in copertina SOLO il nome del cliente
   } else if (flow === "hotel") {
     data.unita = [{}]; // il preventivo hotel nasce dal sopralluogo: nessun numero
   } else {
