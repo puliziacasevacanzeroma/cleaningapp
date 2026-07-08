@@ -1,10 +1,10 @@
 /**
  * quoteEngine.selftest.ts — Batteria di test del motore preventivi
  * Esegui con:  npx tsx src/lib/quote/quoteEngine.selftest.ts
- * Tabella validata con Ariele il 06/07/2026. TUTTI i test devono passare
+ * Tabelle v1 (06/07) e v2 (07/07) validate con Ariele. TUTTI i test devono passare
  * prima di qualsiasi deploy che tocchi il motore.
  */
-import { calcolaCasa, calcolaBnb, verificaCopertura } from './quoteEngine';
+import { ENGINE, calcolaCasa, calcolaBnb, verificaCopertura, calcolaCase, calcolaBnbV2, prezzoCamera, prezzoAreaComuneInLoco, prezzoAreaComuneDedicata, calcolaPassaggioSoggiorno } from './quoteEngine';
 import type { DatiCasa } from './quoteEngine';
 
 let passati = 0, falliti = 0;
@@ -82,10 +82,80 @@ console.log('\n\u2500\u2500 B&B \u2500\u2500');
   check('B&B kit: 1 sing + 2 doppie (5 ospiti) = \u20ac6,30', r.kit === 6.30, String(r.kit));
 }
 
+
+console.log('\n\u2500\u2500 v2: CAMERE B&B A PERSONE \u2500\u2500');
+check('1 persona = \u20ac25', prezzoCamera(1) === 25);
+check('2 persone = \u20ac28', prezzoCamera(2) === 28);
+check('3 persone (tripla) = \u20ac31', prezzoCamera(3) === 31);
+check('4 persone (quadrupla) = \u20ac34', prezzoCamera(4) === 34);
+
+console.log('\n\u2500\u2500 v2: AREE COMUNI \u2500\u2500');
+check('In loco 15mq = \u20ac8', prezzoAreaComuneInLoco(15) === 8);
+check('In loco 30mq = \u20ac13', prezzoAreaComuneInLoco(30) === 13);
+check('Dedicata 15mq = \u20ac20', prezzoAreaComuneDedicata(15) === 20);
+check('Dedicata 30mq = \u20ac28', prezzoAreaComuneDedicata(30) === 28, String(prezzoAreaComuneDedicata(30)));
+check('Dedicata 45mq = \u20ac40', prezzoAreaComuneDedicata(45) === 40);
+
+console.log('\n\u2500\u2500 v2: B&B COMPLETO \u2500\u2500');
+{
+  const r = calcolaBnbV2({ camere: [{persone:2},{persone:2},{persone:3}], frequenza:'giornaliera', areaComune:'dedicata', areaComuneMq:30, vuoleKit:true });
+  check('3 camere (2+2+3p) checkout = \u20ac87 (85\u2013100)', r.puntuale===87 && r.min===85 && r.max===100, `${r.puntuale}/${r.min}-${r.max}`);
+  check('Rifacimento giornaliero 3 letti = \u20ac40/uscita', r.rifacimentoGiornaliero===40, String(r.rifacimentoGiornaliero));
+  check('Area dedicata 30mq = \u20ac28/uscita', r.areaComuneImporto===28);
+  check('Kit 7 ospiti = \u20ac8,82', r.kit===8.82, String(r.kit));
+  check('Dettaglio camere: 28+28+31', r.camereDettaglio.map(c=>c.prezzo).join('+')==='28+28+31', r.camereDettaglio.map(c=>c.prezzo).join('+'));
+  check('Etichetta tripla', r.camereDettaglio[2]!.etichetta==='Tripla');
+}
+
+console.log('\n\u2500\u2500 v2: PI\u00d9 CASE VACANZE \u2500\u2500');
+{
+  const bilo: DatiCasa = { ...base, taglio:'bilo', mq:55, matrimoniali:1, singoli:1 };
+  const r = calcolaCase([{ ...bilo, nome:'Casa Trastevere' }, bilo]);
+  check('Nomi unit\u00e0 nel dettaglio', r.unitaDettaglio[0]!.nome==='Casa Trastevere' && r.unitaDettaglio[1]!.nome==='Unit\u00e0 2', r.unitaDettaglio.map(u=>u.nome).join('/'));
+  check('2 bilocali: 90 -5% = 85,50 \u2192 range 85\u2013100', r.puntuale===85.5 && r.min===85 && r.max===100 && r.scontoPercento===5, `${r.puntuale}/${r.min}-${r.max}/${r.scontoPercento}%`);
+  const solo = calcolaCase([bilo]);
+  check('1 unit\u00e0 sola: nessuno sconto', solo.scontoPercento===0 && solo.puntuale===45);
+  const conGrande = calcolaCase([bilo, { ...base, taglio:'quadri', mq:150 }]);
+  check('Una unit\u00e0 >120mq \u2192 tutto su misura', conGrande.suMisura===true);
+}
+
+console.log('\n\u2500\u2500 v2: PASSAGGIO INFRA-SOGGIORNO \u2500\u2500');
+{
+  const p = calcolaPassaggioSoggiorno({ ...base, taglio:'bilo', mq:55, matrimoniali:1, singoli:1, vuoleKit:true, ospiti:3 });
+  check('Bilo 2 letti + kit 3 ospiti = 10+20+3,78 = \u20ac33,78', p.totale===33.78, String(p.totale));
+  const p2 = calcolaPassaggioSoggiorno({ ...base, taglio:'trilo', mq:65, matrimoniali:2, singoli:1, vuoleBiancheria:true, ospiti:5 });
+  check('Trilo 3 letti + biancheria 37 = 10+30+37 = \u20ac77', p2.totale===77, String(p2.totale));
+}
+
 console.log('\n\u2500\u2500 COPERTURA \u2500\u2500');
 check('CAP coperto', verificaCopertura('00165', ['00165', '00186']) === 'coperta');
 check('CAP non in lista \u2192 in_valutazione', verificaCopertura('00118', ['00165']) === 'in_valutazione');
 check('CAP con spazi', verificaCopertura(' 00165 ', ['00165']) === 'coperta');
+
+
+// ────────────── v3: iniezione parametri (config Firestore) ──────────────
+console.log('\nv3 — parametri iniettabili:');
+{
+  const casaTest: DatiCasa = { ...base, taglio: 'bilo', mq: 50 };
+  const conDefault = calcolaCasa(casaTest);
+  const P2 = JSON.parse(JSON.stringify(ENGINE)) as typeof ENGINE;
+  P2.basi.bilo = 55; // 45 → 55
+  const conOverride = calcolaCasa(casaTest, P2);
+  check('override base bilo sposta il puntuale di +10', conOverride.puntuale === conDefault.puntuale + 10);
+  check('senza override i default restano intatti', calcolaCasa(casaTest).puntuale === conDefault.puntuale);
+
+  const P3 = JSON.parse(JSON.stringify(ENGINE)) as typeof ENGINE;
+  P3.bnb.personaExtra = 5;
+  check('override personaExtra cambia la tripla', prezzoCamera(3, P3) === ENGINE.bnb.doppia + 5);
+  check('prezzoCamera default invariato', prezzoCamera(3) === ENGINE.bnb.doppia + ENGINE.bnb.personaExtra);
+
+  const P4 = JSON.parse(JSON.stringify(ENGINE)) as typeof ENGINE;
+  P4.scontoMultiUnita.percento = 10;
+  const dueCase: DatiCasa[] = [{ ...base, taglio: 'bilo', mq: 50 }, { ...base, taglio: 'bilo', mq: 50 }];
+  const mDefault = calcolaCase(dueCase);
+  const mOverride = calcolaCase(dueCase, P4);
+  check('sconto multi override 10% applicato', mOverride.scontoPercento === 10 && mOverride.puntuale < mDefault.puntuale);
+}
 
 console.log(`\n${'='.repeat(44)}\nRISULTATO: ${passati} passati, ${falliti} falliti\n${'='.repeat(44)}`);
 if (falliti > 0) process.exit(1);
