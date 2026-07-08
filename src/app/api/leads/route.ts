@@ -1,5 +1,7 @@
 /**
  * /api/leads — API preventivi (widget pubblico + dashboard admin)
+ * v2 — 08/07/2026: parametri motore da Firestore (engineConfig) a ogni calcolo,
+ *      pipeline stati estesa, data ricontatto e motivo esito per il CRM.
  * v1 — 06/07/2026
  *
  * POST  (pubblico, rate limit nel middleware): valida input, RICALCOLA il preventivo lato
@@ -18,13 +20,14 @@ import { resend, FROM_EMAIL, isResendConfigured, logResendWarning } from '~/lib/
 import { calcolaCasa, calcolaCase, calcolaBnbV2, calcolaPassaggioSoggiorno, verificaCopertura, formatEuro } from '~/lib/quote/quoteEngine';
 import type { DatiCasa, DatiBnbV2, QuoteResult, QuoteMultiResult, QuoteBnbV2, TipoStruttura, CameraBnb } from '~/lib/quote/quoteEngine';
 import { getCoveredCaps } from '~/lib/quote/coverageZones';
+import { getEngineParams } from '~/lib/quote/engineConfig';
 import { buildEmailPreventivo } from '~/lib/email/emailPreventivo';
 import { buildPreventivoPdf } from '~/lib/email/preventivoPdf';
 
 export const runtime = 'nodejs';
 
 const LEADS_NOTIFY_EMAIL = process.env.LEADS_NOTIFY_EMAIL || 'info@puliziacasevacanze.it';
-const STATI_VALIDI = ['nuovo', 'contattato', 'convertito', 'perso'] as const;
+const STATI_VALIDI = ['nuovo', 'da_ricontattare', 'contattato', 'in_trattativa', 'sopralluogo', 'convertito', 'perso'] as const;
 type StatoLead = (typeof STATI_VALIDI)[number];
 
 // ─────────────────────────── Validazione input ───────────────────────────
@@ -99,7 +102,7 @@ function emailAdmin(doc: Record<string, unknown>, q: QuoteResult): { subject: st
       <p><b>${c.nome}</b> \u2014 ${c.telefono} \u2014 ${c.email}<br>
       Zona: <b>${doc.zona || '-'}</b> (${doc.cap || '-'}) \u2014 copertura: <b>${doc.copertura}</b><br>
       Newsletter: ${doc.consensoNewsletter ? 'S\u00cc' : 'no'}</p>
-      <p>Apri la dashboard: <a href="https://gestionale.puliziacasevacanze.it/admin/preventivi">gestionale \u2192 Preventivi</a></p>
+      <p>Apri la dashboard: <a href="https://gestionale.puliziacasevacanze.it/dashboard/preventivi">gestionale \u2192 Preventivi</a></p>
     </div>`,
   };
 }
@@ -118,19 +121,22 @@ export async function POST(request: NextRequest) {
   if (!v.ok) return NextResponse.json({ ok: false, errore: v.errore }, { status: 400 });
 
   // Ricalcolo SERVER-SIDE: i numeri del browser non contano nulla.
+  // I parametri arrivano da Firestore (config/preventivatore): se l'admin li ha
+  // appena cambiati dalla dashboard, QUESTO calcolo usa già i numeri nuovi.
+  const P = await getEngineParams();
   let quote: QuoteResult | QuoteMultiResult | QuoteBnbV2;
   let datiStruttura: Record<string, unknown> = {};
   let passaggio: ReturnType<typeof calcolaPassaggioSoggiorno> | null = null;
 
   if (body.tipo === 'casa') {
     const casa = normalizzaCasa(body.casa!);
-    quote = calcolaCasa(casa);
-    if (body.passaggioSoggiorno === true) passaggio = calcolaPassaggioSoggiorno(casa);
+    quote = calcolaCasa(casa, P);
+    if (body.passaggioSoggiorno === true) passaggio = calcolaPassaggioSoggiorno(casa, P);
     datiStruttura = { ...casa };
   } else if (body.tipo === 'case') {
     const unita = body.unita!.slice(0, 8).map(normalizzaCasa);
-    quote = calcolaCase(unita);
-    if (body.passaggioSoggiorno === true && unita.length > 0) passaggio = calcolaPassaggioSoggiorno(unita[0]!);
+    quote = calcolaCase(unita, P);
+    if (body.passaggioSoggiorno === true && unita.length > 0) passaggio = calcolaPassaggioSoggiorno(unita[0]!, P);
     datiStruttura = { unita };
   } else if (body.tipo === 'bnb') {
     const b = body.bnbV2!;
@@ -142,7 +148,7 @@ export async function POST(request: NextRequest) {
       areaComuneMq: int(b.areaComuneMq, 0, 500),
       vuoleKit: b.vuoleKit === true,
     };
-    quote = calcolaBnbV2(bnb);
+    quote = calcolaBnbV2(bnb, P);
     datiStruttura = { ...bnb };
   } else {
     quote = { suMisura: true, min: 0, max: 0, puntuale: 0, biancheria: 0, kit: 0 };
@@ -178,6 +184,8 @@ export async function POST(request: NextRequest) {
     consensoNewsletter: body.consensoNewsletter === true,
     stato: 'nuovo' as StatoLead,
     note: '',
+    followUpAt: null as string | null,   // data ricontatto (ISO yyyy-mm-dd)
+    motivoEsito: '',                     // perché perso/convertito (compilato dall'admin)
     foto: [] as string[], // popolate dallo step foto (v2 widget)
     fonte: 'widget',
     createdAt: FieldValue.serverTimestamp(),
@@ -276,7 +284,12 @@ export async function GET(request: NextRequest) {
   const snap = await q.get();
   const leads = snap.docs.map((d) => {
     const data = d.data();
-    return { id: d.id, ...data, createdAt: data.createdAt?.toDate?.()?.toISOString() ?? null, updatedAt: data.updatedAt?.toDate?.()?.toISOString() ?? null };
+    return {
+      id: d.id, ...data,
+      createdAt: data.createdAt?.toDate?.()?.toISOString() ?? null,
+      updatedAt: data.updatedAt?.toDate?.()?.toISOString() ?? null,
+      followUpAt: typeof data.followUpAt === 'string' ? data.followUpAt : (data.followUpAt?.toDate?.()?.toISOString()?.slice(0, 10) ?? null),
+    };
   });
   return NextResponse.json({ ok: true, leads });
 }
@@ -287,7 +300,7 @@ export async function PATCH(request: NextRequest) {
   const auth = await requireAdmin();
   if ('error' in auth) return auth.error;
 
-  let body: { id?: string; stato?: string; note?: string };
+  let body: { id?: string; stato?: string; note?: string; followUpAt?: string | null; motivoEsito?: string };
   try { body = await request.json(); }
   catch { return NextResponse.json({ ok: false, errore: 'Body non valido' }, { status: 400 }); }
 
@@ -302,6 +315,12 @@ export async function PATCH(request: NextRequest) {
     update.stato = body.stato;
   }
   if (body.note !== undefined) update.note = str(body.note, 2000);
+  if (body.followUpAt !== undefined) {
+    if (body.followUpAt === null || body.followUpAt === '') update.followUpAt = null;
+    else if (/^\d{4}-\d{2}-\d{2}$/.test(body.followUpAt)) update.followUpAt = body.followUpAt;
+    else return NextResponse.json({ ok: false, errore: 'Data ricontatto non valida (yyyy-mm-dd)' }, { status: 400 });
+  }
+  if (body.motivoEsito !== undefined) update.motivoEsito = str(body.motivoEsito, 300);
 
   await adminDb.collection('leads').doc(id).update(update);
   return NextResponse.json({ ok: true });
