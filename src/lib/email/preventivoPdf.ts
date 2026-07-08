@@ -601,7 +601,6 @@ const PRODOTTI_OKIKO: Array<{ key: string; nome: string; desc: string; prezzo: s
   { key: "set", nome: "SET CORTESIA", desc: "Set cosmetico viso e mani, con dischetti levatrucco, limetta unghie e cotton fioc.", prezzo: "0,48 \u20AC" },
   { key: "cuffia", nome: "CUFFIA DOCCIA", desc: "Cuffia doccia in astuccio di cartone bicolore, con rilievo su due lati.", prezzo: "0,40 \u20AC" },
   { key: "sapone", nome: "SAPONE MANI", desc: "Sapone vegetale da 15g in incarto colorato, privo di allergeni, alta detergenza e profumato.", prezzo: "0,28 \u20AC" },
-  { key: "pantofole", nome: "PANTOFOLE", desc: "Pantofola chiusa in TNT bianco con suola EVA 3 mm e microforatura in gomma.", prezzo: "0,90 \u20AC" },
 ];
 
 function pageKitCortesia(doc: Doc, a: Assets) {
@@ -625,57 +624,69 @@ function pageKitCortesia(doc: Doc, a: Assets) {
   doc.addImage(a.okikoHero, "JPEG", 14, 34 - (hh - 54) / 2, hw, hh);
   doc.restoreGraphicsState();
 
-  // griglia card prodotto 3x2
-  const gx = 14, gw = (W - 28 - 12) / 3, gh = 74, ggap = 6;
-  let px = gx, py = 96;
-  PRODOTTI_OKIKO.forEach((p, i) => {
-    // card bianca con bordo sottile (pulizia da catalogo)
-    setFill(doc, WHITE);
-    doc.roundedRect(px, py, gw, gh, 4, 4, "F");
-    setDraw(doc, [223, 228, 233] as any);
-    doc.setLineWidth(0.4);
-    doc.roundedRect(px, py, gw, gh, 4, 4, "S");
+  // griglia card prodotto: righe sempre centrate (anche con numero dispari)
+  const gw = (W - 28 - 12) / 3, gh = 78, ggap = 6;
+  const perRiga = 3;
+  const righeIdx: number[][] = [];
+  for (let i = 0; i < PRODOTTI_OKIKO.length; i += perRiga) righeIdx.push(PRODOTTI_OKIKO.map((_, j) => j).slice(i, i + perRiga));
+  let py = 96;
+  for (const riga of righeIdx) {
+    const rowW = riga.length * gw + (riga.length - 1) * ggap;
+    let px = (W - rowW) / 2;
+    for (const i of riga) {
+      const p = PRODOTTI_OKIKO[i];
+        // card bianca con bordo sottile (pulizia da catalogo)
+        setFill(doc, WHITE);
+        doc.roundedRect(px, py, gw, gh, 4, 4, "F");
+        setDraw(doc, [223, 228, 233] as any);
+        doc.setLineWidth(0.4);
+        doc.roundedRect(px, py, gw, gh, 4, 4, "S");
 
-    // foto: prodotto INTERO su bianco puro, con respiro
-    const fy = py + 6, fh = 32;
-    const r = 640 / 370;
-    let iw = gw - 12, ih = iw / r;
-    if (ih > fh) { ih = fh; iw = ih * r; }
-    doc.addImage(a.prod[p.key], "JPEG", px + (gw - iw) / 2, fy + (fh - ih) / 2, iw, ih);
+        // foto: prodotto INTERO su bianco puro, con respiro
+        const fy = py + 6, fh = 32;
+        const r = 640 / 370;
+        let iw = gw - 12, ih = iw / r;
+        if (ih > fh) { ih = fh; iw = ih * r; }
+        doc.addImage(a.prod[p.key], "JPEG", px + (gw - iw) / 2, fy + (fh - ih) / 2, iw, ih);
 
-    // filo rame di separazione
-    setFill(doc, COPPER);
-    doc.roundedRect(px + gw / 2 - 6, py + 42.2, 12, 0.9, 0.45, 0.45, "F");
+        // filo rame di separazione
+        setFill(doc, COPPER);
+        doc.roundedRect(px + gw / 2 - 6, py + 42.2, 12, 0.9, 0.45, 0.45, "F");
 
-    setText(doc, BLUE);
-    doc.setFont("Montserrat", "bold");
-    fitSpacedText(doc, p.nome, px + gw / 2, py + 48.5, gw - 10, { align: "center", charSpace: 1, size: 9.3 });
+        setText(doc, BLUE);
+        doc.setFont("Montserrat", "bold");
+        fitSpacedText(doc, p.nome, px + gw / 2, py + 48.5, gw - 10, { align: "center", charSpace: 1, size: 9.3 });
 
-    setText(doc, GRAYTXT);
-    doc.setFont("Montserrat", "medium");
-    doc.setFontSize(6.7);
-    const dl = wrapSpaced(doc, p.desc, gw - 12, 0.05);
-    let dy = py + 53.5;
-    for (const ln of dl.slice(0, 3)) { spacedText(doc, ln, px + gw / 2, dy, { align: "center", charSpace: 0.05 }); dy += 3.4; }
+        setText(doc, GRAYTXT);
+        doc.setFont("Montserrat", "medium");
+        doc.setFontSize(6.7);
+        const dl = wrapSpaced(doc, p.desc, gw - 12, 0.05);
+        let dy = py + 53.5;
+        for (const ln of dl.slice(0, 3)) { spacedText(doc, ln, px + gw / 2, dy, { align: "center", charSpace: 0.05 }); dy += 3.4; }
 
-    // badge prezzo: pill rame con bordo, testo otticamente centrato
-    doc.setFont("LeagueSpartan", "bold");
-    doc.setFontSize(10);
-    const pTxt = p.prezzo;
-    const tW = spacedWidth(doc, pTxt, 0.5);
-    const pW = tW + 12, pH = 8.2;
-    const pX = px + gw / 2 - pW / 2, pY = py + gh - pH - 4;
-    setFill(doc, COPPER);
-    doc.roundedRect(pX, pY, pW, pH, pH / 2, pH / 2, "F");
-    setDraw(doc, [158, 104, 60] as any);
-    doc.setLineWidth(0.35);
-    doc.roundedRect(pX, pY, pW, pH, pH / 2, pH / 2, "S");
-    setText(doc, WHITE);
-    spacedText(doc, pTxt, px + gw / 2, pY + pH / 2 + PRICE_BASELINE_OFFSET, { align: "center", charSpace: 0.5 });
+        // badge prezzo: pill rame con bordo scuro + anello esterno sottile (look premium)
+        doc.setFont("LeagueSpartan", "bold");
+        doc.setFontSize(10);
+        const pTxt = p.prezzo;
+        const tW = spacedWidth(doc, pTxt, 0.6);
+        const pW = tW + 14, pH = 8.6;
+        const pX = px + gw / 2 - pW / 2, pY = py + gh - pH - 4.5;
+        setDraw(doc, [214, 176, 140] as any);
+        doc.setLineWidth(0.3);
+        doc.roundedRect(pX - 1.4, pY - 1.4, pW + 2.8, pH + 2.8, (pH + 2.8) / 2, (pH + 2.8) / 2, "S");
+        setFill(doc, COPPER);
+        doc.roundedRect(pX, pY, pW, pH, pH / 2, pH / 2, "F");
+        setDraw(doc, [155, 101, 58] as any);
+        doc.setLineWidth(0.4);
+        doc.roundedRect(pX, pY, pW, pH, pH / 2, pH / 2, "S");
+        setText(doc, WHITE);
+        spacedText(doc, pTxt, px + gw / 2, pY + pH / 2 + PRICE_BASELINE_OFFSET, { align: "center", charSpace: 0.6 });
 
-    px += gw + ggap;
-    if ((i + 1) % 3 === 0) { px = gx; py += gh + ggap; }
-  });
+
+      px += gw + ggap;
+    }
+    py += gh + ggap;
+  }
 
   // nota
   setText(doc, DARK);
@@ -746,12 +757,12 @@ function pageContatti(doc: Doc, a: Assets) {
   spacedText(doc, "DITTA DI SERVIZI PER ATTIVIT\u00C0 RICETTIVE", W / 2, 30.5, { align: "center", charSpace: 1.8 });
 
   const rows: Array<[string, string]> = [
-    ["P.IVA", "17480841000"],
     ["TELEFONO", "+39 3927830017"],
-    ["EMAIL", "puliziacasevacanzeroma@gmail.com"],
+    ["EMAIL", "info@puliziacasevacanze.it"],
     ["SITO WEB", "www.puliziacasevacanze.it"],
     ["ORARI", "LUN - DOM 9:00 - 18:00"],
     ["INDIRIZZO", "Via della Cava Aurelia 84N"],
+    ["P.IVA", "17480841000"],
   ];
   let cy = 44;
   for (const [k, v] of rows) {
@@ -902,7 +913,7 @@ function pagePrezziCamere(doc: Doc, a: Assets, opts: {
   notaCard: string[];         // card spiegazione "paghi solo le camere pulite"
   volumeCard?: [string, string]; // [titolo, testo] per hotel
 }) {
-  pageHeader(doc, opts.titolo || "PREZZI PER CAMERA", "Prezzo per singola camera, per uscita \u2014 mai a corpo");
+  pageHeader(doc, opts.titolo || "PREZZI PER CAMERA", "Prezzo per singola camera, per singolo intervento");
 
   // tabella tipologie
   const tx = 20, tw = W - 40;
@@ -951,7 +962,7 @@ function pagePrezziCamere(doc: Doc, a: Assets, opts: {
       setText(doc, COPPER);
       doc.setFont("LeagueSpartan", "bold");
       doc.setFontSize(17);
-      spacedText(doc, fmtPrezzo(e.prezzo), ex + ew / 2, ty + 25, { align: "center" });
+      spacedText(doc, fmtPrezzo(e.prezzo), ex + ew / 2, ty + 21.6, { align: "center" });
       ex += ew + 8;
     }
     ty += 38;
@@ -1004,7 +1015,7 @@ function pagePrezziCamere(doc: Doc, a: Assets, opts: {
 
 
 function pagePuliziaBnb(doc: Doc, a: Assets) {
-  pageHeader(doc, "LA PULIZIA NEL TUO B&B", "Ogni intervento \u00E8 pensato per camera, mai a corpo");
+  pageHeader(doc, "LA PULIZIA NEL TUO B&B", "Ogni camera ha il suo servizio e il suo prezzo");
 
   const blocchi: Array<{ tit: string; sub: string; voci: string[]; strip: number }> = [
     {
@@ -1244,10 +1255,12 @@ function pageGestionale(doc: Doc, a: Assets) {
 
   // ── testo a destra ──
   const tx = phX + phW + 14, tw = W - tx - 14;
+  // titolo di sezione VERO: una riga, filo rame sotto, staccato dal testo
   setText(doc, BLUE);
   doc.setFont("LeagueSpartan", "bold");
-  fitSpacedText(doc, "COME FUNZIONA,", tx, 54, tw, { charSpace: 0.3, size: 15 });
-  fitSpacedText(doc, "IN POCHE PAROLE", tx, 62, tw, { charSpace: 0.3, size: 15 });
+  fitSpacedText(doc, "COME FUNZIONA, IN POCHE PAROLE", tx, 53, tw, { charSpace: 0.5, size: 15.5 });
+  setFill(doc, COPPER);
+  doc.roundedRect(tx, 56.5, 16, 1, 0.5, 0.5, "F");
 
   const punti: Array<[string, string]> = [
     ["CI COLLEGHIAMO AI TUOI CALENDARI", "Airbnb e Booking: a ogni checkout la pulizia viene messa in automatico."],
@@ -1256,7 +1269,7 @@ function pageGestionale(doc: Doc, a: Assets) {
     ["RICHIEDI IL SERVIZIO IN UN TOCCO", "Pulizie extra, biancheria o modifiche direttamente dall'app."],
     ["ESTRATTO CONTO MENSILE", "Tutto in un unico documento chiaro, scaricabile in PDF."],
   ];
-  let py2 = 75;
+  let py2 = 70;
   for (const [tit, txt] of punti) {
     drawCheck(doc, tx + 4.5, py2 - 1.5, 4.5);
     setText(doc, BLUE);
