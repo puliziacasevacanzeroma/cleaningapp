@@ -73,10 +73,13 @@ function valida(body: LeadBody): { ok: true } | { ok: false; errore: string } {
   return { ok: true };
 }
 
-function normalizzaCasa(c: Partial<DatiCasa>): DatiCasa {
+function normalizzaCasa(c: Partial<DatiCasa> & { cap?: string }): DatiCasa & { cap?: string } {
   const tagli = ['mono', 'bilo', 'trilo', 'quadri'];
+  const capU = str(c.cap, 5);
   return {
     nome: str(c.nome, 60),
+    zona: str(c.zona, 80),
+    ...(/^\d{5}$/.test(capU) ? { cap: capU } : {}),
     taglio: tagli.includes(c.taglio as string) ? (c.taglio as DatiCasa['taglio']) : 'mono',
     mq: int(c.mq, 15, 400),
     matrimoniali: int(c.matrimoniali, 0, 20),
@@ -156,7 +159,21 @@ export async function POST(request: NextRequest) {
   }
 
   const cap = str(body.cap, 5);
-  const copertura = body.tipo === 'hotel' ? 'da_valutare' : verificaCopertura(cap, await getCoveredCaps());
+  let copertura: string;
+  if (body.tipo === 'hotel') {
+    copertura = 'da_valutare';
+  } else if (body.tipo === 'case') {
+    // multi: le case possono stare in zone diverse → coperta solo se TUTTI i CAP lo sono
+    const capsCoperti = await getCoveredCaps();
+    const capUnita = ((datiStruttura.unita as { cap?: string }[] | undefined) ?? [])
+      .map((u) => (u.cap || '').trim())
+      .filter((c) => /^\d{5}$/.test(c));
+    const daVerificare = capUnita.length > 0 ? capUnita : [cap];
+    copertura = daVerificare.every((c) => verificaCopertura(c, capsCoperti) === 'coperta')
+      ? 'coperta' : 'in_valutazione';
+  } else {
+    copertura = verificaCopertura(cap, await getCoveredCaps());
+  }
 
   const leadDoc = {
     tipo: body.tipo,
