@@ -44,6 +44,16 @@ const UNITA_VUOTA: UnitaCasa = {
 
 interface CameraBnb { persone: number }
 
+function raggruppaCamere(camere: { etichetta: string; prezzo: number }[]): { etichetta: string; prezzo: number; n: number }[] {
+  const out: { etichetta: string; prezzo: number; n: number }[] = [];
+  for (const c of camere) {
+    const g = out.find((x) => x.etichetta === c.etichetta && x.prezzo === c.prezzo);
+    if (g) g.n++;
+    else out.push({ etichetta: c.etichetta, prezzo: c.prezzo, n: 1 });
+  }
+  return out;
+}
+
 interface Stato {
   tipo: Tipo | null;
   unita: UnitaCasa;              // unità in compilazione
@@ -760,26 +770,55 @@ export function PreventivoWizard() {
         <span className="pv-etich">IL TUO PREVENTIVO</span>
         <div className="pv-chips">{chips.map((c) => <span key={c} className="pv-chip">{c}</span>)}</div>
 
-        <div className="pv-pannello">
-          <div className="tit">{stato.tipo === "bnb" ? "PULIZIA CAMERE A CHECKOUT" : "PULIZIA A OGNI CAMBIO OSPITE"}</div>
-          <div className="da">a partire da</div>
-          <div className="pv-forbice"><span className="euro">€</span><span>{q.min}</span></div>
-          <div className="pv-barra-rame" />
-          <div><span className="pv-stima">stima massima <b>€ {q.max}</b></span></div>
-          {q.scontoPercento ? <div className="pv-sconto">sconto multi-unità -{q.scontoPercento}% già applicato</div> : null}
-          <div className="sub">prezzo definitivo confermato al sopralluogo gratuito</div>
-        </div>
+        {stato.tipo === "bnb" && q.camereDettaglio && q.camereDettaglio.length > 0 ? (
+          <div className="pv-pannello">
+            <div className="tit">PREZZO PER SINGOLA CAMERA</div>
+            <div className="pv-cam-grid">
+              {raggruppaCamere(q.camereDettaglio).map((g, i) => (
+                <div className="pv-cam-card" key={i}>
+                  {g.n > 1 && <span className="pv-cam-x">×{g.n}</span>}
+                  <div className="pv-cam-tipo">{g.etichetta}</div>
+                  <div className="pv-cam-prezzo"><span className="euro">€</span>{g.prezzo}</div>
+                  <div className="pv-cam-sub">a checkout</div>
+                </div>
+              ))}
+            </div>
+            <div className="pv-barra-rame" />
+            <div><span className="pv-stima">Paghi solo le camere effettivamente pulite — <b>nessun forfait</b></span></div>
+            <div className="sub">prezzo definitivo confermato al sopralluogo gratuito</div>
+          </div>
+        ) : stato.tipo === "case" && q.unitaDettaglio && q.unitaDettaglio.length > 0 ? (
+          <div className="pv-pannello">
+            <div className="tit">PREZZO PER SINGOLA STRUTTURA</div>
+            <div className="pv-cam-grid">
+              {q.unitaDettaglio.map((u, i) => (
+                <div className="pv-cam-card" key={i}>
+                  <div className="pv-cam-tipo">{u.nome}</div>
+                  <div className="pv-cam-prezzo"><span className="da-mini">da</span><span className="euro">€</span>{u.min}</div>
+                  <div className="pv-cam-sub">max € {u.max} · a cambio ospite</div>
+                </div>
+              ))}
+            </div>
+            {q.scontoPercento ? <div className="pv-sconto">sconto multi-struttura -{q.scontoPercento}% già applicato a ogni casa</div> : null}
+            <div className="pv-barra-rame" />
+            <div><span className="pv-stima">Ogni casa paga solo le proprie uscite — <b>nessun cumulo</b></span></div>
+            <div className="sub">prezzo definitivo confermato al sopralluogo gratuito</div>
+          </div>
+        ) : (
+          <div className="pv-pannello">
+            <div className="tit">PULIZIA A OGNI CAMBIO OSPITE</div>
+            <div className="da">a partire da</div>
+            <div className="pv-forbice"><span className="euro">€</span><span>{q.min}</span></div>
+            <div className="pv-barra-rame" />
+            <div><span className="pv-stima">stima massima <b>€ {q.max}</b></span></div>
+            <div className="sub">prezzo definitivo confermato al sopralluogo gratuito</div>
+          </div>
+        )}
 
         <div className="pv-righe">
-          {q.camereDettaglio && q.camereDettaglio.length > 0
-            ? q.camereDettaglio.map((c, i) => (
-                <div className="pv-riga" key={i}><Icona nome="camera" mini /><div className="txt">Camera {i + 1} — {c.etichetta}<small>{c.persone} {c.persone === 1 ? "persona" : "persone"} · pulizia a checkout</small></div><b>€ {c.prezzo}</b></div>
-              ))
-            : q.unitaDettaglio && q.unitaDettaglio.length > 1
-            ? q.unitaDettaglio.map((u, i) => (
-                <div className="pv-riga" key={i}><Icona nome="casa" mini /><div className="txt">{u.nome}<small>pulizia a cambio ospite</small></div><b>da € {u.min}</b></div>
-              ))
-            : <div className="pv-riga"><Icona nome="casa" mini /><div className="txt">Pulizia completa<small>a ogni cambio ospite</small></div><b>da € {q.min}</b></div>}
+          {stato.tipo !== "bnb" && stato.tipo !== "case" && (
+            <div className="pv-riga"><Icona nome="casa" mini /><div className="txt">Pulizia completa<small>a ogni cambio ospite</small></div><b>da € {q.min}</b></div>
+          )}
           {q.biancheria > 0 && <div className="pv-riga"><Icona nome="biancheriaSi" mini /><div className="txt">Biancheria a noleggio<small>consegna e ritiro inclusi</small></div><b>+ {eur(q.biancheria)}</b></div>}
           {q.kit > 0 && <div className="pv-riga"><Icona nome="kitSi" mini /><div className="txt">Kit di cortesia<small>un set per ogni ospite</small></div><b>+ {eur(q.kit)}</b></div>}
           {q.rifacimentoGiornaliero ? <div className="pv-riga"><Icona nome="giornaliera" mini /><div className="txt">Rifacimento letti giornaliero<small>a uscita, durante il soggiorno</small></div><b>{eur(q.rifacimentoGiornaliero)}</b></div> : null}

@@ -67,6 +67,69 @@ function riga(glifo: string, titolo: string, sotto: string, prezzo: string): str
   </td></tr>`;
 }
 
+function cardMini(titolo: string, prezzoHtml: string, sub: string, badge?: string): string {
+  return `<td align="center" style="padding:6px">
+    <table role="presentation" cellpadding="0" cellspacing="0" style="background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.24);border-radius:14px">
+      <tr><td align="center" style="padding:13px 18px 11px;position:relative">
+        ${badge ? `<div style="font-family:Arial,Helvetica,sans-serif;font-size:11px;font-weight:bold;color:#E8C9A8;padding-bottom:2px">${badge}</div>` : ''}
+        <div style="font-family:Arial,Helvetica,sans-serif;font-size:11px;font-weight:bold;letter-spacing:1px;color:#ffffff;opacity:.88;text-transform:uppercase">${titolo}</div>
+        <div style="font-family:Arial,Helvetica,sans-serif;font-size:30px;font-weight:800;color:#ffffff;line-height:1.1;padding-top:4px">${prezzoHtml}</div>
+        <div style="font-family:Arial,Helvetica,sans-serif;font-size:10px;color:#ffffff;opacity:.72;padding-top:2px">${sub}</div>
+      </td></tr>
+    </table>
+  </td>`;
+}
+
+/** Pannello blu: per camera (B&B), per struttura (multi) o classico (casa singola). MAI totali per B&B/multi. */
+function buildPannelloPrezzo(d: DatiEmailPreventivo, q: DatiEmailPreventivo['quote']): string {
+  const wrap = (titolo: string, corpo: string, nota: string) => `<tr><td style="padding:6px 0 18px 0">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${BLU_SCURO}" style="background:linear-gradient(165deg,#243B4E,${BLU} 70%,#46647F);border-radius:18px">
+      <tr><td align="center" style="padding:28px 18px 24px">
+        <div style="font-family:Arial,Helvetica,sans-serif;font-size:11px;letter-spacing:3px;color:#ffffff;opacity:.85;font-weight:bold">${titolo}</div>
+        <table role="presentation" cellpadding="0" cellspacing="0" align="center" style="margin:10px auto 0"><tr>${corpo}</tr></table>
+        <div style="width:52px;height:4px;border-radius:99px;background:${RAME};margin:16px auto 0;font-size:0;line-height:0">&nbsp;</div>
+        <div style="padding-top:12px"><span style="display:inline-block;font-family:Arial,Helvetica,sans-serif;font-size:12.5px;color:#ffffff;border:1px solid rgba(255,255,255,.35);border-radius:99px;padding:7px 16px;background:rgba(255,255,255,.10)">${nota}</span></div>
+        <div style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#ffffff;opacity:.75;padding-top:12px">prezzo definitivo confermato al sopralluogo gratuito</div>
+      </td></tr>
+    </table>
+  </td></tr>`;
+
+  if (d.tipo === 'bnb' && q.camereDettaglio && q.camereDettaglio.length > 0) {
+    const gruppi: { etichetta: string; prezzo: number; n: number }[] = [];
+    for (const c of q.camereDettaglio) {
+      const g = gruppi.find((x) => x.etichetta === c.etichetta && x.prezzo === c.prezzo);
+      if (g) g.n++; else gruppi.push({ etichetta: c.etichetta, prezzo: c.prezzo, n: 1 });
+    }
+    const corpo = gruppi.map((g) =>
+      cardMini(g.etichetta, `\u20ac ${g.prezzo}`, 'a checkout', g.n > 1 ? `\u00d7${g.n}` : undefined)
+    ).join('');
+    return wrap('PREZZO PER SINGOLA CAMERA', corpo, 'Paghi solo le camere effettivamente pulite \u2014 <b>nessun forfait</b>');
+  }
+
+  if (d.tipo === 'case' && q.unitaDettaglio && q.unitaDettaglio.length > 0) {
+    const corpo = q.unitaDettaglio.map((u) =>
+      cardMini(u.nome, `<span style="font-size:13px;font-weight:600">da</span> \u20ac ${u.min}`, `max \u20ac ${u.max} \u00b7 a cambio ospite`)
+    ).join('');
+    const sconto = q.scontoPercento
+      ? `sconto multi-struttura -${q.scontoPercento}% gi\u00e0 applicato a ogni casa \u2014 `
+      : '';
+    return wrap('PREZZO PER SINGOLA STRUTTURA', corpo, sconto + 'Ogni casa paga solo le proprie uscite \u2014 <b>nessun cumulo</b>');
+  }
+
+  return `<tr><td style="padding:6px 0 18px 0">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${BLU_SCURO}" style="background:linear-gradient(165deg,#243B4E,${BLU} 70%,#46647F);border-radius:18px">
+      <tr><td align="center" style="padding:30px 24px 26px">
+        <div style="font-family:Arial,Helvetica,sans-serif;font-size:11px;letter-spacing:3px;color:#ffffff;opacity:.85;font-weight:bold">PULIZIA A OGNI CAMBIO OSPITE</div>
+        <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#ffffff;opacity:.9;padding-top:14px">a partire da</div>
+        <div style="font-family:Arial,Helvetica,sans-serif;font-size:58px;font-weight:800;color:#ffffff;line-height:1;padding-top:2px">\u20ac ${q.min}</div>
+        <div style="width:52px;height:4px;border-radius:99px;background:${RAME};margin:14px auto 0;font-size:0;line-height:0">&nbsp;</div>
+        <div style="padding-top:14px"><span style="display:inline-block;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#ffffff;border:1px solid rgba(255,255,255,.35);border-radius:99px;padding:7px 16px;background:rgba(255,255,255,.10)">stima massima <b>\u20ac ${q.max}</b></span></div>
+        <div style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#ffffff;opacity:.75;padding-top:13px">prezzo definitivo confermato al sopralluogo gratuito</div>
+      </td></tr>
+    </table>
+  </td></tr>`;
+}
+
 export function buildEmailPreventivo(d: DatiEmailPreventivo): { subject: string; html: string } {
   const q = d.quote;
   const suMisura = q.suMisura || d.tipo === 'hotel';
@@ -74,15 +137,9 @@ export function buildEmailPreventivo(d: DatiEmailPreventivo): { subject: string;
   // ── righe di dettaglio ──
   let righe = '';
   if (!suMisura) {
-    if (q.camereDettaglio && q.camereDettaglio.length > 0) {
-      q.camereDettaglio.forEach((c, i) => {
-        righe += riga('\u{1F6CF}', `Camera ${i + 1} \u2014 ${c.etichetta}`, `${c.persone} ${c.persone === 1 ? 'persona' : 'persone'} \u00b7 pulizia a checkout`, '\u20ac ' + c.prezzo);
-      });
-    } else if (q.unitaDettaglio && q.unitaDettaglio.length > 1) {
-      q.unitaDettaglio.forEach((u) => {
-        righe += riga('\u{1F3E0}', u.nome, 'pulizia a ogni cambio ospite', 'da \u20ac ' + u.min);
-      });
-    } else {
+    const haCamere = !!(q.camereDettaglio && q.camereDettaglio.length > 0);
+    const haUnita = !!(q.unitaDettaglio && q.unitaDettaglio.length > 0 && d.tipo === 'case');
+    if (!haCamere && !haUnita) {
       righe += riga('\u{1F3E0}', 'Pulizia completa', 'a ogni cambio ospite', 'da \u20ac ' + q.min);
     }
     if (q.biancheria > 0) righe += riga('\u{1F9FA}', 'Biancheria a noleggio', 'a cambio \u00b7 consegna e ritiro inclusi', '+ ' + eur(q.biancheria));
@@ -106,19 +163,7 @@ export function buildEmailPreventivo(d: DatiEmailPreventivo): { subject: string;
           </td></tr>
         </table>
       </td></tr>`
-    : `<tr><td style="padding:6px 0 18px 0">
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${BLU_SCURO}" style="background:linear-gradient(165deg,#243B4E,${BLU} 70%,#46647F);border-radius:18px">
-          <tr><td align="center" style="padding:30px 24px 26px">
-            <div style="font-family:Arial,Helvetica,sans-serif;font-size:11px;letter-spacing:3px;color:#ffffff;opacity:.85;font-weight:bold">${d.tipo === 'bnb' ? 'PULIZIA CAMERE A CHECKOUT' : 'PULIZIA A OGNI CAMBIO OSPITE'}</div>
-            <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#ffffff;opacity:.9;padding-top:14px">a partire da</div>
-            <div style="font-family:Arial,Helvetica,sans-serif;font-size:58px;font-weight:800;color:#ffffff;line-height:1;padding-top:2px">\u20ac ${q.min}</div>
-            <div style="width:52px;height:4px;border-radius:99px;background:${RAME};margin:14px auto 0;font-size:0;line-height:0">&nbsp;</div>
-            <div style="padding-top:14px"><span style="display:inline-block;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#ffffff;border:1px solid rgba(255,255,255,.35);border-radius:99px;padding:7px 16px;background:rgba(255,255,255,.10)">stima massima <b>\u20ac ${q.max}</b></span></div>
-            ${q.scontoPercento ? `<div style="padding-top:10px"><span style="display:inline-block;font-family:Arial,Helvetica,sans-serif;font-size:12px;font-weight:bold;color:#E8C9A8;border:1px solid rgba(232,201,168,.5);border-radius:99px;padding:5px 13px">sconto multi-unit\u00e0 -${q.scontoPercento}% gi\u00e0 applicato</span></div>` : ''}
-            <div style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#ffffff;opacity:.75;padding-top:13px">prezzo definitivo confermato al sopralluogo gratuito</div>
-          </td></tr>
-        </table>
-      </td></tr>`;
+    : buildPannelloPrezzo(d, q);
 
   const avvisoZona = d.copertura && d.copertura !== 'coperta' && !suMisura
     ? `<tr><td style="padding:0 0 14px 0">
@@ -211,6 +256,10 @@ export function buildEmailPreventivo(d: DatiEmailPreventivo): { subject: string;
   return {
     subject: suMisura
       ? 'La tua richiesta di preventivo \u2014 Puliziacasevacanze.it'
+      : d.tipo === 'bnb'
+      ? `Il tuo preventivo: prezzi per singola camera \u2014 Puliziacasevacanze.it`
+      : d.tipo === 'case'
+      ? `Il tuo preventivo: prezzi per singola struttura \u2014 Puliziacasevacanze.it`
       : `Il tuo preventivo: a partire da \u20ac ${q.min} \u2014 Puliziacasevacanze.it`,
     html,
   };
