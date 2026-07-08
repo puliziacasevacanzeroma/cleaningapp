@@ -35,6 +35,8 @@ export interface DatiEmailPreventivo {
     unitaDettaglio?: { nome: string; min: number; max: number }[] | null;
     camereDettaglio?: { persone: number; etichetta: string; prezzo: number }[] | null;
     rifacimentoGiornaliero?: number;
+    rifacimentoPerCamera?: number;
+    rifacimentoUscita?: number;
     areaComuneImporto?: number;
     areaComuneTipo?: string;
     passaggio?: { totale: number } | null;
@@ -103,7 +105,7 @@ function buildPannelloPrezzo(d: DatiEmailPreventivo, q: DatiEmailPreventivo['quo
     const corpo = gruppi.map((g) =>
       cardMini(g.etichetta, `\u20ac ${g.prezzo}`, 'a checkout', g.n > 1 ? `\u00d7${g.n}` : undefined)
     ).join('');
-    return wrap('PREZZO PER SINGOLA CAMERA', corpo, 'Paghi solo le camere effettivamente pulite \u2014 <b>nessun forfait</b>');
+    return wrap('PREZZO PER SINGOLA CAMERA', corpo, 'Paghi solo le camere effettivamente pulite \u2014 <b>nessun costo fisso</b>');
   }
 
   if (d.tipo === 'case' && q.unitaDettaglio && q.unitaDettaglio.length > 0) {
@@ -144,7 +146,8 @@ export function buildEmailPreventivo(d: DatiEmailPreventivo): { subject: string;
     }
     if (q.biancheria > 0) righe += riga('\u{1F9FA}', 'Biancheria a noleggio', 'a cambio \u00b7 consegna e ritiro inclusi', '+ ' + eur(q.biancheria));
     if (q.kit > 0) righe += riga('\u{1F9F4}', 'Kit di cortesia', 'un set per ogni ospite', '+ ' + eur(q.kit));
-    if (q.rifacimentoGiornaliero) righe += riga('\u{1F4C5}', 'Rifacimento letti giornaliero', 'a uscita, durante il soggiorno', eur(q.rifacimentoGiornaliero));
+    if (q.rifacimentoPerCamera) righe += riga('\u{1F4C5}', 'Rifacimento letti giornaliero', `+ \u20ac ${q.rifacimentoUscita ?? 0} di uscita, durante il soggiorno`, '\u20ac ' + q.rifacimentoPerCamera + ' /camera');
+    else if (q.rifacimentoGiornaliero) righe += riga('\u{1F4C5}', 'Rifacimento letti giornaliero', 'a uscita, durante il soggiorno', eur(q.rifacimentoGiornaliero));
     if (q.areaComuneImporto) righe += riga('\u{1F6CB}', 'Aree comuni', q.areaComuneTipo === 'dedicata' ? 'a uscita dedicata' : 'quando siamo gi\u00e0 in struttura', eur(q.areaComuneImporto));
     if (q.passaggio) righe += riga('\u{1F504}', 'Servizio durante il soggiorno', 'a passaggio: letti, biancheria e kit', eur(q.passaggio.totale));
   }
