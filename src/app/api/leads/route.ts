@@ -186,9 +186,21 @@ export async function POST(request: NextRequest) {
       unitaDettaglio: (quote as QuoteMultiResult).unitaDettaglio ?? null,
       camereDettaglio: (quote as QuoteBnbV2).camereDettaglio ?? null,
       rifacimentoGiornaliero: (quote as QuoteBnbV2).rifacimentoGiornaliero ?? 0,
+      rifacimentoPerCamera: (quote as QuoteBnbV2).rifacimentoPerCamera ?? 0,
+      rifacimentoUscita: (quote as QuoteBnbV2).rifacimentoUscita ?? 0,
       areaComuneImporto: (quote as QuoteBnbV2).areaComuneImporto ?? 0,
       areaComuneTipo: (quote as QuoteBnbV2).areaComuneTipo ?? 'no',
       passaggio,
+      // caratteristiche dell'immobile (SOLO tipo 'casa'): senza queste il PDF
+      // non pu\u00f2 disegnare le pill mq/bagni/posti letto nella pagina PULIZIA.
+      // Per 'case' i dettagli sono gi\u00e0 dentro unitaDettaglio, per 'bnb'/'hotel'
+      // non si applicano.
+      ...(body.tipo === 'casa' ? {
+        mq: (datiStruttura as { mq?: number }).mq ?? null,
+        bagni: (datiStruttura as { bagni?: number }).bagni ?? null,
+        ospiti: (datiStruttura as { ospiti?: number }).ospiti ?? null,
+        taglio: (datiStruttura as { taglio?: string }).taglio ?? null,
+      } : {}),
     },
     zona: str(body.zona, 80),
     cap,
