@@ -27,6 +27,8 @@ export interface DatiCasa {
   nome?: string;
   /** zona dell'unità (multi: ogni casa ha la sua, usata nel PDF) */
   zona?: string;
+  /** indirizzo preciso dell'unità (via e civico) */
+  indirizzo?: string;
   taglio: Taglio;
   mq: number;
   matrimoniali: number;
@@ -183,7 +185,7 @@ export function verificaCopertura(cap: string, capCoperti: string[]): EsitoCoper
 
 export interface QuoteMultiResult extends QuoteResult {
   unitaDettaglio: {
-    nome: string; zona?: string; min: number; max: number; suMisura: boolean;
+    nome: string; zona?: string; indirizzo?: string; min: number; max: number; suMisura: boolean;
     taglio: string; mq: number; bagni: number; postiLetto: number;
     matrimoniali: number; singoli: number; divani: number;
     cucina: string; esterno: string;
@@ -196,7 +198,7 @@ export function calcolaCase(unita: DatiCasa[], P: EngineParams = ENGINE): QuoteM
   const vuoto = { min: 0, max: 0, puntuale: 0, biancheria: 0, kit: 0 };
   if (dettagli.some((d) => d.suMisura) || unita.length === 0) {
     return { suMisura: true, ...vuoto, unitaDettaglio: dettagli.map((d, i) => ({
-      nome: unita[i]?.nome || 'Unit\u00e0 ' + (i + 1), zona: unita[i]?.zona || '',
+      nome: unita[i]?.nome || 'Unit\u00e0 ' + (i + 1), zona: unita[i]?.zona || '', indirizzo: unita[i]?.indirizzo || '',
       min: d.min, max: d.max, suMisura: d.suMisura,
       taglio: unita[i]?.taglio || '', mq: unita[i]?.mq || 0, bagni: unita[i]?.bagni || 0,
       postiLetto: unita[i]?.ospiti || 0,
@@ -213,7 +215,7 @@ export function calcolaCase(unita: DatiCasa[], P: EngineParams = ENGINE): QuoteM
   return {
     suMisura: false, min, max, puntuale: round2(sommaPulizia), biancheria, kit,
     unitaDettaglio: dettagli.map((d, i) => ({
-      nome: unita[i]?.nome || 'Unit\u00e0 ' + (i + 1), zona: unita[i]?.zona || '',
+      nome: unita[i]?.nome || 'Unit\u00e0 ' + (i + 1), zona: unita[i]?.zona || '', indirizzo: unita[i]?.indirizzo || '',
       min: d.min, max: d.max, suMisura: d.suMisura,
       taglio: unita[i]?.taglio || '', mq: unita[i]?.mq || 0, bagni: unita[i]?.bagni || 0,
       postiLetto: unita[i]?.ospiti || 0,

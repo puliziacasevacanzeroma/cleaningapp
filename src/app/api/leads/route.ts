@@ -46,6 +46,7 @@ interface LeadBody {
     vuoleKit?: boolean;
   };
   zona: string;
+  indirizzo: string;
   cap: string;
   nome: string;
   email: string;
@@ -79,6 +80,7 @@ function normalizzaCasa(c: Partial<DatiCasa> & { cap?: string }): DatiCasa & { c
   return {
     nome: str(c.nome, 60),
     zona: str(c.zona, 80),
+    indirizzo: str((c as { indirizzo?: string }).indirizzo, 160),
     ...(/^\d{5}$/.test(capU) ? { cap: capU } : {}),
     taglio: tagli.includes(c.taglio as string) ? (c.taglio as DatiCasa['taglio']) : 'mono',
     mq: int(c.mq, 15, 400),
@@ -203,6 +205,7 @@ export async function POST(request: NextRequest) {
       } : {}),
     },
     zona: str(body.zona, 80),
+    indirizzo: str((body as { indirizzo?: string }).indirizzo, 160),
     cap,
     copertura,
     contatti: {

@@ -25,6 +25,7 @@ type AreaComune = "no" | "inloco" | "dedicata";
 interface UnitaCasa {
   nome: string;
   zona: string;
+  indirizzo: string;
   cap: string;
   taglio: Taglio | null;
   mq: number | null;
@@ -37,7 +38,7 @@ interface UnitaCasa {
   ospiti: number;
 }
 const UNITA_VUOTA: UnitaCasa = {
-  nome: "", zona: "", cap: "",
+  nome: "", zona: "", indirizzo: "", cap: "",
   taglio: null, mq: null, matrimoniali: 1, singoli: 0, divani: 0,
   bagni: 1, cucina: null, esterno: null, ospiti: 2,
 };
@@ -65,7 +66,7 @@ interface Stato {
   vuoleBiancheria: boolean | null;
   vuoleKit: boolean | null;
   vuolePassaggio: boolean | null;
-  zona: string; cap: string;
+  zona: string; indirizzo: string; cap: string;
   nome: string; email: string; telefono: string;
   consensoNewsletter: boolean;
   nomeStruttura: string;
@@ -78,7 +79,7 @@ const STATO_INIZIALE: Stato = {
   camere: [{ persone: 2 }],
   frequenza: null, areaComune: null, areaComuneMq: 20,
   vuoleBiancheria: null, vuoleKit: null, vuolePassaggio: null,
-  zona: "", cap: "", nome: "", email: "", telefono: "",
+  zona: "", indirizzo: "", cap: "", nome: "", email: "", telefono: "",
   consensoNewsletter: false, nomeStruttura: "",
 };
 
@@ -323,10 +324,10 @@ export function PreventivoWizard() {
       case "zona":
         if (stato.tipo === "case") {
           return [...stato.unitaCompletate, stato.unita].every(
-            (x) => x.zona.trim().length > 1 && x.cap.length === 5
+            (x) => x.zona.trim().length > 1 && x.indirizzo.trim().length > 3 && x.cap.length === 5
           );
         }
-        return stato.zona.trim().length > 1 && stato.cap.length === 5;
+        return stato.zona.trim().length > 1 && stato.indirizzo.trim().length > 3 && stato.cap.length === 5;
       case "contatti":
       case "contattiHotel":
         return stato.nome.trim().length > 1 && /.+@.+\..+/.test(stato.email) && stato.telefono.trim().length >= 8;
@@ -361,7 +362,7 @@ export function PreventivoWizard() {
   }
 
   // ── Unità multiple ──
-  function setUnitaZona(indice: number, campo: "zona" | "cap", valore: string) {
+  function setUnitaZona(indice: number, campo: "zona" | "indirizzo" | "cap", valore: string) {
     const v = campo === "cap" ? valore.replace(/[^0-9]/g, "").slice(0, 5) : valore;
     setStato((s) => {
       const tot = s.unitaCompletate.length;
@@ -423,7 +424,7 @@ export function PreventivoWizard() {
     setInvio(true); setErroreInvio(null);
     try {
       const unitaPayload = (u: UnitaCasa) => ({
-        nome: u.nome, zona: u.zona, cap: u.cap, taglio: u.taglio, mq: u.mq,
+        nome: u.nome, zona: u.zona, indirizzo: u.indirizzo, cap: u.cap, taglio: u.taglio, mq: u.mq,
         matrimoniali: u.matrimoniali, singoli: u.singoli, divani: u.divani,
         bagni: u.bagni, cucina: u.cucina, esterno: u.esterno,
         vuoleBiancheria: stato.vuoleBiancheria === true,
@@ -438,6 +439,7 @@ export function PreventivoWizard() {
         cap: stato.tipo === "hotel" ? "00100"
           : stato.tipo === "case" ? (stato.unitaCompletate[0]?.cap || stato.unita.cap || stato.cap)
           : stato.cap,
+        indirizzo: stato.tipo === "case" ? (stato.unitaCompletate[0]?.indirizzo || stato.unita.indirizzo || "") : stato.indirizzo,
         nome: stato.nome, email: stato.email, telefono: stato.telefono,
         consensoNewsletter: stato.consensoNewsletter,
         nomeStruttura: stato.nomeStruttura,
@@ -681,6 +683,10 @@ export function PreventivoWizard() {
               <input placeholder="es. Trastevere, Prati, Aurelio…" value={x.zona}
                 onChange={(e) => setUnitaZona(i, "zona", e.target.value)} />
             </CampoBox>
+            <CampoBox label="Indirizzo preciso">
+              <input placeholder="es. Via Garibaldi 12, int. 3" value={x.indirizzo}
+                onChange={(e) => setUnitaZona(i, "indirizzo", e.target.value)} />
+            </CampoBox>
             <CampoBox label="CAP">
               <input placeholder="es. 00165" maxLength={5} inputMode="numeric" value={x.cap}
                 onChange={(e) => setUnitaZona(i, "cap", e.target.value)} />
@@ -692,6 +698,9 @@ export function PreventivoWizard() {
         <p className="pv-sotto">Ci serve per organizzare il giro e confermarti la copertura.</p>
         <CampoBox label="Quartiere / zona">
           <input placeholder="es. Trastevere, Prati, Aurelio…" value={stato.zona} onChange={(e) => set("zona", e.target.value)} />
+        </CampoBox>
+        <CampoBox label="Indirizzo preciso">
+          <input placeholder="es. Via Garibaldi 12, int. 3" value={stato.indirizzo} onChange={(e) => set("indirizzo", e.target.value)} />
         </CampoBox>
         <CampoBox label="CAP">
           <input placeholder="es. 00165" maxLength={5} inputMode="numeric" value={stato.cap}

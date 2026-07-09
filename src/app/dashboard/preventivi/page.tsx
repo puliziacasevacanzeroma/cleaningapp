@@ -20,6 +20,7 @@ interface Lead {
   id: string;
   tipo: "casa" | "case" | "bnb" | "hotel";
   zona: string;
+  indirizzo?: string;
   cap: string;
   copertura: string;
   contatti: { nome: string; email: string; telefono: string };
@@ -477,6 +478,8 @@ function LeadCard({ lead: l, espanso, onToggle, onPatch, onReinvia, salvando, in
               {l.consensoNewsletter ? <span className="ml-2 text-[11px] text-emerald-600">✓ newsletter</span> : null}
             </div>
 
+            <IndirizzoLead lead={l} />
+
             <div className="text-xs font-semibold text-slate-400 uppercase mt-3">Preventivo</div>
             <DettaglioQuote lead={l} />
 
@@ -527,6 +530,45 @@ function LeadCard({ lead: l, espanso, onToggle, onPatch, onReinvia, salvando, in
       )}
     </div>
   );
+}
+
+function IndirizzoLead({ lead: l }: { lead: Lead }) {
+  const maps = (q: string) => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
+  const unita = (l.datiStruttura?.unita as { nome?: string; zona?: string; indirizzo?: string; cap?: string }[] | undefined);
+
+  if (l.tipo === "case" && Array.isArray(unita) && unita.some((u) => u?.indirizzo)) {
+    return (
+      <>
+        <div className="text-xs font-semibold text-slate-400 uppercase mt-3">Indirizzi</div>
+        <div className="space-y-1.5 mt-1">
+          {unita.map((u, i) => {
+            const full = [u?.indirizzo, u?.cap, u?.zona].filter(Boolean).join(", ");
+            if (!full) return null;
+            return (
+              <div key={i} className="text-sm">
+                <span className="font-semibold text-slate-600">{u?.nome?.trim() || `Unità ${i + 1}`}:</span>{" "}
+                <a href={maps(full)} target="_blank" rel="noreferrer" className="text-sky-600 hover:underline">{u?.indirizzo}{u?.cap ? ` — ${u.cap}` : ""}</a>
+              </div>
+            );
+          })}
+        </div>
+      </>
+    );
+  }
+
+  if (l.indirizzo) {
+    const full = [l.indirizzo, l.cap, l.zona].filter(Boolean).join(", ");
+    return (
+      <>
+        <div className="text-xs font-semibold text-slate-400 uppercase mt-3">Indirizzo</div>
+        <a href={maps(full)} target="_blank" rel="noreferrer" className="text-sm text-sky-600 hover:underline inline-flex items-center gap-1">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a2 2 0 01-2.828 0l-4.243-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+          {l.indirizzo}{l.cap ? ` — ${l.cap}` : ""}
+        </a>
+      </>
+    );
+  }
+  return null;
 }
 
 function FotoLead({ lead: l }: { lead: Lead }) {
