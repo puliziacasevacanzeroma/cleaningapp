@@ -182,7 +182,12 @@ export function verificaCopertura(cap: string, capCoperti: string[]): EsitoCoper
 // ────────────────── v2: Più case vacanze (somma + sconto) ──────────────────
 
 export interface QuoteMultiResult extends QuoteResult {
-  unitaDettaglio: { nome: string; zona?: string; min: number; max: number; suMisura: boolean }[];
+  unitaDettaglio: {
+    nome: string; zona?: string; min: number; max: number; suMisura: boolean;
+    taglio: string; mq: number; bagni: number; postiLetto: number;
+    matrimoniali: number; singoli: number; divani: number;
+    cucina: string; esterno: string;
+  }[];
   scontoPercento: number;
 }
 
@@ -190,7 +195,14 @@ export function calcolaCase(unita: DatiCasa[], P: EngineParams = ENGINE): QuoteM
   const dettagli = unita.map((u) => calcolaCasa(u, P));
   const vuoto = { min: 0, max: 0, puntuale: 0, biancheria: 0, kit: 0 };
   if (dettagli.some((d) => d.suMisura) || unita.length === 0) {
-    return { suMisura: true, ...vuoto, unitaDettaglio: dettagli.map((d, i) => ({ nome: unita[i]?.nome || 'Unit\u00e0 ' + (i + 1), zona: unita[i]?.zona || '', min: d.min, max: d.max, suMisura: d.suMisura })), scontoPercento: 0 };
+    return { suMisura: true, ...vuoto, unitaDettaglio: dettagli.map((d, i) => ({
+      nome: unita[i]?.nome || 'Unit\u00e0 ' + (i + 1), zona: unita[i]?.zona || '',
+      min: d.min, max: d.max, suMisura: d.suMisura,
+      taglio: unita[i]?.taglio || '', mq: unita[i]?.mq || 0, bagni: unita[i]?.bagni || 0,
+      postiLetto: unita[i]?.ospiti || 0,
+      matrimoniali: unita[i]?.matrimoniali || 0, singoli: unita[i]?.singoli || 0, divani: unita[i]?.divani || 0,
+      cucina: unita[i]?.cucina || '', esterno: unita[i]?.esterno || '',
+    })), scontoPercento: 0 };
   }
   let sommaPulizia = dettagli.reduce((a, d) => a + d.puntuale, 0);
   const sconto = unita.length >= P.scontoMultiUnita.daUnita ? P.scontoMultiUnita.percento : 0;
@@ -200,7 +212,14 @@ export function calcolaCase(unita: DatiCasa[], P: EngineParams = ENGINE): QuoteM
   const { min, max } = range(sommaPulizia);
   return {
     suMisura: false, min, max, puntuale: round2(sommaPulizia), biancheria, kit,
-    unitaDettaglio: dettagli.map((d, i) => ({ nome: unita[i]?.nome || 'Unit\u00e0 ' + (i + 1), zona: unita[i]?.zona || '', min: d.min, max: d.max, suMisura: d.suMisura })),
+    unitaDettaglio: dettagli.map((d, i) => ({
+      nome: unita[i]?.nome || 'Unit\u00e0 ' + (i + 1), zona: unita[i]?.zona || '',
+      min: d.min, max: d.max, suMisura: d.suMisura,
+      taglio: unita[i]?.taglio || '', mq: unita[i]?.mq || 0, bagni: unita[i]?.bagni || 0,
+      postiLetto: unita[i]?.ospiti || 0,
+      matrimoniali: unita[i]?.matrimoniali || 0, singoli: unita[i]?.singoli || 0, divani: unita[i]?.divani || 0,
+      cucina: unita[i]?.cucina || '', esterno: unita[i]?.esterno || '',
+    })),
     scontoPercento: sconto,
   };
 }
@@ -240,8 +259,11 @@ export function prezzoAreaComuneDedicata(mq: number, P: EngineParams = ENGINE): 
 export interface QuoteBnbV2 extends QuoteResult {
   /** dettaglio per camera: tipo leggibile e prezzo a checkout */
   camereDettaglio: { persone: number; etichetta: string; prezzo: number }[];
-  /** rifacimento letti giornaliero, PER USCITA (assunzione: 1 letto per camera) */
+  /** rifacimento letti giornaliero, PER USCITA (assunzione: 1 letto per camera) — uso interno/back-office */
   rifacimentoGiornaliero: number;
+  /** componenti unitarie del riassetto: al cliente si mostrano SOLO queste, mai la somma */
+  rifacimentoPerCamera: number;
+  rifacimentoUscita: number;
   /** area comune: per passaggio (inloco) o per uscita (dedicata); 0 se 'no' */
   areaComuneImporto: number;
   areaComuneTipo: AreaComune;
@@ -263,7 +285,8 @@ export function calcolaBnbV2(d: DatiBnbV2, P: EngineParams = ENGINE): QuoteBnbV2
   const tot = camereDettaglio.reduce((a, c) => a + c.prezzo, 0);
   const persone = d.camere.reduce((a, c) => a + Math.max(1, c.persone), 0);
   const kit = d.vuoleKit ? round2(persone * P.kitCortesia) : 0;
-  const rifacimento = d.frequenza === 'giornaliera'
+  const giornaliera = d.frequenza === 'giornaliera';
+  const rifacimento = giornaliera
     ? round2(P.bnb.uscita + d.camere.length * P.bnb.rifacimentoLetto)
     : 0;
   const areaComuneImporto =
@@ -275,6 +298,8 @@ export function calcolaBnbV2(d: DatiBnbV2, P: EngineParams = ENGINE): QuoteBnbV2
     suMisura: false, min, max, puntuale: tot, biancheria: 0, kit,
     camereDettaglio,
     rifacimentoGiornaliero: rifacimento,
+    rifacimentoPerCamera: giornaliera ? P.bnb.rifacimentoLetto : 0,
+    rifacimentoUscita: giornaliera ? P.bnb.uscita : 0,
     areaComuneImporto, areaComuneTipo: d.areaComune,
   };
 }

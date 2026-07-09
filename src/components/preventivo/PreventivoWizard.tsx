@@ -87,6 +87,8 @@ interface QuoteRisposta {
   biancheria: number; kit: number;
   scontoPercento?: number;
   unitaDettaglio?: { nome: string; min: number; max: number }[];
+  rifacimentoPerCamera?: number;
+  rifacimentoUscita?: number;
   camereDettaglio?: { persone: number; etichetta: string; prezzo: number }[];
   rifacimentoGiornaliero?: number;
   areaComuneImporto?: number;
@@ -252,7 +254,7 @@ type NomeStep =
   | "camere" | "frequenza" | "areaComune"
   | "zona" | "foto" | "contatti" | "contattiHotel" | "risultato" | "fineHotel";
 
-const MAX_FOTO = 5;
+const MAX_FOTO = 10;
 const MAX_UNITA = 8;
 const MAX_CAMERE = 15;
 
@@ -263,7 +265,10 @@ export function PreventivoWizard() {
   const [erroreInvio, setErroreInvio] = useState<string | null>(null);
   const [risposta, setRisposta] = useState<{ quote: QuoteRisposta; copertura: string; leadId: string } | null>(null);
   const [foto, setFoto] = useState<File[]>([]);
+  const [fotoUnita, setFotoUnita] = useState<Record<number, File[]>>({});
+  const [altraScelta, setAltraScelta] = useState<"si" | "no" | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+  const fotoUnitaIdx = useRef<number | null>(null);
 
   const set = <K extends keyof Stato>(k: K, v: Stato[K]) => setStato((s) => ({ ...s, [k]: v }));
   const setU = <K extends keyof UnitaCasa>(k: K, v: UnitaCasa[K]) =>
@@ -300,6 +305,7 @@ export function PreventivoWizard() {
       case "biancheria": return stato.vuoleBiancheria !== null;
       case "kit": return stato.vuoleKit !== null;
       case "passaggio": return stato.vuolePassaggio !== null;
+      case "altraUnita": return altraScelta !== null;
       case "zona":
         if (stato.tipo === "case") {
           return [...stato.unitaCompletate, stato.unita].every(
@@ -320,6 +326,13 @@ export function PreventivoWizard() {
   }
   function avanti() {
     if (!valido(step)) return;
+    if (step === "altraUnita") {
+      if (altraScelta === "si") { setAltraScelta(null); aggiungiAltraUnita(); return; }
+      setAltraScelta(null);
+      setIdx((i) => Math.min(i + 1, flusso.length - 1));
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
     const prossimo = flusso[idx + 1];
     if (prossimo === "risultato" || prossimo === "fineHotel") { void submit(); return; }
     if (idx < flusso.length - 1) { setIdx(idx + 1); window.scrollTo({ top: 0, behavior: "smooth" }); }
@@ -330,7 +343,7 @@ export function PreventivoWizard() {
     if (avanza) setTimeout(() => { setIdx((i) => Math.min(i + 1, flusso.length - 1)); window.scrollTo({ top: 0, behavior: "smooth" }); }, 240);
   }
   function riparti() {
-    setStato(STATO_INIZIALE); setIdx(0); setRisposta(null); setFoto([]); setErroreInvio(null);
+    setStato(STATO_INIZIALE); setIdx(0); setRisposta(null); setFoto([]); setFotoUnita({}); setAltraScelta(null); setErroreInvio(null);
   }
 
   // ── Unità multiple ──
@@ -347,10 +360,7 @@ export function PreventivoWizard() {
   }
   function aggiungiAltraUnita() {
     setStato((s) => ({ ...s, unitaCompletate: [...s.unitaCompletate, s.unita], unita: { ...UNITA_VUOTA } }));
-    setTimeout(() => vaiA("taglio"), 180);
-  }
-  function nessunAltraUnita() {
-    setTimeout(() => { setIdx((i) => Math.min(i + 1, flusso.length - 1)); window.scrollTo({ top: 0, behavior: "smooth" }); }, 180);
+    vaiA("taglio");
   }
 
   // ── Camere B&B ──
@@ -386,7 +396,12 @@ export function PreventivoWizard() {
   function aggiungiFoto(files: FileList | null) {
     if (!files) return;
     const nuove = Array.from(files).filter((f) => f.size <= 15 * 1024 * 1024);
-    setFoto((prev) => [...prev, ...nuove].slice(0, MAX_FOTO));
+    if (stato.tipo === "case" && fotoUnitaIdx.current !== null) {
+      const i = fotoUnitaIdx.current;
+      setFotoUnita((prev) => ({ ...prev, [i]: [...(prev[i] ?? []), ...nuove].slice(0, MAX_FOTO) }));
+    } else {
+      setFoto((prev) => [...prev, ...nuove].slice(0, MAX_FOTO));
+    }
   }
 
   // ── Invio ──
@@ -435,11 +450,16 @@ export function PreventivoWizard() {
       const data = await res.json();
       if (!res.ok || !data.ok) throw new Error(data.errore || "Errore invio");
 
-      if (foto.length > 0 && data.leadId) {
+      const tutteFoto: { file: File; unita: number | null }[] =
+        stato.tipo === "case"
+          ? Object.entries(fotoUnita).flatMap(([i, fs]) => fs.map((file) => ({ file, unita: Number(i) })))
+          : foto.map((file) => ({ file, unita: null }));
+      if (tutteFoto.length > 0 && data.leadId) {
         try {
           const fd = new FormData();
           fd.append("leadId", data.leadId);
-          for (const f of foto) fd.append("foto", await comprimi(f), f.name.replace(/\.(heic|heif)$/i, ".heic"));
+          fd.append("unita", JSON.stringify(tutteFoto.map((t) => t.unita)));
+          for (const t of tutteFoto) fd.append("foto", await comprimi(t.file), t.file.name.replace(/\.(heic|heif)$/i, ".heic"));
           await fetch("/api/leads/photos", { method: "POST", body: fd });
         } catch { /* il lead è salvo */ }
       }
@@ -461,7 +481,7 @@ export function PreventivoWizard() {
       case "tipo": return (<>
         <h1>Che struttura gestisci?</h1>
         <p className="pv-sotto">Il preventivo si adatta al tuo tipo di attività.</p>
-        <SceltaGriglia selezionato={stato.tipo} onSel={(v) => scegli("tipo", v, true)} opzioni={[
+        <SceltaGriglia selezionato={stato.tipo} onSel={(v) => scegli("tipo", v, false)} opzioni={[
           { v: "casa" as Tipo, ic: "casa", t: "Casa vacanze", s: "Un appartamento in affitto breve" },
           { v: "case" as Tipo, ic: "case", t: "Più case vacanze", s: "Gestisci due o più unità" },
           { v: "bnb" as Tipo, ic: "bnb", t: "B&B / Affittacamere", s: "Camere con ospiti in rotazione" },
@@ -511,7 +531,7 @@ export function PreventivoWizard() {
       case "cucina": return (<>
         <h1>Com'è la cucina?{suffUnita}</h1>
         <p className="pv-sotto">Un vano in più è tempo di lavoro in più: contiamolo bene.</p>
-        <SceltaGriglia selezionato={u.cucina} onSel={(v) => { setU("cucina", v); setTimeout(avanti, 240); }} opzioni={[
+        <SceltaGriglia selezionato={u.cucina} onSel={(v) => setU("cucina", v)} opzioni={[
           { v: "angolo" as Cucina, ic: "angolo", t: "Angolo cottura", s: "Fornelli e divano nella stessa stanza" },
           { v: "sep" as Cucina, ic: "cucinaSep", t: "Cucina separata", s: "Una stanza a parte con fornelli e frigo" },
           { v: "abit" as Cucina, ic: "cucinaAbit", t: "Cucina abitabile", s: "Grande: fornelli, frigo e tavolo da pranzo" },
@@ -521,7 +541,7 @@ export function PreventivoWizard() {
       case "esterno": return (<>
         <h1>Spazi esterni da pulire?{suffUnita}</h1>
         <p className="pv-sotto">Conta solo se c'è arredo di cui prenderci cura.</p>
-        <SceltaGriglia selezionato={u.esterno} onSel={(v) => { setU("esterno", v); setTimeout(avanti, 240); }} opzioni={[
+        <SceltaGriglia selezionato={u.esterno} onSel={(v) => setU("esterno", v)} opzioni={[
           { v: "no" as Esterno, ic: "nienteEsterno", t: "Nessuno", s: "Solo finestre o un piccolo affaccio" },
           { v: "balcone" as Esterno, ic: "balcone", t: "Balcone arredato", s: "Ringhiera con tavolino, sedie o piante" },
           { v: "terrazzo" as Esterno, ic: "terrazzo", t: "Terrazzo", s: "Ombrellone e tavolo per mangiare fuori" },
@@ -551,9 +571,9 @@ export function PreventivoWizard() {
               </div>
             ))}
           </div>
-          <SceltaGriglia selezionato={null} onSel={(v) => (v === "si" ? aggiungiAltraUnita() : nessunAltraUnita())} opzioni={[
-            { v: "si", ic: "aggiungiUnita", t: "Sì, aggiungi unità", s: tutte.length >= MAX_UNITA ? "Limite raggiunto" : `Compila l'unità ${tutte.length + 1}` },
-            { v: "no", ic: "finito", t: "Ho finito", s: `Continua con ${tutte.length} ${tutte.length === 1 ? "unità" : "unità"}` },
+          <SceltaGriglia selezionato={altraScelta} onSel={(v) => setAltraScelta(v)} opzioni={[
+            { v: "si" as "si" | "no", ic: "aggiungiUnita", t: "Sì, aggiungi unità", s: tutte.length >= MAX_UNITA ? "Limite raggiunto" : `Compila l'unità ${tutte.length + 1}` },
+            { v: "no" as "si" | "no", ic: "finito", t: "Ho finito", s: `Continua con ${tutte.length} ${tutte.length === 1 ? "unità" : "unità"}` },
           ]} />
         </>);
       }
@@ -561,7 +581,7 @@ export function PreventivoWizard() {
       case "biancheria": return (<>
         <h1>Vuoi anche la biancheria?</h1>
         <p className="pv-sotto">La portiamo pulita e ritiriamo la sporca: consegna inclusa.{stato.tipo === "case" ? " Vale per tutte le unità." : ""}</p>
-        <SceltaGriglia selezionato={stato.vuoleBiancheria} onSel={(v) => scegli("vuoleBiancheria", v, true)} opzioni={[
+        <SceltaGriglia selezionato={stato.vuoleBiancheria} onSel={(v) => scegli("vuoleBiancheria", v, false)} opzioni={[
           { v: true, ic: "biancheriaSi", t: "Sì, pensateci voi", s: "Lenzuola, teli e accessori a noleggio" },
           { v: false, ic: "biancheriaNo", t: "No, la gestisco io", s: "Solo il servizio di pulizia" },
         ]} />
@@ -570,7 +590,7 @@ export function PreventivoWizard() {
       case "kit": return (<>
         <h1>Kit di cortesia per gli ospiti?</h1>
         <p className="pv-sotto">Doccia-shampoo, sapone e crema corpo: il tocco da hotel che gli ospiti citano nelle recensioni.</p>
-        <SceltaGriglia selezionato={stato.vuoleKit} onSel={(v) => scegli("vuoleKit", v, true)} opzioni={[
+        <SceltaGriglia selezionato={stato.vuoleKit} onSel={(v) => scegli("vuoleKit", v, false)} opzioni={[
           { v: true, ic: "kitSi", t: "Sì, aggiungilo", s: "Un set completo per ogni ospite" },
           { v: false, ic: "kitNo", t: "No, grazie", s: "Magari più avanti" },
         ]} />
@@ -579,7 +599,7 @@ export function PreventivoWizard() {
       case "passaggio": return (<>
         <h1>Serve un servizio durante il soggiorno?</h1>
         <p className="pv-sotto">Per i soggiorni lunghi: rifacimento letti e ricarica kit mentre gli ospiti sono ancora in casa, senza aspettare il checkout.</p>
-        <SceltaGriglia selezionato={stato.vuolePassaggio} onSel={(v) => scegli("vuolePassaggio", v, true)} opzioni={[
+        <SceltaGriglia selezionato={stato.vuolePassaggio} onSel={(v) => scegli("vuolePassaggio", v, false)} opzioni={[
           { v: true, ic: "passaggioSi", t: "Sì, mi interessa", s: "Rifacimento letti e ricarica a metà soggiorno" },
           { v: false, ic: "passaggioNo", t: "No, solo al cambio", s: "Interveniamo solo tra un ospite e l'altro" },
         ]} />
@@ -615,7 +635,7 @@ export function PreventivoWizard() {
       case "frequenza": return (<>
         <h1>Quando puliamo le camere?</h1>
         <p className="pv-sotto">Il rifacimento giornaliero comprende letti e riordino durante il soggiorno degli ospiti.</p>
-        <SceltaGriglia selezionato={stato.frequenza} onSel={(v) => scegli("frequenza", v, true)} opzioni={[
+        <SceltaGriglia selezionato={stato.frequenza} onSel={(v) => scegli("frequenza", v, false)} opzioni={[
           { v: "checkout" as Frequenza, ic: "checkout", t: "Solo al checkout", s: "Pulizia completa a ogni cambio ospite" },
           { v: "giornaliera" as Frequenza, ic: "giornaliera", t: "Anche giornaliera", s: "Rifacimento letti ogni giorno durante il soggiorno" },
         ]} />
@@ -665,7 +685,36 @@ export function PreventivoWizard() {
         </CampoBox>
       </>);
 
-      case "foto": return (<>
+      case "foto": if (stato.tipo === "case") {
+        const caseTutte = [...stato.unitaCompletate, stato.unita];
+        return (<>
+          <h1>Qualche foto delle tue case?</h1>
+          <p className="pv-sotto">Carica le foto separatamente per ogni casa: così sappiamo a quale appartamento si riferiscono.</p>
+          {caseTutte.map((x, i) => (
+            <div key={i} className="pv-zona-unita">
+              <div className="pv-zona-unita-nome">{x.nome.trim() || `Unità ${i + 1}`}</div>
+              <div className="pv-foto-zona" onClick={() => { fotoUnitaIdx.current = i; fileInput.current?.click(); }}>
+                <Icona nome="fotocamera" />
+                <b>Tocca per aggiungere foto</b>
+                <span>fino a {MAX_FOTO} immagini per casa · anche da iPhone (HEIC)</span>
+              </div>
+              {(fotoUnita[i]?.length ?? 0) > 0 && (
+                <div className="pv-foto-griglia">
+                  {fotoUnita[i]!.map((f, j) => (
+                    <div key={j} className="pv-foto-thumb">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={URL.createObjectURL(f)} alt="" />
+                      <button type="button" onClick={() => setFotoUnita((p) => ({ ...p, [i]: p[i]!.filter((_, k) => k !== j) }))}>×</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+          <p className="pv-facoltativo">Passaggio facoltativo: puoi anche saltarlo.</p>
+        </>);
+      }
+      return (<>
         <h1>Vuoi mostrarci la struttura? <span className="pv-facoltativo">facoltativo</span></h1>
         <p className="pv-sotto">Due o tre foto degli ambienti ci aiutano a prepararti un preventivo più preciso al sopralluogo.</p>
         <div className="pv-foto-zona" onClick={() => fileInput.current?.click()}>
@@ -784,7 +833,7 @@ export function PreventivoWizard() {
               ))}
             </div>
             <div className="pv-barra-rame" />
-            <div><span className="pv-stima">Paghi solo le camere effettivamente pulite — <b>nessun forfait</b></span></div>
+            <div><span className="pv-stima">Paghi solo le camere effettivamente pulite — <b>nessun costo fisso</b></span></div>
             <div className="sub">prezzo definitivo confermato al sopralluogo gratuito</div>
           </div>
         ) : stato.tipo === "case" && q.unitaDettaglio && q.unitaDettaglio.length > 0 ? (
@@ -821,7 +870,7 @@ export function PreventivoWizard() {
           )}
           {q.biancheria > 0 && <div className="pv-riga"><Icona nome="biancheriaSi" mini /><div className="txt">Biancheria a noleggio<small>consegna e ritiro inclusi</small></div><b>+ {eur(q.biancheria)}</b></div>}
           {q.kit > 0 && <div className="pv-riga"><Icona nome="kitSi" mini /><div className="txt">Kit di cortesia<small>un set per ogni ospite</small></div><b>+ {eur(q.kit)}</b></div>}
-          {q.rifacimentoGiornaliero ? <div className="pv-riga"><Icona nome="giornaliera" mini /><div className="txt">Rifacimento letti giornaliero<small>a uscita, durante il soggiorno</small></div><b>{eur(q.rifacimentoGiornaliero)}</b></div> : null}
+          {q.rifacimentoPerCamera ? <div className="pv-riga"><Icona nome="giornaliera" mini /><div className="txt">Rifacimento letti giornaliero<small>+ € {q.rifacimentoUscita ?? 0} di uscita, durante il soggiorno</small></div><b>€ {q.rifacimentoPerCamera} <small style={{ fontWeight: 600, color: "var(--grigio)" }}>/camera</small></b></div> : null}
           {q.areaComuneImporto ? <div className="pv-riga"><Icona nome="areaDedicata" mini /><div className="txt">Aree comuni<small>{q.areaComuneTipo === "dedicata" ? "a uscita dedicata" : "quando siamo già in struttura"}</small></div><b>{eur(q.areaComuneImporto)}</b></div> : null}
           {q.passaggio ? <div className="pv-riga"><Icona nome="passaggioSi" mini /><div className="txt">Servizio durante il soggiorno<small>a passaggio: letti, biancheria e kit</small></div><b>{eur(q.passaggio.totale)}</b></div> : null}
         </div>
@@ -859,7 +908,7 @@ export function PreventivoWizard() {
     : prossimo === "risultato" ? "Vedi il preventivo →"
     : prossimo === "fineHotel" ? "Invia richiesta →"
     : "Avanti →";
-  const nascondiAvanti = step === "altraUnita"; // la scelta avviene con le due card
+  const nascondiAvanti = false;
 
   return (
     <div className="pv-widget">
