@@ -708,7 +708,12 @@ export function PreventivoWizard() {
         </CampoBox>
       </>);
 
-      case "foto": if (stato.tipo === "case") {
+      case "foto": {
+        const inputFile = (
+          <input ref={fileInput} type="file" accept="image/*,.heic,.heif" multiple hidden
+            onChange={(e) => { aggiungiFoto(e.target.files); e.target.value = ""; }} />
+        );
+        if (stato.tipo === "case") {
         const caseTutte = [...stato.unitaCompletate, stato.unita];
         return (<>
           <h1>Qualche foto delle tue case?</h1>
@@ -735,9 +740,10 @@ export function PreventivoWizard() {
             </div>
           ))}
           <p className="pv-facoltativo">Passaggio facoltativo: puoi anche saltarlo.</p>
+          {inputFile}
         </>);
-      }
-      return (<>
+        }
+        return (<>
         <h1>Vuoi mostrarci la struttura? <span className="pv-facoltativo">facoltativo</span></h1>
         <p className="pv-sotto">Due o tre foto degli ambienti ci aiutano a prepararti un preventivo più preciso al sopralluogo.</p>
         <div className="pv-foto-zona" onClick={() => fileInput.current?.click()}>
@@ -745,8 +751,7 @@ export function PreventivoWizard() {
           <b>Tocca per aggiungere foto</b>
           <span>fino a {MAX_FOTO} immagini · anche da iPhone (HEIC)</span>
         </div>
-        <input ref={fileInput} type="file" accept="image/*,.heic,.heif" multiple hidden
-          onChange={(e) => { aggiungiFoto(e.target.files); e.target.value = ""; }} />
+        {inputFile}
         {foto.length > 0 && (
           <div className="pv-foto-griglia">
             {foto.map((f, i) => (
@@ -760,6 +765,7 @@ export function PreventivoWizard() {
           </div>
         )}
       </>);
+      }
 
       case "contatti": return (<>
         <h1>Ultimo passo: dove ti mandiamo il preventivo?</h1>
