@@ -265,7 +265,7 @@ function ContatoreRiga({ icona, titolo, sotto, valore, min, max, onCambia }: {
 
 type NomeStep =
   | "tipo" | "taglio" | "letti" | "bagni" | "cucina" | "esterno" | "ospitiUnita" | "altraUnita"
-  | "biancheria" | "kit" | "passaggio"
+  | "biancheria" | "kit"
   | "camere" | "frequenza" | "areaComune"
   | "zona" | "foto" | "contatti" | "contattiHotel" | "risultato" | "fineHotel";
 
@@ -298,7 +298,7 @@ export function PreventivoWizard() {
     const loop: NomeStep[] = ["taglio", "letti", "bagni", "cucina", "esterno", "ospitiUnita"];
     const f: (NomeStep | null)[] = ["tipo", ...loop,
       stato.tipo === "case" ? "altraUnita" : null,
-      "biancheria", "kit", "passaggio", "zona", "foto", "contatti", "risultato"];
+      "biancheria", "kit", "zona", "foto", "contatti", "risultato"];
     return f.filter(Boolean) as NomeStep[];
   }, [stato.tipo]);
 
@@ -319,7 +319,6 @@ export function PreventivoWizard() {
       case "areaComune": return stato.areaComune !== null && (stato.areaComune === "no" || stato.areaComuneMq >= 1);
       case "biancheria": return stato.vuoleBiancheria !== null;
       case "kit": return stato.vuoleKit !== null;
-      case "passaggio": return stato.vuolePassaggio !== null;
       case "altraUnita": return altraScelta !== null;
       case "zona":
         if (stato.tipo === "case") {
@@ -609,15 +608,6 @@ export function PreventivoWizard() {
         <SceltaGriglia selezionato={stato.vuoleKit} onSel={(v) => scegli("vuoleKit", v, false)} opzioni={[
           { v: true, ic: "kitSi", t: "Sì, aggiungilo", s: "Un set completo per ogni ospite" },
           { v: false, ic: "kitNo", t: "No, grazie", s: "Magari più avanti" },
-        ]} />
-      </>);
-
-      case "passaggio": return (<>
-        <h1>Serve un servizio durante il soggiorno?</h1>
-        <p className="pv-sotto">Per i soggiorni lunghi: rifacimento letti e ricarica kit mentre gli ospiti sono ancora in casa, senza aspettare il checkout.</p>
-        <SceltaGriglia selezionato={stato.vuolePassaggio} onSel={(v) => scegli("vuolePassaggio", v, false)} opzioni={[
-          { v: true, ic: "passaggioSi", t: "Sì, mi interessa", s: "Rifacimento letti e ricarica a metà soggiorno" },
-          { v: false, ic: "passaggioNo", t: "No, solo al cambio", s: "Interveniamo solo tra un ospite e l'altro" },
         ]} />
       </>);
 
@@ -927,7 +917,7 @@ export function PreventivoWizard() {
   const ETICHETTE: Partial<Record<NomeStep, string>> = {
     tipo: "Struttura", taglio: "Appartamento", letti: "Posti letto", bagni: "Bagni",
     cucina: "Cucina", esterno: "Esterni", ospitiUnita: "Ospiti", altraUnita: "Altre unità",
-    biancheria: "Biancheria", kit: "Kit cortesia", passaggio: "Soggiorno",
+    biancheria: "Biancheria", kit: "Kit cortesia",
     camere: "Camere", frequenza: "Frequenza", areaComune: "Aree comuni",
     zona: "Zona", foto: "Foto", contatti: "Contatti", contattiHotel: "Contatti",
   };
