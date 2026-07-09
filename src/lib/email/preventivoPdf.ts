@@ -1568,7 +1568,7 @@ export async function buildPreventivoPdf(a: BuildPreventivoPdfArgs): Promise<Buf
   else if (q.camereDettaglio && q.camereDettaglio.length) flow = "bnb";
   else if (q.unitaDettaglio && q.unitaDettaglio.length > 1) flow = "multi";
   else if (t.includes("bnb") || t.includes("b&b") || t.includes("affitta")) flow = "bnb";
-  else if (t.includes("multi") || t.includes("piu") || t.includes("pi\u00F9")) flow = "multi";
+  else if ((t.includes("multi") || t.includes("piu") || t.includes("pi\u00F9")) && q.unitaDettaglio && q.unitaDettaglio.length > 1) flow = "multi";
   else flow = "vacation";
 
   const data: PreventivoPdfData = {
@@ -1629,11 +1629,12 @@ export async function buildPreventivoPdf(a: BuildPreventivoPdfArgs): Promise<Buf
   } else if (flow === "hotel") {
     data.unita = [{}]; // il preventivo hotel nasce dal sopralluogo: nessun numero
   } else {
+    const u0 = (q.unitaDettaglio && q.unitaDettaglio.length === 1) ? q.unitaDettaglio[0] : undefined;
     data.unita = [{
-      mq: numOrUndef(q.mq, dati.mq),
-      bagni: numOrUndef(q.bagni, dati.bagni),
-      postiLetto: numOrUndef(q.postiLetto, dati.postiLetto, q.ospiti, dati.ospiti),
-      prezzo: prezzoDaRange(q),
+      mq: numOrUndef(q.mq, dati.mq, u0?.mq),
+      bagni: numOrUndef(q.bagni, dati.bagni, u0?.bagni),
+      postiLetto: numOrUndef(q.postiLetto, dati.postiLetto, q.ospiti, dati.ospiti, u0?.postiLetto, u0?.ospiti),
+      prezzo: prezzoDaRange(u0 || q),
     }];
   }
 
