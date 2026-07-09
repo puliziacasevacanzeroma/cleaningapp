@@ -409,19 +409,7 @@ function LeadCard({ lead: l, espanso, onToggle, onPatch, onReinvia, salvando, in
             <div className="text-xs font-semibold text-slate-400 uppercase mt-3">Preventivo</div>
             <DettaglioQuote lead={l} />
 
-            {l.foto && l.foto.length > 0 && (
-              <>
-                <div className="text-xs font-semibold text-slate-400 uppercase mt-3">Foto ({l.foto.length})</div>
-                <div className="flex gap-2 flex-wrap">
-                  {l.foto.slice(0, 6).map((f, i) => (
-                    <a key={i} href={f} target="_blank" rel="noreferrer">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={f} alt="" className="w-16 h-16 object-cover rounded-lg border border-slate-200" />
-                    </a>
-                  ))}
-                </div>
-              </>
-            )}
+            <FotoLead lead={l} />
           </div>
 
           <div className="space-y-3">
@@ -468,6 +456,59 @@ function LeadCard({ lead: l, espanso, onToggle, onPatch, onReinvia, salvando, in
       )}
     </div>
   );
+}
+
+function FotoLead({ lead: l }: { lead: Lead }) {
+  // Multi-struttura: le foto sono salvate per appartamento in datiStruttura.unita[i].foto
+  const unita = (l.datiStruttura?.unita as { nome?: string; foto?: string[] }[] | undefined);
+  const perUnita =
+    l.tipo === "case" && Array.isArray(unita)
+      ? unita
+          .map((u, i) => ({ nome: u?.nome?.trim() || `Unità ${i + 1}`, foto: Array.isArray(u?.foto) ? u.foto : [] }))
+          .filter((u) => u.foto.length > 0)
+      : [];
+
+  if (perUnita.length > 0) {
+    return (
+      <>
+        <div className="text-xs font-semibold text-slate-400 uppercase mt-3">Foto per appartamento</div>
+        <div className="space-y-3 mt-1">
+          {perUnita.map((u, i) => (
+            <div key={i}>
+              <div className="text-[13px] font-semibold text-slate-600 mb-1">
+                {u.nome} <span className="text-slate-400 font-normal">({u.foto.length})</span>
+              </div>
+              <div className="flex gap-2 flex-wrap">
+                {u.foto.map((f, j) => (
+                  <a key={j} href={f} target="_blank" rel="noreferrer">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={f} alt="" className="w-16 h-16 object-cover rounded-lg border border-slate-200" />
+                  </a>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </>
+    );
+  }
+
+  if (l.foto && l.foto.length > 0) {
+    return (
+      <>
+        <div className="text-xs font-semibold text-slate-400 uppercase mt-3">Foto ({l.foto.length})</div>
+        <div className="flex gap-2 flex-wrap">
+          {l.foto.map((f, i) => (
+            <a key={i} href={f} target="_blank" rel="noreferrer">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={f} alt="" className="w-16 h-16 object-cover rounded-lg border border-slate-200" />
+            </a>
+          ))}
+        </div>
+      </>
+    );
+  }
+  return null;
 }
 
 function DettaglioQuote({ lead: l }: { lead: Lead }) {

@@ -198,7 +198,21 @@ const IC: Record<string, string> = {
   passaggioNo: `<svg viewBox="0 0 110 78">${lettoLato(24, 16, 1.15, true)}<path class="draw accent" d="M74 44l14 14M88 44L74 58"/></svg>`,
 };
 
+// Icone "tipo struttura": immagini reali (non ridisegnate), stile duotone elegante.
+const IMG_ICONE: Record<string, string> = {
+  casa: "/preventivo-icone/casa.png",
+  case: "/preventivo-icone/case.png",
+  bnb: "/preventivo-icone/bnb.png",
+  hotel: "/preventivo-icone/hotel.png",
+};
+
 function Icona({ nome, mini }: { nome: string; mini?: boolean }) {
+  if (IMG_ICONE[nome]) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img src={IMG_ICONE[nome]} alt="" className={mini ? "pv-ic pv-ic-mini pv-ic-img" : "pv-ic pv-ic-img"} />
+    );
+  }
   return (
     <span className={mini ? "pv-ic pv-ic-mini" : "pv-ic"}
       dangerouslySetInnerHTML={{ __html: IC[nome] ?? "" }} />
