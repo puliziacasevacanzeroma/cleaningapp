@@ -72,6 +72,32 @@ const TIPI: Record<string, { label: string; badge: string }> = {
 
 const oggiISO = () => new Date().toISOString().slice(0, 10);
 
+/** Numero in formato wa.me: solo cifre, prefisso incluso; default Italia se manca. */
+function waNumero(tel: string | undefined): string {
+  let n = (tel || "").replace(/[^0-9]/g, "");
+  if (!n) return "";
+  if (n.startsWith("00")) n = n.slice(2);
+  else if (!n.startsWith("39") && (n.length === 9 || n.length === 10)) n = "39" + n; // cellulare IT senza prefisso
+  return n;
+}
+function waLink(tel: string | undefined, nome?: string, numeroPrev?: string): string {
+  const n = waNumero(tel);
+  if (!n) return "";
+  const saluto = nome ? `Buongiorno ${nome.split(" ")[0]}` : "Buongiorno";
+  const rif = numeroPrev ? ` in merito al preventivo N°${numeroPrev}` : " in merito alla sua richiesta di preventivo";
+  const testo = encodeURIComponent(`${saluto}, la contatto da Puliziacasevacanze.it${rif}.`);
+  return `https://wa.me/${n}?text=${testo}`;
+}
+
+// Icona WhatsApp (glyph ufficiale semplificato)
+function IconaWhatsApp({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 32 32" className={className} fill="currentColor" aria-hidden="true">
+      <path d="M16.001 3C9.373 3 4 8.373 4 15c0 2.106.55 4.086 1.514 5.807L4 29l8.4-1.48A11.93 11.93 0 0016.001 27C22.628 27 28 21.627 28 15S22.628 3 16.001 3zm0 21.75c-1.86 0-3.6-.51-5.09-1.397l-.365-.216-4.985.878.888-4.86-.238-.377A9.7 9.7 0 016.25 15c0-5.385 4.366-9.75 9.751-9.75 5.384 0 9.749 4.365 9.749 9.75s-4.365 9.75-9.749 9.75zm5.355-7.29c-.293-.147-1.735-.856-2.003-.954-.269-.098-.464-.147-.66.147-.195.293-.756.954-.927 1.15-.171.195-.342.22-.635.073-.293-.147-1.238-.456-2.358-1.454-.872-.777-1.46-1.737-1.631-2.03-.171-.293-.018-.451.128-.598.132-.131.293-.342.44-.513.146-.171.195-.293.293-.489.098-.195.049-.366-.025-.513-.073-.147-.66-1.59-.904-2.178-.238-.572-.48-.494-.66-.503l-.562-.01c-.195 0-.513.073-.782.366-.269.293-1.025 1.002-1.025 2.444 0 1.441 1.05 2.834 1.196 3.03.146.195 2.065 3.153 5.004 4.42.699.302 1.244.482 1.669.617.701.223 1.339.192 1.843.116.562-.084 1.735-.709 1.98-1.394.244-.685.244-1.271.171-1.394-.073-.122-.269-.195-.562-.342z"/>
+    </svg>
+  );
+}
+
 function fmtData(iso: string | null): string {
   if (!iso) return "-";
   const d = new Date(iso);
@@ -98,24 +124,34 @@ export default function PreventiviPage() {
 
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto">
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-5">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800">Preventivi</h1>
-          <p className="text-sm text-slate-500">Lead dal preventivatore e configurazione del calcolatore</p>
-        </div>
-        <div className="flex bg-slate-100 rounded-xl p-1 w-fit">
-          <button
-            onClick={() => setTab("leads")}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${tab === "leads" ? "bg-white text-slate-800 shadow" : "text-slate-500"}`}
-          >
-            📋 Preventivi
-          </button>
-          <button
-            onClick={() => setTab("config")}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${tab === "config" ? "bg-white text-slate-800 shadow" : "text-slate-500"}`}
-          >
-            🧮 Calcolatore
-          </button>
+      {/* Hero in stile gestionale */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-sky-500 via-blue-600 to-indigo-600 p-5 md:p-6 mb-5 shadow-lg">
+        <div className="absolute -right-8 -top-8 w-40 h-40 bg-white/10 rounded-full" />
+        <div className="absolute -right-16 top-12 w-32 h-32 bg-white/5 rounded-full" />
+        <div className="relative flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur flex items-center justify-center text-white shadow-md">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-white">Preventivi</h1>
+              <p className="text-sm text-white/80">Lead dal preventivatore e configurazione del calcolatore</p>
+            </div>
+          </div>
+          <div className="flex bg-white/15 backdrop-blur rounded-xl p-1 w-fit">
+            <button
+              onClick={() => setTab("leads")}
+              className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${tab === "leads" ? "bg-white text-blue-700 shadow" : "text-white/90 hover:bg-white/10"}`}
+            >
+              Preventivi
+            </button>
+            <button
+              onClick={() => setTab("config")}
+              className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${tab === "config" ? "bg-white text-blue-700 shadow" : "text-white/90 hover:bg-white/10"}`}
+            >
+              Calcolatore
+            </button>
+          </div>
         </div>
       </div>
 
@@ -249,20 +285,30 @@ function TabLeads() {
           <div className="font-semibold text-amber-800 mb-2">📞 Da richiamare oggi ({daRichiamare.length})</div>
           <div className="flex flex-wrap gap-2">
             {daRichiamare.map((l) => (
-              <button
-                key={l.id}
-                onClick={() => { setFiltroStato("tutti"); setSearch(l.contatti.nome); setEspanso(l.id); }}
-                className="px-3 py-1.5 bg-white border border-amber-300 rounded-lg text-sm text-amber-900 hover:bg-amber-100 transition-colors"
-              >
-                {l.contatti.nome} · {l.contatti.telefono}
-              </button>
+              <div key={l.id} className="inline-flex items-center gap-1 bg-white border border-amber-300 rounded-lg overflow-hidden">
+                <button
+                  onClick={() => { setFiltroStato("tutti"); setSearch(l.contatti.nome); setEspanso(l.id); }}
+                  className="px-3 py-1.5 text-sm text-amber-900 hover:bg-amber-100 transition-colors"
+                >
+                  {l.contatti.nome} · {l.contatti.telefono}
+                </button>
+                {waNumero(l.contatti?.telefono) && (
+                  <a
+                    href={waLink(l.contatti?.telefono, l.contatti?.nome, l.numeroPreventivo)}
+                    target="_blank" rel="noreferrer" title="Scrivi su WhatsApp"
+                    className="flex items-center justify-center w-8 h-8 bg-gradient-to-r from-emerald-500 to-green-600 text-white hover:from-emerald-600 hover:to-green-700 transition-all"
+                  >
+                    <IconaWhatsApp className="w-4 h-4" />
+                  </a>
+                )}
+              </div>
             ))}
           </div>
         </div>
       )}
 
       {/* Filtri */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-3 space-y-3">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-3 space-y-3">
         <div className="flex flex-wrap gap-2">
           <FiltroPill attivo={filtroStato === "tutti"} onClick={() => setFiltroStato("tutti")} label={`Tutti (${leads.length})`} />
           {STATI.map((s) => (
@@ -270,20 +316,26 @@ function TabLeads() {
           ))}
         </div>
         <div className="flex flex-col md:flex-row gap-2">
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Cerca nome, telefono, email, zona, n° preventivo…"
-            className="flex-1 px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-sky-300"
-          />
-          <select value={filtroTipo} onChange={(e) => setFiltroTipo(e.target.value)} className="px-3 py-2 border border-slate-200 rounded-xl text-sm bg-white">
+          <div className="relative flex-1">
+            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z" /></svg>
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Cerca nome, telefono, email, zona, n° preventivo…"
+              className="w-full pl-9 pr-3 py-2.5 border-2 border-slate-200 rounded-xl text-sm focus:outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100 transition-all"
+            />
+          </div>
+          <select value={filtroTipo} onChange={(e) => setFiltroTipo(e.target.value)} className="px-3 py-2.5 border-2 border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:border-sky-500 transition-all">
             <option value="tutti">Tutti i tipi</option>
             <option value="casa">Casa vacanze</option>
             <option value="case">Multi struttura</option>
             <option value="bnb">B&B</option>
             <option value="hotel">Hotel</option>
           </select>
-          <button onClick={carica} className="px-4 py-2 rounded-xl text-sm font-medium bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors">↻ Aggiorna</button>
+          <button onClick={carica} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold bg-gradient-to-r from-slate-600 to-slate-700 text-white hover:from-slate-700 hover:to-slate-800 shadow-sm transition-all">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+            Aggiorna
+          </button>
         </div>
       </div>
 
@@ -317,7 +369,8 @@ function TabLeads() {
 
 function StatCard({ label, value, accent }: { label: string; value: string; accent: string }) {
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 p-4">
+    <div className="relative bg-white rounded-2xl border border-slate-200 p-4 shadow-sm hover:shadow-md transition-shadow overflow-hidden">
+      <div className={`absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b ${accent}`} />
       <div className={`text-2xl font-bold bg-gradient-to-r ${accent} bg-clip-text text-transparent`}>{value}</div>
       <div className="text-xs text-slate-500 mt-1">{label}</div>
     </div>
@@ -356,7 +409,7 @@ function LeadCard({ lead: l, espanso, onToggle, onPatch, onReinvia, salvando, in
   const [motivo, setMotivo] = useState(l.motivoEsito ?? "");
 
   return (
-    <div className={`bg-white rounded-2xl border p-4 transition-all ${scaduto ? "border-amber-300 ring-1 ring-amber-200" : "border-slate-200"}`}>
+    <div className={`bg-white rounded-2xl border p-4 shadow-sm hover:shadow-md transition-all ${scaduto ? "border-amber-300 ring-1 ring-amber-200" : "border-slate-200 hover:border-slate-300"}`}>
       {/* riga principale */}
       <div className="flex flex-col lg:flex-row lg:items-center gap-3">
         <button onClick={onToggle} className="flex-1 text-left">
@@ -376,12 +429,30 @@ function LeadCard({ lead: l, espanso, onToggle, onPatch, onReinvia, salvando, in
         </button>
 
         <div className="flex flex-wrap items-center gap-2">
-          <a href={`tel:${l.contatti?.telefono}`} className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm transition-colors">📞 {l.contatti?.telefono}</a>
+          <a
+            href={`tel:${l.contatti?.telefono}`}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
+            {l.contatti?.telefono}
+          </a>
+          {waNumero(l.contatti?.telefono) && (
+            <a
+              href={waLink(l.contatti?.telefono, l.contatti?.nome, l.numeroPreventivo)}
+              target="_blank"
+              rel="noreferrer"
+              title="Scrivi su WhatsApp"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white text-sm font-semibold shadow-sm transition-all"
+            >
+              <IconaWhatsApp className="w-4 h-4" />
+              WhatsApp
+            </a>
+          )}
           <select
             value={l.stato}
             disabled={salvando}
             onChange={(e) => onPatch({ stato: e.target.value })}
-            className="px-2 py-1.5 border border-slate-200 rounded-lg text-sm bg-white"
+            className="px-2.5 py-1.5 border-2 border-slate-200 rounded-lg text-sm bg-white font-medium focus:outline-none focus:border-sky-500 transition-all"
           >
             {STATI.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
           </select>
@@ -391,7 +462,7 @@ function LeadCard({ lead: l, espanso, onToggle, onPatch, onReinvia, salvando, in
             disabled={salvando}
             onChange={(e) => onPatch({ followUpAt: e.target.value || null })}
             title="Data ricontatto"
-            className="px-2 py-1.5 border border-slate-200 rounded-lg text-sm bg-white"
+            className="px-2.5 py-1.5 border-2 border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:border-sky-500 transition-all"
           />
         </div>
       </div>
