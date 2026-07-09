@@ -58,6 +58,10 @@
 /* icone SVG */
 .pv-ic{width:110px;height:78px;margin:0 auto 8px;display:block;max-width:100%}
 .pv-ic svg{width:100%;height:100%;display:block}
+/* Icone tipo struttura come immagine (PNG in /public/preventivo-icone) */
+.pv-ic-img{width:100%;height:100%;object-fit:contain;display:block}
+img.pv-ic-img{width:110px;height:78px}
+.pv-ic-mini.pv-ic-img{width:38px;height:38px}
 .pv-ic svg *{fill:none;stroke:var(--blu);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
 .pv-ic svg .accent{stroke:var(--rame)}
 .pv-ic svg .fill{fill:var(--blu-chiaro)}
