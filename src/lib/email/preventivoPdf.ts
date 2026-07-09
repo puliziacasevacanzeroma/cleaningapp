@@ -392,7 +392,9 @@ function drawInfoPills(doc: Doc, a: Assets, o: PuliziaOpts) {
   const iconH = 10.5, iconW = iconH * (231 / 168); // proporzioni reali dell'icona
   for (const [icon, label] of rows) {
     setFill(doc, BLUE);
-    doc.roundedRect(px, py, pw, ph, 6.5, 6.5, "F");
+    doc.setDrawColor(COPPER[0], COPPER[1], COPPER[2]);
+    doc.setLineWidth(0.6);
+    doc.roundedRect(px, py, pw, ph, 6.5, 6.5, "FD");
     doc.addImage(icons[icon], "PNG", px + 3.2, py + (ph - iconH) / 2, iconW, iconH);
     setText(doc, WHITE);
     doc.setFont("LeagueSpartan", "bold");
