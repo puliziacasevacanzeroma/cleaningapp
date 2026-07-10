@@ -328,3 +328,7 @@ img.pv-ic-img{width:110px;height:78px}
 .pv-cam-prezzo .euro{font-size:.5em;font-weight:600;opacity:.85}
 .pv-cam-prezzo .da-mini{font-size:12px;font-weight:600;opacity:.8;margin-right:3px}
 .pv-cam-sub{font-size:10.5px;opacity:.72;font-weight:600;margin-top:3px}
+
+/* Logo immagine nell'header (sostituisce la casetta SVG) */
+.pv-brand .pv-logo-img{height:34px;width:auto;display:block}
+.pv-side .pv-brand .pv-logo-img{height:40px}

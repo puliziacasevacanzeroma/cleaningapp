@@ -45,6 +45,8 @@ interface Assets {
   gestShotRatios: number[];
   prod: Record<string, string>;
   fonts: Record<string, string>;
+  logo?: string;
+  logoRatio?: number;
 }
 
 async function loadOptional(name: string): Promise<{ b64: string; ratio: number } | undefined> {
@@ -80,6 +82,7 @@ async function loadAssets(): Promise<Assets> {
   ];
   const b = await Promise.all(names.map(loadAsset));
   const gPhone = await loadOptional("gest_phone.png") || await loadOptional("gest_phone.jpg");
+  const logoAsset = await loadOptional("logo_full.png");
   const gShots = await Promise.all([1, 2, 3].map(async (i) => (await loadOptional(`gest_shot_${i}.png`)) || (await loadOptional(`gest_shot_${i}.jpg`))));
   return {
     coverTop: b[0], fadeBg: b[1],
@@ -94,6 +97,8 @@ async function loadAssets(): Promise<Assets> {
     gestPhoneRatio: gPhone?.ratio,
     gestShots: gShots.map((g) => g?.b64),
     gestShotRatios: gShots.map((g) => g?.ratio || 1),
+    logo: logoAsset?.b64,
+    logoRatio: logoAsset?.ratio,
     fonts: {
       "LeagueSpartan-Bold": b[24], "Montserrat-Regular": b[25], "Montserrat-Medium": b[26],
       "Montserrat-Bold": b[27], "Montserrat-BoldItalic": b[28],
@@ -225,6 +230,13 @@ function pageCover(doc: Doc, a: Assets, d: CoverData) {
   setFill(doc, BLUE);
   doc.rect(0, 0, W, 29.5, "F");
   doc.addImage(a.coverTop, "JPEG", 0, 0, W, 177.3);
+
+  // logo brand centrato in alto
+  if (a.logo) {
+    const lh = 22; // altezza logo in mm
+    const lw = lh * (a.logoRatio || 1.2);
+    doc.addImage(a.logo, "PNG", W / 2 - lw / 2, 4, lw, lh);
+  }
 
   // badge tipo struttura
   setFill(doc, COPPER);

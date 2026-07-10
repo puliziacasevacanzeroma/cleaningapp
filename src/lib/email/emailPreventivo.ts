@@ -188,7 +188,7 @@ export function buildEmailPreventivo(d: DatiEmailPreventivo): { subject: string;
     <!-- TESTATA BRAND -->
     <tr><td bgcolor="${BLU_SCURO}" style="background:linear-gradient(135deg,${BLU_SCURO},${BLU});border-radius:22px 22px 0 0;padding:24px 28px">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
-        <td style="font-family:Arial,Helvetica,sans-serif;font-size:19px;font-weight:800;color:#ffffff">\u{1F3E1}&nbsp; Puliziacasevacanze.it</td>
+        <td style="font-family:Arial,Helvetica,sans-serif;font-size:19px;font-weight:800;color:#ffffff"><img src="https://gestionale.puliziacasevacanze.it/preventivo/logo-mail.png" alt="" width="34" height="34" style="vertical-align:middle;margin-right:8px;border:0" />Puliziacasevacanze.it</td>
       </tr><tr>
         <td style="font-family:Arial,Helvetica,sans-serif;font-size:12.5px;color:#ffffff;opacity:.85;padding-top:3px">Pulizie e noleggio biancheria per case vacanze, B&amp;B e affittacamere a Roma \u2014 365 giorni l\u2019anno</td>
       </tr></table>
