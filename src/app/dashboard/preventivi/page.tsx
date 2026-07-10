@@ -654,108 +654,111 @@ function DettaglioQuote({ lead: l }: { lead: Lead }) {
 // ═══════════════════════════ TAB CALCOLATORE ═══════════════════════════
 
 /** Etichette leggibili per ogni sezione/campo del motore. */
-const SEZIONI: { key: string; titolo: string; nota?: string; campi: { path: string[]; label: string; unit: string; step?: number }[] }[] = [
+const SEZIONI: { key: string; titolo: string; nota?: string; icona?: string; campi: { path: string[]; label: string; unit: string; step?: number; help?: string }[] }[] = [
   {
-    key: "basi", titolo: "Prezzo base per taglio", nota: "Il punto di partenza del calcolo, per taglio effettivo.",
+    key: "basi", titolo: "Prezzo base per taglio", icona: "home",
+    nota: "Il punto di partenza del calcolo. In base ai mq, l'appartamento viene classificato in un taglio e parte da questo prezzo.",
     campi: [
-      { path: ["basi", "mono"], label: "Monolocale", unit: "€" },
-      { path: ["basi", "bilo"], label: "Bilocale", unit: "€" },
-      { path: ["basi", "trilo"], label: "Trilocale", unit: "€" },
-      { path: ["basi", "triloGrande"], label: "Trilocale grande (>75mq)", unit: "€" },
-      { path: ["basi", "quadri"], label: "Quadrilocale", unit: "€" },
+      { path: ["basi", "mono"], label: "Monolocale", unit: "€", help: "Prezzo di partenza per un monolocale. Es: se metti 40, un monolocale standard parte da 40€ e poi si aggiungono eventuali extra (letti in più, bagni, esterni)." },
+      { path: ["basi", "bilo"], label: "Bilocale", unit: "€", help: "Prezzo di partenza per un bilocale (una camera + soggiorno). Es: 45€ è la base, a cui si sommano i correttivi." },
+      { path: ["basi", "trilo"], label: "Trilocale", unit: "€", help: "Prezzo di partenza per un trilocale (due camere + soggiorno). Es: 52€." },
+      { path: ["basi", "triloGrande"], label: "Trilocale grande (>75mq)", unit: "€", help: "Un trilocale sopra i mq indicati nelle Soglie diventa \"grande\" e usa questo prezzo, più alto. Es: 54€ invece di 52€." },
+      { path: ["basi", "quadri"], label: "Quadrilocale", unit: "€", help: "Prezzo di partenza per un quadrilocale (tre o più camere). Es: 60€." },
     ],
   },
   {
-    key: "lettiInclusi", titolo: "Letti inclusi nel prezzo base", nota: "Oltre questi, scatta il correttivo per letto.",
+    key: "lettiInclusi", titolo: "Letti inclusi nel prezzo base", icona: "bed",
+    nota: "Quanti posti letto sono già compresi nel prezzo base di ogni taglio. Ogni letto in più fa scattare il correttivo \"Letto extra\".",
     campi: [
-      { path: ["lettiInclusi", "mono"], label: "Monolocale", unit: "letti", step: 1 },
-      { path: ["lettiInclusi", "bilo"], label: "Bilocale", unit: "letti", step: 1 },
-      { path: ["lettiInclusi", "trilo"], label: "Trilocale", unit: "letti", step: 1 },
-      { path: ["lettiInclusi", "triloGrande"], label: "Trilocale grande", unit: "letti", step: 1 },
-      { path: ["lettiInclusi", "quadri"], label: "Quadrilocale", unit: "letti", step: 1 },
+      { path: ["lettiInclusi", "mono"], label: "Monolocale", unit: "letti", step: 1, help: "Letti già inclusi nel prezzo base di un monolocale. Es: se metti 1, il 2° letto viene conteggiato come extra e costa in più." },
+      { path: ["lettiInclusi", "bilo"], label: "Bilocale", unit: "letti", step: 1, help: "Letti inclusi nel bilocale. Es: 2 letti inclusi; dal 3° si paga il correttivo letto extra." },
+      { path: ["lettiInclusi", "trilo"], label: "Trilocale", unit: "letti", step: 1, help: "Letti inclusi nel trilocale. Es: 3. Dal 4° scatta l'extra." },
+      { path: ["lettiInclusi", "triloGrande"], label: "Trilocale grande", unit: "letti", step: 1, help: "Letti inclusi nel trilocale grande. Es: 3." },
+      { path: ["lettiInclusi", "quadri"], label: "Quadrilocale", unit: "letti", step: 1, help: "Letti inclusi nel quadrilocale. Es: 4. Dal 5° si paga l'extra." },
     ],
   },
   {
-    key: "corrP", titolo: "Correttivi — appartamenti piccoli (mono/bilo)",
+    key: "corrP", titolo: "Correttivi — appartamenti piccoli (mono/bilo)", icona: "plus",
+    nota: "Quanto si aggiunge al prezzo base per ogni caratteristica extra, negli appartamenti piccoli (mono e bilocali).",
     campi: [
-      { path: ["corr", "piccolo", "letto"], label: "Letto extra", unit: "€" },
-      { path: ["corr", "piccolo", "bagno"], label: "Bagno extra", unit: "€" },
-      { path: ["corr", "piccolo", "cucinaSep"], label: "Cucina separata", unit: "€" },
-      { path: ["corr", "piccolo", "cucinaAbit"], label: "Cucina abitabile", unit: "€" },
-      { path: ["corr", "piccolo", "balcone"], label: "Balcone", unit: "€" },
-      { path: ["corr", "piccolo", "terrazzo"], label: "Terrazzo", unit: "€" },
-      { path: ["corr", "piccolo", "terrazzoGrande"], label: "Terrazzo grande", unit: "€" },
+      { path: ["corr", "piccolo", "letto"], label: "Letto extra", unit: "€", help: "Costo per ogni letto oltre quelli inclusi. Es: 3€ a letto. Un bilocale con 3 letti (2 inclusi) paga +3€." },
+      { path: ["corr", "piccolo", "bagno"], label: "Bagno extra", unit: "€", help: "Costo per ogni bagno oltre il primo. Es: 7€. Un bilocale con 2 bagni paga +7€." },
+      { path: ["corr", "piccolo", "cucinaSep"], label: "Cucina separata", unit: "€", help: "Supplemento se la cucina è una stanza separata (più superficie da pulire). Es: 4€." },
+      { path: ["corr", "piccolo", "cucinaAbit"], label: "Cucina abitabile", unit: "€", help: "Supplemento per cucina abitabile (con tavolo da pranzo). Es: 3€." },
+      { path: ["corr", "piccolo", "balcone"], label: "Balcone", unit: "€", help: "Supplemento se c'è un balcone da pulire. Es: 2€." },
+      { path: ["corr", "piccolo", "terrazzo"], label: "Terrazzo", unit: "€", help: "Supplemento per un terrazzo. Es: 4€." },
+      { path: ["corr", "piccolo", "terrazzoGrande"], label: "Terrazzo grande", unit: "€", help: "Supplemento per un terrazzo grande (oltre 20mq). Es: 6€." },
     ],
   },
   {
-    key: "corrG", titolo: "Correttivi — appartamenti grandi (trilo+)",
+    key: "corrG", titolo: "Correttivi — appartamenti grandi (trilo+)", icona: "plus",
+    nota: "Stessi correttivi, ma applicati agli appartamenti grandi (trilocali e quadrilocali). Di solito un po' più alti, perché le superfici sono maggiori.",
     campi: [
-      { path: ["corr", "grande", "letto"], label: "Letto extra", unit: "€" },
-      { path: ["corr", "grande", "bagno"], label: "Bagno extra", unit: "€" },
-      { path: ["corr", "grande", "cucinaSep"], label: "Cucina separata", unit: "€" },
-      { path: ["corr", "grande", "cucinaAbit"], label: "Cucina abitabile", unit: "€" },
-      { path: ["corr", "grande", "balcone"], label: "Balcone", unit: "€" },
-      { path: ["corr", "grande", "terrazzo"], label: "Terrazzo", unit: "€" },
-      { path: ["corr", "grande", "terrazzoGrande"], label: "Terrazzo grande", unit: "€" },
+      { path: ["corr", "grande", "letto"], label: "Letto extra", unit: "€", help: "Costo per ogni letto oltre quelli inclusi, nei grandi. Es: 4€ a letto." },
+      { path: ["corr", "grande", "bagno"], label: "Bagno extra", unit: "€", help: "Costo per ogni bagno oltre il primo, nei grandi. Es: 8€." },
+      { path: ["corr", "grande", "cucinaSep"], label: "Cucina separata", unit: "€", help: "Supplemento cucina separata nei grandi. Es: 5€." },
+      { path: ["corr", "grande", "cucinaAbit"], label: "Cucina abitabile", unit: "€", help: "Supplemento cucina abitabile nei grandi. Es: 4€." },
+      { path: ["corr", "grande", "balcone"], label: "Balcone", unit: "€", help: "Supplemento balcone nei grandi. Es: 3€." },
+      { path: ["corr", "grande", "terrazzo"], label: "Terrazzo", unit: "€", help: "Supplemento terrazzo nei grandi. Es: 5€." },
+      { path: ["corr", "grande", "terrazzoGrande"], label: "Terrazzo grande", unit: "€", help: "Supplemento terrazzo grande nei grandi. Es: 7€." },
     ],
   },
   {
-    key: "biancheria", titolo: "Biancheria (a cambio)",
+    key: "biancheria", titolo: "Biancheria (a cambio)", icona: "linen",
+    nota: "Prezzi del noleggio biancheria, conteggiati a ogni cambio. Vengono mostrati a parte, non sono inclusi nel prezzo di pulizia.",
     campi: [
-      { path: ["biancheria", "matrimoniale"], label: "Set matrimoniale", unit: "€", step: 0.1 },
-      { path: ["biancheria", "singolo"], label: "Set singolo", unit: "€", step: 0.1 },
-      { path: ["biancheria", "setOspite"], label: "Set bagno per ospite", unit: "€", step: 0.1 },
-      { path: ["biancheria", "tappetino"], label: "Tappetino (per bagno)", unit: "€", step: 0.1 },
-      { path: ["biancheria", "canavaccio"], label: "Canovaccio", unit: "€", step: 0.1 },
+      { path: ["biancheria", "matrimoniale"], label: "Set matrimoniale", unit: "€", step: 0.1, help: "Prezzo di un set completo per letto matrimoniale (lenzuola + federe). Es: 8€." },
+      { path: ["biancheria", "singolo"], label: "Set singolo", unit: "€", step: 0.1, help: "Prezzo di un set per letto singolo. Es: 6€." },
+      { path: ["biancheria", "setOspite"], label: "Set bagno per ospite", unit: "€", step: 0.1, help: "Asciugamani per ogni ospite (viso + corpo). Es: 4€ a persona." },
+      { path: ["biancheria", "tappetino"], label: "Tappetino (per bagno)", unit: "€", step: 0.1, help: "Tappetino da bagno, conteggiato per ogni bagno. Es: 1€." },
+      { path: ["biancheria", "canavaccio"], label: "Canovaccio", unit: "€", step: 0.1, help: "Canovaccio da cucina. Es: 1€." },
     ],
   },
   {
-    key: "kit", titolo: "Kit di cortesia",
-    campi: [{ path: ["kitCortesia"], label: "Kit per ospite", unit: "€", step: 0.01 }],
+    key: "kit", titolo: "Kit di cortesia", icona: "kit",
+    nota: "Prezzo del kit cortesia per ospite (saponcini, cuffia, ecc.), se richiesto. Mostrato come opzione a parte.",
+    campi: [{ path: ["kitCortesia"], label: "Kit per ospite", unit: "€", step: 0.01, help: "Costo di un kit cortesia completo per un ospite. Es: 2,50€ a persona." }],
   },
   {
-    key: "bnb", titolo: "B&B / Affittacamere",
+    key: "bnb", titolo: "B&B / Affittacamere", icona: "bnb",
+    nota: "Prezzi specifici per B&B e affittacamere, calcolati a camera invece che ad appartamento.",
     campi: [
-      { path: ["bnb", "singola"], label: "Camera singola (1p)", unit: "€" },
-      { path: ["bnb", "doppia"], label: "Camera doppia (2p)", unit: "€" },
-      { path: ["bnb", "personaExtra"], label: "Per persona oltre la 2ª", unit: "€" },
-      { path: ["bnb", "rifacimentoLetto"], label: "Rifacimento letto (giornaliero)", unit: "€" },
-      { path: ["bnb", "uscita"], label: "Uscita (riassetto giornaliero)", unit: "€" },
+      { path: ["bnb", "singola"], label: "Camera singola (1p)", unit: "€", help: "Prezzo pulizia di una camera singola. Es: 22€." },
+      { path: ["bnb", "doppia"], label: "Camera doppia (2p)", unit: "€", help: "Prezzo pulizia di una camera doppia. Es: 28€." },
+      { path: ["bnb", "personaExtra"], label: "Per persona oltre la 2ª", unit: "€", help: "Aggiunta per ogni ospite oltre il secondo nella stessa camera (es. tripla). Es: +6€ a persona." },
+      { path: ["bnb", "rifacimentoLetto"], label: "Rifacimento letto (giornaliero)", unit: "€", help: "Costo del solo rifacimento letto quando il servizio è giornaliero. Es: 5€." },
+      { path: ["bnb", "uscita"], label: "Uscita (riassetto giornaliero)", unit: "€", help: "Costo fisso di uscita per il riassetto giornaliero della camera. Es: 10€." },
     ],
   },
   {
-    key: "aree", titolo: "Aree comuni",
+    key: "aree", titolo: "Aree comuni", icona: "sofa",
+    nota: "Come si calcola la pulizia degli spazi comuni (ingressi, saloni) nei B&B e nelle strutture con più camere.",
     campi: [
-      { path: ["areaComune", "sogliaMq"], label: "Mq inclusi nella base", unit: "mq", step: 1 },
-      { path: ["areaComune", "inLocoBase"], label: "In loco — base", unit: "€" },
-      { path: ["areaComune", "inLocoMqExtra"], label: "In loco — €/mq extra", unit: "€", step: 0.1 },
-      { path: ["areaComune", "dedicataBase"], label: "Uscita dedicata — base", unit: "€" },
-      { path: ["areaComune", "dedicataMqExtra"], label: "Uscita dedicata — €/mq extra", unit: "€", step: 0.1 },
+      { path: ["areaComune", "sogliaMq"], label: "Mq inclusi nella base", unit: "mq", step: 1, help: "Fino a questi mq, l'area comune è coperta dal prezzo base. Es: 20mq inclusi; oltre si paga al mq." },
+      { path: ["areaComune", "inLocoBase"], label: "In loco — base", unit: "€", help: "Prezzo base per pulire le aree comuni quando l'operatore è già lì per le camere. Es: 15€." },
+      { path: ["areaComune", "inLocoMqExtra"], label: "In loco — €/mq extra", unit: "€", step: 0.1, help: "Costo per ogni mq oltre la soglia, quando si è già in loco. Es: 0,5€/mq. Un salone di 30mq (10 oltre soglia) = +5€." },
+      { path: ["areaComune", "dedicataBase"], label: "Uscita dedicata — base", unit: "€", help: "Prezzo base se serve un'uscita apposta solo per le aree comuni (l'operatore va lì solo per quello). Es: 25€." },
+      { path: ["areaComune", "dedicataMqExtra"], label: "Uscita dedicata — €/mq extra", unit: "€", step: 0.1, help: "Costo al mq oltre soglia, per l'uscita dedicata. Es: 0,7€/mq." },
     ],
   },
   {
-    key: "passaggio", titolo: "Passaggio in soggiorno (case)",
+    key: "sconto", titolo: "Sconto multi-struttura", icona: "percent",
+    nota: "Sconto automatico quando un cliente affida più case insieme.",
     campi: [
-      { path: ["passaggio", "uscita"], label: "Uscita", unit: "€" },
-      { path: ["passaggio", "perLetto"], label: "Per letto", unit: "€" },
+      { path: ["scontoMultiUnita", "daUnita"], label: "A partire da (n° case)", unit: "case", step: 1, help: "Da quante case in su scatta lo sconto. Es: 2 → chi ne affida 2 o più riceve lo sconto." },
+      { path: ["scontoMultiUnita", "percento"], label: "Sconto", unit: "%", step: 1, help: "Percentuale di sconto applicata a ogni casa. Es: 5% su tutte le strutture." },
     ],
   },
   {
-    key: "sconto", titolo: "Sconto multi-struttura",
+    key: "soglie", titolo: "Soglie mq", icona: "ruler",
+    nota: "I mq che decidono in quale taglio finisce un appartamento, e oltre quali il preventivo diventa \"su misura\" (troppo grande per il calcolo automatico).",
     campi: [
-      { path: ["scontoMultiUnita", "daUnita"], label: "A partire da (n° case)", unit: "case", step: 1 },
-      { path: ["scontoMultiUnita", "percento"], label: "Sconto", unit: "%", step: 1 },
-    ],
-  },
-  {
-    key: "soglie", titolo: "Soglie mq", nota: "Sopra MQ MAX il preventivo diventa \"su misura\". Le soglie promuovono il taglio dichiarato al superiore.",
-    campi: [
-      { path: ["MQ_MAX"], label: "MQ massimi (oltre: su misura)", unit: "mq", step: 5 },
-      { path: ["MQ_TRILO_GRANDE"], label: "Trilo diventa \"grande\" oltre", unit: "mq", step: 5 },
-      { path: ["soglieMqPromozione", "mono"], label: "Mono → Bilo oltre", unit: "mq", step: 5 },
-      { path: ["soglieMqPromozione", "bilo"], label: "Bilo → Trilo oltre", unit: "mq", step: 5 },
-      { path: ["soglieMqPromozione", "trilo"], label: "Trilo → Quadri oltre", unit: "mq", step: 5 },
-      { path: ["soglieMqPromozione", "triloGrande"], label: "Trilo grande → Quadri oltre", unit: "mq", step: 5 },
+      { path: ["MQ_MAX"], label: "MQ massimi (oltre: su misura)", unit: "mq", step: 5, help: "Sopra questi mq il preventivo automatico non basta e diventa \"su misura\" (sopralluogo). Es: 200mq." },
+      { path: ["MQ_TRILO_GRANDE"], label: "Trilo diventa \"grande\" oltre", unit: "mq", step: 5, help: "Un trilocale sopra questi mq passa alla tariffa \"trilo grande\". Es: 75mq." },
+      { path: ["soglieMqPromozione", "mono"], label: "Mono → Bilo oltre", unit: "mq", step: 5, help: "Un monolocale troppo grande viene trattato come bilocale oltre questi mq. Es: 40mq." },
+      { path: ["soglieMqPromozione", "bilo"], label: "Bilo → Trilo oltre", unit: "mq", step: 5, help: "Un bilocale oltre questi mq viene trattato come trilocale. Es: 65mq." },
+      { path: ["soglieMqPromozione", "trilo"], label: "Trilo → Quadri oltre", unit: "mq", step: 5, help: "Un trilocale oltre questi mq diventa quadrilocale. Es: 95mq." },
+      { path: ["soglieMqPromozione", "triloGrande"], label: "Trilo grande → Quadri oltre", unit: "mq", step: 5, help: "Un trilo grande oltre questi mq diventa quadrilocale. Es: 95mq." },
     ],
   },
 ];
@@ -782,6 +785,51 @@ function contaDiff(a: EngineCfg, b: EngineCfg): number {
   };
   walk(a, b);
   return n;
+}
+
+// Icona informativa con tooltip (hover su desktop, tap su mobile)
+function InfoTip({ testo }: { testo: string }) {
+  const [aperto, setAperto] = useState(false);
+  return (
+    <span className="relative inline-flex">
+      <button
+        type="button"
+        onClick={(e) => { e.preventDefault(); setAperto((v) => !v); }}
+        onMouseEnter={() => setAperto(true)}
+        onMouseLeave={() => setAperto(false)}
+        className="w-4 h-4 rounded-full bg-slate-200 hover:bg-sky-500 hover:text-white text-slate-500 text-[10px] font-bold flex items-center justify-center transition-colors"
+        aria-label="Spiegazione"
+      >
+        i
+      </button>
+      {aperto && (
+        <span className="absolute z-20 left-1/2 -translate-x-1/2 bottom-full mb-2 w-56 p-2.5 rounded-xl bg-slate-800 text-white text-xs leading-snug shadow-xl">
+          {testo}
+          <span className="absolute left-1/2 -translate-x-1/2 top-full w-2 h-2 bg-slate-800 rotate-45 -mt-1" />
+        </span>
+      )}
+    </span>
+  );
+}
+
+// Piccola icona colorata per intestazione sezione
+function IconaSezione({ tipo }: { tipo?: string }) {
+  const paths: Record<string, React.ReactNode> = {
+    home: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l9-9 9 9M5 10v10h14V10" />,
+    bed: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 18v-6a2 2 0 012-2h14a2 2 0 012 2v6M3 14h18M6 10V8a2 2 0 012-2h8a2 2 0 012 2v2" />,
+    plus: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />,
+    linen: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7h16M4 12h16M4 17h16" />,
+    kit: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3h6v4l3 3v11H6V10l3-3V3z" />,
+    bnb: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 21V9l8-6 8 6v12M9 21v-6h6v6" />,
+    sofa: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 12V9a2 2 0 012-2h12a2 2 0 012 2v3M3 12a2 2 0 012 2v3h14v-3a2 2 0 012-2M6 20v-3M18 20v-3" />,
+    percent: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 5L5 19M6.5 6.5h.01M17.5 17.5h.01" />,
+    ruler: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7l14 14 4-4L7 3zM8 8l2 2M11 5l2 2M5 11l2 2" />,
+  };
+  return (
+    <span className="w-9 h-9 rounded-xl bg-gradient-to-br from-sky-500 to-blue-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">{paths[tipo || "home"] || paths.home}</svg>
+    </span>
+  );
 }
 
 function TabConfig() {
@@ -897,6 +945,21 @@ function TabConfig() {
     <div className="grid lg:grid-cols-3 gap-4 items-start">
       {/* colonna parametri */}
       <div className="lg:col-span-2 space-y-4">
+        {/* Banner spiegazione */}
+        <div className="rounded-2xl bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200 p-4">
+          <div className="flex items-start gap-3">
+            <span className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 text-white flex items-center justify-center shrink-0 shadow-sm">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+            </span>
+            <div>
+              <div className="font-semibold text-slate-800">Come funziona il calcolatore</div>
+              <div className="text-sm text-slate-600 mt-0.5 leading-snug">
+                Questi sono i prezzi che il preventivatore usa per calcolare ogni preventivo automaticamente. Modifica un numero, guarda l'<b>Anteprima live</b> a lato che si aggiorna subito, e quando sei soddisfatto premi <b>Salva</b>. Passa il mouse (o tocca) la <span className="inline-flex w-4 h-4 rounded-full bg-slate-300 text-slate-600 text-[10px] font-bold items-center justify-center align-middle">i</span> accanto a ogni campo per una spiegazione con esempio.
+              </div>
+            </div>
+          </div>
+        </div>
+
         {msg && (
           <div className={`rounded-2xl p-3 text-sm font-medium ${msg.tipo === "ok" ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-rose-50 text-rose-700 border border-rose-200"}`}>
             {msg.testo}
@@ -904,18 +967,24 @@ function TabConfig() {
         )}
 
         {SEZIONI.map((sez) => (
-          <div key={sez.key} className="bg-white rounded-2xl border border-slate-200 p-4">
-            <div className="font-semibold text-slate-800">{sez.titolo}</div>
-            {sez.nota && <div className="text-xs text-slate-400 mt-0.5">{sez.nota}</div>}
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mt-3">
+          <div key={sez.key} className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow p-4">
+            <div className="flex items-start gap-3">
+              <IconaSezione tipo={sez.icona} />
+              <div className="flex-1">
+                <div className="font-semibold text-slate-800">{sez.titolo}</div>
+                {sez.nota && <div className="text-xs text-slate-500 mt-0.5 leading-snug">{sez.nota}</div>}
+              </div>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mt-4">
               {sez.campi.map((c) => {
                 const val = getPath(cfg, c.path);
                 const def = defaults ? getPath(defaults, c.path) : val;
                 const cambiato = val !== def;
                 return (
-                  <label key={c.path.join(".")} className="block">
-                    <span className={`text-xs ${cambiato ? "text-violet-600 font-semibold" : "text-slate-500"}`}>
-                      {c.label}{cambiato ? ` (default ${def})` : ""}
+                  <div key={c.path.join(".")} className="block">
+                    <span className={`text-xs flex items-center gap-1 ${cambiato ? "text-violet-600 font-semibold" : "text-slate-600"}`}>
+                      {c.label}{cambiato ? ` (def. ${def})` : ""}
+                      {c.help && <InfoTip testo={c.help} />}
                     </span>
                     <div className="flex items-center gap-1 mt-1">
                       <input
@@ -924,11 +993,11 @@ function TabConfig() {
                         min={0}
                         value={val}
                         onChange={(e) => setCfg(setPath(cfg, c.path, Math.max(0, Number(e.target.value))))}
-                        className={`w-full px-2 py-1.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-sky-300 ${cambiato ? "border-violet-300 bg-violet-50/50" : "border-slate-200"}`}
+                        className={`w-full px-2.5 py-2 border-2 rounded-lg text-sm focus:outline-none focus:border-sky-500 transition-all ${cambiato ? "border-violet-300 bg-violet-50/50" : "border-slate-200"}`}
                       />
                       <span className="text-xs text-slate-400 w-8">{c.unit}</span>
                     </div>
-                  </label>
+                  </div>
                 );
               })}
             </div>
