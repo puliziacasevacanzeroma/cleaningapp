@@ -228,14 +228,14 @@ interface CoverData { numero: string; data: string; cliente: string; indirizzo: 
 
 function pageCover(doc: Doc, a: Assets, d: CoverData) {
   setFill(doc, BLUE);
-  doc.rect(0, 0, W, 29.5, "F");
-  doc.addImage(a.coverTop, "JPEG", 0, 0, W, 177.3);
+  doc.rect(0, 0, W, 32, "F");
+  doc.addImage(a.coverTop, "JPEG", 0, 32, W, 145.3);
 
-  // logo brand centrato in alto
+  // logo simbolo centrato nella fascia blu superiore
   if (a.logo) {
-    const lh = 22; // altezza logo in mm
-    const lw = lh * (a.logoRatio || 1.2);
-    doc.addImage(a.logo, "PNG", W / 2 - lw / 2, 4, lw, lh);
+    const lh = 24; // altezza logo in mm
+    const lw = lh * (a.logoRatio || 1.25);
+    doc.addImage(a.logo, "PNG", W / 2 - lw / 2, 2.5, lw, lh);
   }
 
   // badge tipo struttura
