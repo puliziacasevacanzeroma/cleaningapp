@@ -1,5 +1,7 @@
 /**
  * emailPreventivo.ts — Email preventivo per il cliente
+ * v3 — 10/07/2026: fix proporzioni logo (onda completa, ratio 1.137)
+ * v2 — 10/07/2026: testata con solo logo simbolo (logo_full.png), rimossa scritta affiancata
  * v1 — 07/07/2026
  * Design speculare al widget /preventivo: testata blu, pannello prezzo scuro
  * "a partire da", righe di dettaglio con badge-icona, blocco verde inclusi,
@@ -188,7 +190,7 @@ export function buildEmailPreventivo(d: DatiEmailPreventivo): { subject: string;
     <!-- TESTATA BRAND -->
     <tr><td bgcolor="${BLU_SCURO}" style="background:linear-gradient(135deg,${BLU_SCURO},${BLU});border-radius:22px 22px 0 0;padding:24px 28px">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
-        <td style="font-family:Arial,Helvetica,sans-serif;font-size:19px;font-weight:800;color:#ffffff"><img src="https://gestionale.puliziacasevacanze.it/preventivo/logo-mail.png" alt="" width="34" height="34" style="vertical-align:middle;margin-right:8px;border:0" />Puliziacasevacanze.it</td>
+        <td><img src="https://gestionale.puliziacasevacanze.it/preventivo/logo_full.png" alt="Puliziacasevacanze.it" width="50" height="44" style="display:block;border:0" /></td>
       </tr><tr>
         <td style="font-family:Arial,Helvetica,sans-serif;font-size:12.5px;color:#ffffff;opacity:.85;padding-top:3px">Pulizie e noleggio biancheria per case vacanze, B&amp;B e affittacamere a Roma \u2014 365 giorni l\u2019anno</td>
       </tr></table>
