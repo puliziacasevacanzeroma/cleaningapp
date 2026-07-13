@@ -80,7 +80,8 @@ img.pv-ic-mini.pv-ic-img{width:46px;max-width:46px;height:46px;margin:0}
 /* contatori */
 .pv-contatori{display:grid;gap:11px}
 /* ═══ v5: card contatore stile "squircle" (demo 3) ═══
-   Icona grande (96px) in un quadrato arrotondato a sinistra, testo e stepper a pillola a destra.
+   Icona grande (96px) in un quadrato arrotondato a sinistra; testo in alto, stepper a pillola
+   allineato in BASSO A DESTRA della card.
    Lo stepper e' un gruppo unico su fondo blu-chiaro: i bottoni sono bianchi DENTRO la pillola. */
 .pv-contatore{position:relative;background:#fff;border:1.5px solid #E3E9EE;border-radius:16px;box-shadow:var(--ombra-sm);
   display:flex;align-items:center;gap:14px;padding:13px 15px;min-width:0;
@@ -95,7 +96,8 @@ img.pv-ic-mini.pv-ic-img{width:46px;max-width:46px;height:46px;margin:0}
 .pv-contatore .lab b{font-size:15px;font-weight:700;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pv-contatore .lab span{font-size:12px;color:var(--grigio);display:block;margin:1px 0 10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* stepper a pillola */
-.pv-contatore .btns{display:inline-flex;align-items:center;gap:2px;background:var(--blu-chiaro);border-radius:12px;padding:4px}
+.pv-contatore .btns{display:inline-flex;align-items:center;gap:2px;background:var(--blu-chiaro);border-radius:12px;padding:4px;
+  align-self:flex-end}
 .pv-contatore .btns button{width:32px;height:32px;border-radius:9px;border:none;cursor:pointer;
   background:#fff;color:var(--blu);font-size:17px;font-weight:700;transition:transform .15s,background .18s,color .18s}
 @media(hover:hover){.pv-contatore .btns button:hover{background:var(--blu);color:#fff}}
