@@ -79,24 +79,29 @@ img.pv-ic-mini.pv-ic-img{width:46px;max-width:46px;height:46px;margin:0}
 
 /* contatori */
 .pv-contatori{display:grid;gap:11px}
+/* ═══ v5: card contatore stile "squircle" (demo 3) ═══
+   Icona grande (96px) in un quadrato arrotondato a sinistra, testo e stepper a pillola a destra.
+   Lo stepper e' un gruppo unico su fondo blu-chiaro: i bottoni sono bianchi DENTRO la pillola. */
 .pv-contatore{position:relative;background:#fff;border:1.5px solid #E3E9EE;border-radius:16px;box-shadow:var(--ombra-sm);
-  display:flex;flex-direction:column;gap:10px;padding:14px 16px 12px;min-width:0;
+  display:flex;align-items:center;gap:14px;padding:13px 15px;min-width:0;
   transition:transform .2s,box-shadow .2s}
 @media(hover:hover){.pv-contatore:hover{transform:translateY(-2px);box-shadow:var(--ombra-md)}}
-/* riga 1: icona grande a sinistra + titolo/sottotitolo */
-.pv-cont-top{display:flex;align-items:center;gap:14px;min-width:0}
-.pv-contatore .pv-ic{width:72px;height:50px;flex:none;margin:0}
-.pv-contatore img.pv-ic-img{width:80px;max-width:80px;height:80px;flex:none;margin:0}
-.pv-contatore .lab{flex:1;min-width:0;overflow:hidden}
-.pv-contatore .lab b{font-size:14.5px;font-weight:700;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.pv-contatore .lab span{font-size:12px;color:var(--grigio);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-/* riga 2: contatore -/valore/+, allineato in basso a destra */
-.pv-contatore .btns{display:flex;align-items:center;justify-content:flex-end;gap:8px;align-self:flex-end}
-.pv-contatore button{width:40px;height:40px;border-radius:12px;border:none;cursor:pointer;
-  background:var(--blu-chiaro);color:var(--blu);font-size:20px;font-weight:700;transition:transform .15s,background .18s}
-@media(hover:hover){.pv-contatore button:hover{background:var(--blu);color:#fff}}
-.pv-contatore button:active{transform:scale(.9)}
-.pv-contatore .val{min-width:46px;text-align:center;font-weight:700;font-size:16px;font-variant-numeric:tabular-nums}
+/* icona: squircle con fondo crema, coerente con le illustrazioni */
+.pv-contatore .pv-ic,.pv-contatore img.pv-ic-img{
+  width:96px;height:96px;max-width:96px;flex:none;margin:0;border-radius:22px;padding:8px;
+  background:linear-gradient(160deg,#F8F1E6,#EFE1CD);object-fit:contain}
+.pv-cont-body{flex:1;min-width:0;display:flex;flex-direction:column;align-items:flex-start}
+.pv-contatore .lab{width:100%;min-width:0;overflow:hidden}
+.pv-contatore .lab b{font-size:15px;font-weight:700;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pv-contatore .lab span{font-size:12px;color:var(--grigio);display:block;margin:1px 0 10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* stepper a pillola */
+.pv-contatore .btns{display:inline-flex;align-items:center;gap:2px;background:var(--blu-chiaro);border-radius:12px;padding:4px}
+.pv-contatore .btns button{width:32px;height:32px;border-radius:9px;border:none;cursor:pointer;
+  background:#fff;color:var(--blu);font-size:17px;font-weight:700;transition:transform .15s,background .18s,color .18s}
+@media(hover:hover){.pv-contatore .btns button:hover{background:var(--blu);color:#fff}}
+.pv-contatore .btns button:active{transform:scale(.9)}
+.pv-contatore .btns button:disabled{opacity:.4;cursor:not-allowed;background:#fff;color:var(--blu)}
+.pv-contatore .val{min-width:44px;text-align:center;font-weight:700;font-size:15px;font-variant-numeric:tabular-nums}
 
 /* campi */
 .pv-campo{margin:0 0 13px}
@@ -191,10 +196,10 @@ img.pv-ic-mini.pv-ic-img{width:46px;max-width:46px;height:46px;margin:0}
   .pv-scelte{gap:9px}
   .pv-ic{width:92px;height:66px}
   img.pv-ic-img{max-width:104px}
-  .pv-contatore img.pv-ic-img{width:66px;max-width:66px;height:66px}
-  .pv-contatore .btns{gap:6px}
-  .pv-contatore button{width:36px;height:36px;font-size:18px}
-  .pv-contatore .val{min-width:40px;font-size:15px}
+  .pv-contatore .pv-ic,.pv-contatore img.pv-ic-img{width:84px;height:84px;max-width:84px;border-radius:20px;padding:7px}
+  .pv-contatore{gap:12px;padding:12px 13px}
+  .pv-contatore .btns button{width:31px;height:31px;font-size:16px}
+  .pv-contatore .val{min-width:40px;font-size:14.5px}
 }
 @media (prefers-reduced-motion:reduce){
   .pv-page *,.pv-page *::before,.pv-page *::after{animation:none!important;transition:none!important}
@@ -307,15 +312,11 @@ img.pv-ic-mini.pv-ic-img{width:46px;max-width:46px;height:46px;margin:0}
 .pv-contatore .lab b,.pv-contatore .lab span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
 @media (max-width:560px){
-  /* v4: card a DUE righe (icona+testo sopra, contatore sotto a destra).
-     La X e' un badge separato ancorato all'angolo della card (vedi .pv-rimuovi), non piu' dentro .btns:
-     prima ci finiva incollata sopra al "+" perche' erano nello stesso gruppo flex. */
-  .pv-contatore{padding:12px 14px 10px;gap:8px}
-  .pv-contatore img.pv-ic-img{width:70px;max-width:70px;height:70px}
-  .pv-contatore .lab b{font-size:13.5px}
-  .pv-contatore .lab span{font-size:11px}
-  .pv-contatore button{width:38px;height:38px;font-size:19px}
-  .pv-contatore .val{min-width:42px;font-size:16px}
+  /* La X resta un badge separato ancorato all'angolo (vedi .pv-rimuovi):
+     dentro .btns finiva incollata sopra al "+". */
+  .pv-contatore .pv-ic,.pv-contatore img.pv-ic-img{width:90px;height:90px;max-width:90px}
+  .pv-contatore .lab b{font-size:14px}
+  .pv-contatore .lab span{font-size:11.5px}
   .pv-unita-riga .desc{white-space:normal}
 }
 

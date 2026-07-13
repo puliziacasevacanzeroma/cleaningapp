@@ -2,6 +2,8 @@
 
 /**
  * PreventivoWizard.tsx — Widget preventivi pubblico (/preventivo)
+ * v19 — 13/07/2026: card contatori stile 'squircle' — icona 96px a sinistra, testo e stepper
+ *                    a pillola sulla destra. Il suffisso ' pers.' resta SOLO sulle camere.
  * v18 — 13/07/2026: card contatori riprogettata — icona+testo in alto, contatore in basso a destra;
  *                    X di rimozione camera come badge separato (non piu' incollata al +)
  * v17 — 13/07/2026: 1 persona = nuova icona 'cameraSingola' (letto singolo, estratta lossless);
@@ -303,14 +305,14 @@ function ContatoreRiga({ icona, titolo, sotto, valore, min, max, onCambia }: {
 }) {
   return (
     <div className="pv-contatore">
-      <div className="pv-cont-top">
-        <Icona nome={icona} />
+      <Icona nome={icona} />
+      <div className="pv-cont-body">
         <div className="lab"><b>{titolo}</b><span>{sotto}</span></div>
-      </div>
-      <div className="btns">
-        <button type="button" onClick={() => onCambia(-1)} disabled={valore <= min}>−</button>
-        <span className="val">{valore}</span>
-        <button type="button" onClick={() => onCambia(1)} disabled={max !== undefined && valore >= max}>+</button>
+        <div className="btns">
+          <button type="button" onClick={() => onCambia(-1)} disabled={valore <= min}>−</button>
+          <span className="val">{valore}</span>
+          <button type="button" onClick={() => onCambia(1)} disabled={max !== undefined && valore >= max}>+</button>
+        </div>
       </div>
     </div>
   );
@@ -675,17 +677,17 @@ export function PreventivoWizard() {
               {stato.camere.length > 1 && (
                 <button type="button" className="pv-rimuovi" onClick={() => rimuoviCamera(i)} aria-label="Rimuovi camera">×</button>
               )}
-              <div className="pv-cont-top">
-                <Icona nome={IC_CAMERA[Math.min(c.persone, 5)]} />
+              <Icona nome={IC_CAMERA[Math.min(c.persone, 5)]} />
+              <div className="pv-cont-body">
                 <div className="lab">
                   <b>Camera {i + 1}</b>
                   <span>{c.persone === 1 ? "Singola" : c.persone === 2 ? "Doppia/Matrimoniale" : c.persone === 3 ? "Tripla" : `${c.persone} persone`}</span>
                 </div>
-              </div>
-              <div className="btns">
-                <button type="button" onClick={() => cambiaPersone(i, -1)} disabled={c.persone <= 1}>−</button>
-                <span className="val">{c.persone}<small className="pv-pers"> pers.</small></span>
-                <button type="button" onClick={() => cambiaPersone(i, 1)} disabled={c.persone >= 6}>+</button>
+                <div className="btns">
+                  <button type="button" onClick={() => cambiaPersone(i, -1)} disabled={c.persone <= 1}>−</button>
+                  <span className="val">{c.persone}<small className="pv-pers"> pers.</small></span>
+                  <button type="button" onClick={() => cambiaPersone(i, 1)} disabled={c.persone >= 6}>+</button>
+                </div>
               </div>
             </div>
           ))}
