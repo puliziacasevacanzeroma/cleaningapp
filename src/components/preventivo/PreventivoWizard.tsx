@@ -2,6 +2,8 @@
 
 /**
  * PreventivoWizard.tsx — Widget preventivi pubblico (/preventivo)
+ * v18 — 13/07/2026: card contatori riprogettata — icona+testo in alto, contatore in basso a destra;
+ *                    X di rimozione camera come badge separato (non piu' incollata al +)
  * v17 — 13/07/2026: 1 persona = nuova icona 'cameraSingola' (letto singolo, estratta lossless);
  *                    camere da 2 persone in su invariate (camera2..camera5)
  * v16 — 13/07/2026: +11 icone illustrate (foto, aree comuni, frequenza, camere 1-5);
@@ -301,8 +303,10 @@ function ContatoreRiga({ icona, titolo, sotto, valore, min, max, onCambia }: {
 }) {
   return (
     <div className="pv-contatore">
-      <Icona nome={icona} />
-      <div className="lab"><b>{titolo}</b><span>{sotto}</span></div>
+      <div className="pv-cont-top">
+        <Icona nome={icona} />
+        <div className="lab"><b>{titolo}</b><span>{sotto}</span></div>
+      </div>
       <div className="btns">
         <button type="button" onClick={() => onCambia(-1)} disabled={valore <= min}>−</button>
         <span className="val">{valore}</span>
@@ -668,18 +672,20 @@ export function PreventivoWizard() {
         <div className="pv-contatori">
           {stato.camere.map((c, i) => (
             <div className="pv-contatore" key={i}>
-              <Icona nome={IC_CAMERA[Math.min(c.persone, 5)]} />
-              <div className="lab">
-                <b>Camera {i + 1}</b>
-                <span>{c.persone === 1 ? "Singola" : c.persone === 2 ? "Doppia/Matrimoniale" : c.persone === 3 ? "Tripla" : `${c.persone} persone`}</span>
+              {stato.camere.length > 1 && (
+                <button type="button" className="pv-rimuovi" onClick={() => rimuoviCamera(i)} aria-label="Rimuovi camera">×</button>
+              )}
+              <div className="pv-cont-top">
+                <Icona nome={IC_CAMERA[Math.min(c.persone, 5)]} />
+                <div className="lab">
+                  <b>Camera {i + 1}</b>
+                  <span>{c.persone === 1 ? "Singola" : c.persone === 2 ? "Doppia/Matrimoniale" : c.persone === 3 ? "Tripla" : `${c.persone} persone`}</span>
+                </div>
               </div>
               <div className="btns">
                 <button type="button" onClick={() => cambiaPersone(i, -1)} disabled={c.persone <= 1}>−</button>
                 <span className="val">{c.persone}<small className="pv-pers"> pers.</small></span>
                 <button type="button" onClick={() => cambiaPersone(i, 1)} disabled={c.persone >= 6}>+</button>
-                {stato.camere.length > 1 && (
-                  <button type="button" className="pv-rimuovi" onClick={() => rimuoviCamera(i)} aria-label="Rimuovi camera">×</button>
-                )}
               </div>
             </div>
           ))}
