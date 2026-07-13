@@ -63,7 +63,7 @@
    a 78x78 sprecando 32px. Qui il box diventa quadrato e l'icona riempie la card. */
 .pv-ic-img{width:100%;height:100%;object-fit:contain;display:block}
 img.pv-ic-img{width:100%;max-width:118px;height:auto;aspect-ratio:1/1;margin:0 auto 8px}
-.pv-contatore img.pv-ic-img{width:68px;max-width:68px;height:68px;flex:none;margin:0}
+.pv-contatore img.pv-ic-img{width:76px;max-width:76px;height:76px;flex:none;margin:0}
 img.pv-ic-mini.pv-ic-img{width:46px;max-width:46px;height:46px;margin:0}
 .pv-ic svg *{fill:none;stroke:var(--blu);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
 .pv-ic svg .accent{stroke:var(--rame)}
@@ -187,7 +187,10 @@ img.pv-ic-mini.pv-ic-img{width:46px;max-width:46px;height:46px;margin:0}
   .pv-scelte{gap:9px}
   .pv-ic{width:92px;height:66px}
   img.pv-ic-img{max-width:104px}
-  .pv-contatore img.pv-ic-img{width:60px;max-width:60px;height:60px}
+  .pv-contatore img.pv-ic-img{width:58px;max-width:58px;height:58px}
+  .pv-contatore .btns{gap:5px}
+  .pv-contatore button{width:36px;height:36px}
+  .pv-contatore .val{min-width:26px}
 }
 @media (prefers-reduced-motion:reduce){
   .pv-page *,.pv-page *::before,.pv-page *::after{animation:none!important;transition:none!important}
@@ -265,7 +268,7 @@ img.pv-ic-mini.pv-ic-img{width:46px;max-width:46px;height:46px;margin:0}
   background:#F6E6E6!important;color:#A05252!important;font-size:17px!important;
 }
 .pv-pers{font-size:10px;color:var(--grigio);font-weight:600}
-.pv-contatore .val{min-width:52px}
+.pv-contatore .val{min-width:36px}
 .pv-unita-lista{display:grid;gap:8px;max-width:620px;margin:0 auto 18px;width:100%}
 .pv-unita-riga{
   display:flex;align-items:center;gap:12px;background:var(--fondo);border:1px solid #E0E7EC;
@@ -295,14 +298,17 @@ img.pv-ic-mini.pv-ic-img{width:46px;max-width:46px;height:46px;margin:0}
 .pv-contatore .lab b,.pv-contatore .lab span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
 @media (max-width:560px){
-  .pv-contatore{flex-wrap:wrap;gap:6px 10px;padding:12px 12px 10px;position:relative}
-  .pv-contatore .pv-ic{width:52px;height:38px}
-  .pv-contatore .lab{flex:1 1 calc(100% - 66px)}
+  /* v3: UNA sola riga — icona a sinistra, testo al centro, +/- a destra.
+     Prima i bottoni andavano a capo (flex:1 1 100%) e la card diventava alta e vuota. */
+  .pv-contatore{flex-wrap:nowrap;align-items:center;gap:10px;padding:10px 12px;position:relative}
+  .pv-contatore .pv-ic{width:64px;height:46px}
+  .pv-contatore img.pv-ic-img{width:64px;max-width:64px;height:64px}
+  .pv-contatore .lab{flex:1 1 auto;min-width:0}
   .pv-contatore .lab b{font-size:13.5px}
   .pv-contatore .lab span{font-size:11px}
-  .pv-contatore .btns{flex:1 1 100%;justify-content:flex-end;gap:8px}
-  .pv-contatore button{width:40px;height:40px;font-size:19px}
-  .pv-contatore .val{min-width:44px;font-size:16px}
+  .pv-contatore .btns{flex:0 0 auto;justify-content:flex-end;gap:6px}
+  .pv-contatore button{width:38px;height:38px;font-size:19px}
+  .pv-contatore .val{min-width:30px;font-size:16px}
   .pv-rimuovi{
     position:absolute;top:8px;right:8px;margin:0;
     width:28px!important;height:28px!important;font-size:15px!important;line-height:28px!important;
