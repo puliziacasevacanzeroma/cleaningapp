@@ -231,11 +231,14 @@ function pageCover(doc: Doc, a: Assets, d: CoverData) {
   doc.rect(0, 0, W, 32, "F");
   doc.addImage(a.coverTop, "JPEG", 0, 32, W, 145.3);
 
-  // logo simbolo centrato nella fascia blu superiore
+  // logo centrato nella fascia blu superiore.
+  // v2: il logo nuovo (simbolo bordo scuro + scritta) e' molto piu' largo (ratio ~5.8:1):
+  // fissando l'ALTEZZA a 24mm la larghezza esplodeva a ~138mm. Ora fissiamo la larghezza
+  // e ricaviamo l'altezza, centrando in verticale nella fascia da 32mm.
   if (a.logo) {
-    const lh = 24; // altezza logo in mm
-    const lw = lh * (a.logoRatio || 1.25);
-    doc.addImage(a.logo, "PNG", W / 2 - lw / 2, 2.5, lw, lh);
+    const lw = 108; // larghezza logo in mm
+    const lh = lw / (a.logoRatio || 5.78);
+    doc.addImage(a.logo, "PNG", W / 2 - lw / 2, Math.max(2, (32 - lh) / 2), lw, lh);
   }
 
   // badge tipo struttura
