@@ -58,10 +58,13 @@
 /* icone SVG */
 .pv-ic{width:110px;height:78px;margin:0 auto 8px;display:block;max-width:100%}
 .pv-ic svg{width:100%;height:100%;display:block}
-/* Icone tipo struttura come immagine (PNG in /public/preventivo-icone) */
+/* Icone illustrate come immagine (PNG in /public/preventivo-icone).
+   Il canvas dei PNG e' QUADRATO (300x300): il box landscape 110x78 le schiacciava
+   a 78x78 sprecando 32px. Qui il box diventa quadrato e l'icona riempie la card. */
 .pv-ic-img{width:100%;height:100%;object-fit:contain;display:block}
-img.pv-ic-img{width:110px;height:78px}
-.pv-ic-mini.pv-ic-img{width:38px;height:38px}
+img.pv-ic-img{width:100%;max-width:118px;height:auto;aspect-ratio:1/1;margin:0 auto 8px}
+.pv-contatore img.pv-ic-img{width:68px;max-width:68px;height:68px;flex:none;margin:0}
+img.pv-ic-mini.pv-ic-img{width:46px;max-width:46px;height:46px;margin:0}
 .pv-ic svg *{fill:none;stroke:var(--blu);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
 .pv-ic svg .accent{stroke:var(--rame)}
 .pv-ic svg .fill{fill:var(--blu-chiaro)}
@@ -183,6 +186,8 @@ img.pv-ic-img{width:110px;height:78px}
   .pv-nav{padding-left:16px;padding-right:16px}
   .pv-scelte{gap:9px}
   .pv-ic{width:92px;height:66px}
+  img.pv-ic-img{max-width:104px}
+  .pv-contatore img.pv-ic-img{width:60px;max-width:60px;height:60px}
 }
 @media (prefers-reduced-motion:reduce){
   .pv-page *,.pv-page *::before,.pv-page *::after{animation:none!important;transition:none!important}
