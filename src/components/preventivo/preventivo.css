@@ -122,7 +122,10 @@ img.pv-ic-mini.pv-ic-img{width:46px;max-width:46px;height:46px;margin:0}
   transition:border-color .2s,background .2s}
 .pv-foto-zona:hover{border-color:var(--blu);background:var(--blu-chiaro)}
 .pv-foto-zona .pv-ic{width:84px;height:60px}
-.pv-foto-zona b{display:block;font-size:14px;color:var(--blu-scuro)}
+/* v6: il PNG della fotocamera e' quadrato: nel box 84x60 veniva schiacciato a 60x60.
+   Box quadrato dedicato, molto piu' grande (la zona foto e' larga tutta la card). */
+.pv-foto-zona img.pv-ic-img{width:132px;max-width:132px;height:132px;margin:0 auto 8px}
+.pv-foto-zona b{display:block;font-size:15px;color:var(--blu-scuro)}
 .pv-foto-zona span{display:block;font-size:12px;color:var(--grigio);margin-top:2px}
 .pv-foto-griglia{display:grid;grid-template-columns:repeat(auto-fill,minmax(86px,1fr));gap:10px;margin-top:14px}
 .pv-foto-thumb{position:relative;aspect-ratio:1;border-radius:12px;overflow:hidden;background:var(--blu-chiaro);
@@ -199,6 +202,7 @@ img.pv-ic-mini.pv-ic-img{width:46px;max-width:46px;height:46px;margin:0}
   .pv-ic{width:92px;height:66px}
   img.pv-ic-img{max-width:104px}
   .pv-contatore .pv-ic,.pv-contatore img.pv-ic-img{width:84px;height:84px;max-width:84px;border-radius:20px;padding:7px}
+  .pv-foto-zona img.pv-ic-img{width:112px;max-width:112px;height:112px}
   .pv-contatore{gap:12px;padding:12px 13px}
   .pv-contatore .btns button{width:31px;height:31px;font-size:16px}
   .pv-contatore .val{min-width:40px;font-size:14.5px}
