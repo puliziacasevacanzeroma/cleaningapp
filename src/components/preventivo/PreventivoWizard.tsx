@@ -2,6 +2,8 @@
 
 /**
  * PreventivoWizard.tsx — Widget preventivi pubblico (/preventivo)
+ * v20 — 13/07/2026: preload di tutte le icone all'avvio (prima comparivano ~1s dopo la card,
+ *                    perche' il PNG partiva a scaricarsi solo al mount dello step)
  * v19 — 13/07/2026: card contatori stile 'squircle' — icona 96px a sinistra, testo e stepper
  *                    a pillola sulla destra. Il suffisso ' pers.' resta SOLO sulle camere.
  * v18 — 13/07/2026: card contatori riprogettata — icona+testo in alto, contatore in basso a destra;
@@ -23,7 +25,7 @@
  * I prezzi arrivano SEMPRE dal server: qui nessun calcolo.
  */
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 // ─────────────────────────── Tipi ───────────────────────────
 
@@ -266,7 +268,8 @@ function Icona({ nome, mini }: { nome: string; mini?: boolean }) {
   if (IMG_ICONE[nome]) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
-      <img src={IMG_ICONE[nome]} alt="" className={mini ? "pv-ic pv-ic-mini pv-ic-img" : "pv-ic pv-ic-img"} />
+      <img src={IMG_ICONE[nome]} alt="" loading="eager" decoding="sync" fetchPriority="high"
+        className={mini ? "pv-ic pv-ic-mini pv-ic-img" : "pv-ic pv-ic-img"} />
     );
   }
   return (
@@ -331,6 +334,19 @@ const MAX_UNITA = 8;
 const MAX_CAMERE = 15;
 
 export function PreventivoWizard() {
+  // Preload icone: senza questo ogni PNG partiva a scaricarsi solo quando lo step
+  // veniva montato, e l'icona compariva ~1s dopo la card. Qui le scarichiamo tutte
+  // subito, in background, mentre l'utente compila i primi step.
+  useEffect(() => {
+    const imgs = Object.values(IMG_ICONE).map((src) => {
+      const im = new Image();
+      im.decoding = "sync";
+      im.src = src;
+      return im;
+    });
+    return () => { imgs.forEach((im) => { im.src = ""; }); };
+  }, []);
+
   const [stato, setStato] = useState<Stato>(STATO_INIZIALE);
   const [idx, setIdx] = useState(0);
   const [invio, setInvio] = useState(false);
