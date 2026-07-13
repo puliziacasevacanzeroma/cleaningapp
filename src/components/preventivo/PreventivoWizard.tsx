@@ -2,6 +2,10 @@
 
 /**
  * PreventivoWizard.tsx — Widget preventivi pubblico (/preventivo)
+ * v17 — 13/07/2026: 1 persona = nuova icona 'cameraSingola' (letto singolo, estratta lossless);
+ *                    camere da 2 persone in su invariate (camera2..camera5)
+ * v16 — 13/07/2026: +11 icone illustrate (foto, aree comuni, frequenza, camere 1-5);
+ *                    l'icona camera cambia col numero di persone (da 5 in su resta camera5)
  * v15 — 13/07/2026: 20 icone illustrate (stile step 1) per letti, bagni, cucina, esterni, ospiti, biancheria, kit
  * v14 — 13/07/2026: scritta "Puliziacasevacanze.it" accanto al logo (bordo bianco invariato)
  * v12 — 10/07/2026: fix logo, onda inferiore completa (v11 la tagliava di 8px)
@@ -229,6 +233,29 @@ const IMG_ICONE: Record<string, string> = {
   biancheriaNo: "/preventivo-icone/biancheriaNo.png",
   kitSi: "/preventivo-icone/kitSi.png",
   kitNo: "/preventivo-icone/kitNo.png",
+  fotocamera: "/preventivo-icone/fotocamera.png",
+  areaNo: "/preventivo-icone/areaNo.png",
+  areaInloco: "/preventivo-icone/areaInloco.png",
+  areaDedicata: "/preventivo-icone/areaDedicata.png",
+  checkout: "/preventivo-icone/checkout.png",
+  giornaliera: "/preventivo-icone/giornaliera.png",
+  // camere: l'illustrazione cambia col numero di persone (1..5); da 5 in su resta camera5
+  cameraSingola: "/preventivo-icone/cameraSingola.png",
+  camera1: "/preventivo-icone/camera1.png",
+  camera2: "/preventivo-icone/camera2.png",
+  camera3: "/preventivo-icone/camera3.png",
+  camera4: "/preventivo-icone/camera4.png",
+  camera5: "/preventivo-icone/camera5.png",
+};
+
+// Camere: 1 persona = letto singolo (icona dedicata); da 2 in su le illustrazioni storiche.
+// Da 5 persone in su resta sempre camera5.
+const IC_CAMERA: Record<number, string> = {
+  1: "cameraSingola",
+  2: "camera2",
+  3: "camera3",
+  4: "camera4",
+  5: "camera5",
 };
 
 function Icona({ nome, mini }: { nome: string; mini?: boolean }) {
@@ -641,7 +668,7 @@ export function PreventivoWizard() {
         <div className="pv-contatori">
           {stato.camere.map((c, i) => (
             <div className="pv-contatore" key={i}>
-              <Icona nome="camera" />
+              <Icona nome={IC_CAMERA[Math.min(c.persone, 5)]} />
               <div className="lab">
                 <b>Camera {i + 1}</b>
                 <span>{c.persone === 1 ? "Singola" : c.persone === 2 ? "Doppia/Matrimoniale" : c.persone === 3 ? "Tripla" : `${c.persone} persone`}</span>
