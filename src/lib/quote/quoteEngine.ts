@@ -198,7 +198,7 @@ export function calcolaCase(unita: DatiCasa[], P: EngineParams = ENGINE): QuoteM
   const vuoto = { min: 0, max: 0, puntuale: 0, biancheria: 0, kit: 0 };
   if (dettagli.some((d) => d.suMisura) || unita.length === 0) {
     return { suMisura: true, ...vuoto, unitaDettaglio: dettagli.map((d, i) => ({
-      nome: unita[i]?.nome || 'Unit\u00e0 ' + (i + 1), zona: unita[i]?.zona || '', indirizzo: unita[i]?.indirizzo || '',
+      nome: unita[i]?.nome || 'Casa ' + (i + 1), zona: unita[i]?.zona || '', indirizzo: unita[i]?.indirizzo || '',
       min: d.min, max: d.max, suMisura: d.suMisura,
       taglio: unita[i]?.taglio || '', mq: unita[i]?.mq || 0, bagni: unita[i]?.bagni || 0,
       postiLetto: unita[i]?.ospiti || 0,
@@ -209,14 +209,19 @@ export function calcolaCase(unita: DatiCasa[], P: EngineParams = ENGINE): QuoteM
   let sommaPulizia = dettagli.reduce((a, d) => a + d.puntuale, 0);
   const sconto = unita.length >= P.scontoMultiUnita.daUnita ? P.scontoMultiUnita.percento : 0;
   if (sconto > 0) sommaPulizia = sommaPulizia * (1 - sconto / 100);
+  // Lo sconto multi-casa va applicato ANCHE al prezzo mostrato per ogni singola casa:
+  // prima finiva solo nel totale (che nel wizard non viene mai mostrato), quindi lo
+  // sconto era dichiarato ma invisibile nei numeri letti dall'utente.
+  const fatt = 1 - sconto / 100;
+  const rangeScontato = (d: QuoteResult) => range(d.puntuale * fatt);
   const biancheria = round2(dettagli.reduce((a, d) => a + d.biancheria, 0));
   const kit = round2(dettagli.reduce((a, d) => a + d.kit, 0));
   const { min, max } = range(sommaPulizia);
   return {
     suMisura: false, min, max, puntuale: round2(sommaPulizia), biancheria, kit,
     unitaDettaglio: dettagli.map((d, i) => ({
-      nome: unita[i]?.nome || 'Unit\u00e0 ' + (i + 1), zona: unita[i]?.zona || '', indirizzo: unita[i]?.indirizzo || '',
-      min: d.min, max: d.max, suMisura: d.suMisura,
+      nome: unita[i]?.nome || 'Casa ' + (i + 1), zona: unita[i]?.zona || '', indirizzo: unita[i]?.indirizzo || '',
+      min: rangeScontato(d).min, max: rangeScontato(d).max, suMisura: d.suMisura,
       taglio: unita[i]?.taglio || '', mq: unita[i]?.mq || 0, bagni: unita[i]?.bagni || 0,
       postiLetto: unita[i]?.ospiti || 0,
       matrimoniali: unita[i]?.matrimoniali || 0, singoli: unita[i]?.singoli || 0, divani: unita[i]?.divani || 0,

@@ -305,14 +305,14 @@ function SceltaGriglia<T,>({ opzioni, selezionato, onSel }: {
 }
 
 function ContatoreRiga({ icona, titolo, sotto, valore, min, max, onCambia }: {
-  icona: string; titolo: string; sotto: string; valore: number; min: number; max?: number;
+  icona: string; titolo: string; sotto?: string; valore: number; min: number; max?: number;
   onCambia: (delta: number) => void;
 }) {
   return (
     <div className="pv-contatore">
       <Icona nome={icona} />
       <div className="pv-cont-body">
-        <div className="lab"><b>{titolo}</b><span>{sotto}</span></div>
+        <div className="lab"><b>{titolo}</b>{sotto ? <span>{sotto}</span> : null}</div>
         <div className="btns">
           <button type="button" onClick={() => onCambia(-1)} disabled={valore <= min}>−</button>
           <span className="val">{valore}</span>
@@ -566,14 +566,14 @@ export function PreventivoWizard() {
 
   function renderStep() {
     const u = stato.unita;
-    const suffUnita = stato.tipo === "case" ? ` — ${stato.unita.nome.trim() || `Unit\u00e0 ${numeroUnitaCorrente}`}` : "";
+    const suffUnita = stato.tipo === "case" ? ` — ${stato.unita.nome.trim() || `Casa ${numeroUnitaCorrente}`}` : "";
     switch (step) {
       case "tipo": return (<>
         <h1>Che struttura gestisci?</h1>
         <p className="pv-sotto">Il preventivo si adatta al tuo tipo di attività.</p>
         <SceltaGriglia selezionato={stato.tipo} onSel={(v) => scegli("tipo", v, false)} opzioni={[
           { v: "casa" as Tipo, ic: "casa", t: "Casa vacanze", s: "Un appartamento in affitto breve" },
-          { v: "case" as Tipo, ic: "case", t: "Più case vacanze", s: "Gestisci due o più unità" },
+          { v: "case" as Tipo, ic: "case", t: "Più case vacanze", s: "Gestisci due o più case" },
           { v: "bnb" as Tipo, ic: "bnb", t: "B&B / Affittacamere", s: "Camere con ospiti in rotazione" },
           { v: "hotel" as Tipo, ic: "hotel", t: "Hotel", s: "Struttura alberghiera" },
         ]} />
@@ -589,38 +589,39 @@ export function PreventivoWizard() {
           </CampoBox>
         )}
         <SceltaGriglia selezionato={u.taglio} onSel={(v) => setU("taglio", v)} opzioni={[
-          { v: "mono" as Taglio, ic: "mono", t: "Monolocale", s: "Una stanza unica + bagno · fino a ~45 mq" },
-          { v: "bilo" as Taglio, ic: "bilo", t: "Bilocale", s: "Camera + soggiorno · ~45–65 mq" },
-          { v: "trilo" as Taglio, ic: "trilo", t: "Trilocale", s: "2 camere + soggiorno · ~65–90 mq" },
-          { v: "quadri" as Taglio, ic: "quadri", t: "Quadrilocale", s: "3 camere + soggiorno · ~90–120 mq" },
+          { v: "mono" as Taglio, ic: "mono", t: "Monolocale", s: "Una stanza unica + bagno" },
+          { v: "bilo" as Taglio, ic: "bilo", t: "Bilocale", s: "Camera + soggiorno" },
+          { v: "trilo" as Taglio, ic: "trilo", t: "Trilocale", s: "2 camere + soggiorno" },
+          { v: "quadri" as Taglio, ic: "quadri", t: "Quadrilocale", s: "3 camere + soggiorno" },
         ]} />
         <CampoBox label="Metri quadri (indicativi)">
           <input type="number" inputMode="numeric" placeholder="es. 65" min={15} max={400}
             value={u.mq ?? ""} onChange={(e) => setU("mq", parseInt(e.target.value) || null)} />
         </CampoBox>
+        <p className="pv-nota-campo">Sopra i 120 mq prepariamo un preventivo su misura.</p>
       </>);
 
       case "letti": return (<>
-        <h1>Quanti posti letto prepariamo?{suffUnita}</h1>
+        <h1>Quanti letti ci sono?{suffUnita}</h1>
         <p className="pv-sotto">Conta tutti i letti che vanno rifatti a ogni cambio ospite.</p>
         <div className="pv-contatori">
           <ContatoreRiga icona="matrimoniale" titolo="Letti matrimoniali" sotto="Compresi francesi e piazza e mezza" valore={u.matrimoniali} min={0} onCambia={bumpU("matrimoniali", 0)} />
-          <ContatoreRiga icona="singolo" titolo="Letti singoli" sotto="Anche a castello: conta ogni posto" valore={u.singoli} min={0} onCambia={bumpU("singoli", 0)} />
+          <ContatoreRiga icona="singolo" titolo="Letti singoli" sotto="Anche a castello: conta ogni letto" valore={u.singoli} min={0} onCambia={bumpU("singoli", 0)} />
           <ContatoreRiga icona="divano" titolo="Divani letto" sotto="Da aprire e preparare" valore={u.divani} min={0} onCambia={bumpU("divani", 0)} />
         </div>
       </>);
 
       case "bagni": return (<>
         <h1>Quanti bagni ci sono?{suffUnita}</h1>
-        <p className="pv-sotto">Contiamo anche i bagni di servizio.</p>
+        <p className="pv-sotto">Contali tutti, anche quelli piccoli.</p>
         <div className="pv-contatori">
-          <ContatoreRiga icona="bagno" titolo="Bagni" sotto="WC, lavandino, doccia o vasca" valore={u.bagni} min={1} onCambia={bumpU("bagni", 1)} />
+          <ContatoreRiga icona="bagno" titolo="Bagni" sotto="Anche il bagno di servizio o il secondo WC" valore={u.bagni} min={1} onCambia={bumpU("bagni", 1)} />
         </div>
       </>);
 
       case "cucina": return (<>
         <h1>Com'è la cucina?{suffUnita}</h1>
-        <p className="pv-sotto">Un vano in più è tempo di lavoro in più: contiamolo bene.</p>
+        <p className="pv-sotto">La cucina è la stanza che porta via più tempo.</p>
         <SceltaGriglia selezionato={u.cucina} onSel={(v) => setU("cucina", v)} opzioni={[
           { v: "angolo" as Cucina, ic: "angolo", t: "Angolo cottura", s: "Fornelli e divano nella stessa stanza" },
           { v: "sep" as Cucina, ic: "cucinaSep", t: "Cucina separata", s: "Una stanza a parte con fornelli e frigo" },
@@ -643,7 +644,7 @@ export function PreventivoWizard() {
         <h1>Per quanti ospiti al massimo?{suffUnita}</h1>
         <p className="pv-sotto">La capienza dell'annuncio: ci serve per biancheria e kit di cortesia.</p>
         <div className="pv-contatori">
-          <ContatoreRiga icona="ospiti" titolo="Ospiti massimi" sotto="La capienza di questa unità" valore={u.ospiti} min={1} onCambia={bumpU("ospiti", 1)} />
+          <ContatoreRiga icona="ospiti" titolo="Ospiti massimi" valore={u.ospiti} min={1} onCambia={bumpU("ospiti", 1)} />
         </div>
       </>);
 
@@ -651,26 +652,26 @@ export function PreventivoWizard() {
         const tutte = [...stato.unitaCompletate, stato.unita];
         const nomi: Record<Taglio, string> = { mono: "Monolocale", bilo: "Bilocale", trilo: "Trilocale", quadri: "Quadrilocale" };
         return (<>
-          <h1>Vuoi aggiungere un'altra unità?</h1>
-          <p className="pv-sotto">Da 2 unità in su applichiamo il 5% di sconto sul totale pulizie.</p>
+          <h1>Vuoi aggiungere un'altra casa?</h1>
+          <p className="pv-sotto">Da 2 case in su, -5% sul prezzo di ogni pulizia.</p>
           <div className="pv-unita-lista">
             {tutte.map((un, i) => (
               <div key={i} className="pv-unita-riga">
                 <span className="num">{i + 1}</span>
-                <span className="desc"><b className="pv-nome-unita">{un.nome || `Unit\u00e0 ${i + 1}`}</b> — {un.taglio ? nomi[un.taglio] : "\u2014"} · {un.mq ?? "?"} mq · {un.matrimoniali + un.singoli + un.divani} letti · {un.bagni} {un.bagni === 1 ? "bagno" : "bagni"}</span>
+                <span className="desc"><b className="pv-nome-unita">{un.nome || `Casa ${i + 1}`}</b> — {un.taglio ? nomi[un.taglio] : "\u2014"} · {un.mq ?? "?"} mq · {un.matrimoniali + un.singoli + un.divani} letti · {un.bagni} {un.bagni === 1 ? "bagno" : "bagni"}</span>
               </div>
             ))}
           </div>
           <SceltaGriglia selezionato={altraScelta} onSel={(v) => setAltraScelta(v)} opzioni={[
-            { v: "si" as "si" | "no", ic: "aggiungiUnita", t: "Sì, aggiungi unità", s: tutte.length >= MAX_UNITA ? "Limite raggiunto" : `Compila l'unità ${tutte.length + 1}` },
-            { v: "no" as "si" | "no", ic: "finito", t: "Ho finito", s: `Continua con ${tutte.length} ${tutte.length === 1 ? "unità" : "unità"}` },
+            { v: "si" as "si" | "no", ic: "aggiungiUnita", t: "Sì, aggiungi casa", s: tutte.length >= MAX_UNITA ? "Limite raggiunto" : `Compila la casa ${tutte.length + 1}` },
+            { v: "no" as "si" | "no", ic: "finito", t: "Ho finito", s: `Continua con ${tutte.length} ${tutte.length === 1 ? "casa" : "case"}` },
           ]} />
         </>);
       }
 
       case "biancheria": return (<>
         <h1>Vuoi anche la biancheria?</h1>
-        <p className="pv-sotto">La portiamo pulita e ritiriamo la sporca: consegna inclusa.{stato.tipo === "case" ? " Vale per tutte le unità." : ""}</p>
+        <p className="pv-sotto">La portiamo pulita e ritiriamo la sporca: consegna inclusa.{stato.tipo === "case" ? " Vale per tutte le case." : ""}</p>
         <SceltaGriglia selezionato={stato.vuoleBiancheria} onSel={(v) => scegli("vuoleBiancheria", v, false)} opzioni={[
           { v: true, ic: "biancheriaSi", t: "Sì, pensateci voi", s: "Lenzuola, teli e accessori a noleggio" },
           { v: false, ic: "biancheriaNo", t: "No, la gestisco io", s: "Solo il servizio di pulizia" },
@@ -679,7 +680,7 @@ export function PreventivoWizard() {
 
       case "kit": return (<>
         <h1>Kit di cortesia per gli ospiti?</h1>
-        <p className="pv-sotto">Doccia-shampoo, sapone e crema corpo: il tocco da hotel che gli ospiti citano nelle recensioni.</p>
+        <p className="pv-sotto">Bagnoschiuma, shampoo e sapone: il dettaglio che gli ospiti notano.</p>
         <SceltaGriglia selezionato={stato.vuoleKit} onSel={(v) => scegli("vuoleKit", v, false)} opzioni={[
           { v: true, ic: "kitSi", t: "Sì, aggiungilo", s: "Un set completo per ogni ospite" },
           { v: false, ic: "kitNo", t: "No, grazie", s: "Magari più avanti" },
@@ -687,8 +688,8 @@ export function PreventivoWizard() {
       </>);
 
       case "camere": return (<>
-        <h1>Le camere della struttura</h1>
-        <p className="pv-sotto">Aggiungi le camere e indica quante persone dorme ciascuna: il prezzo si adatta.</p>
+        <h1>Quante camere ha la struttura?</h1>
+        <p className="pv-sotto">Aggiungi le camere e indica quante persone ospita ciascuna: il prezzo si adatta.</p>
         <div className="pv-contatori">
           {stato.camere.map((c, i) => (
             <div className="pv-contatore" key={i}>
@@ -729,8 +730,8 @@ export function PreventivoWizard() {
         <p className="pv-sotto">Sala colazione, corridoi, reception: dicci quando vanno pulite.</p>
         <SceltaGriglia selezionato={stato.areaComune} onSel={(v) => set("areaComune", v)} opzioni={[
           { v: "no" as AreaComune, ic: "areaNo", t: "No", s: "Nessuna area comune" },
-          { v: "inloco" as AreaComune, ic: "areaInloco", t: "Quando siamo già lì", s: "Insieme alla pulizia delle camere" },
-          { v: "dedicata" as AreaComune, ic: "areaDedicata", t: "Tutti i giorni", s: "Anche quando non ci sono checkout" },
+          { v: "inloco" as AreaComune, ic: "areaInloco", t: "Sì, quando siete già lì", s: "Insieme alla pulizia delle camere" },
+          { v: "dedicata" as AreaComune, ic: "areaDedicata", t: "Sì, tutti i giorni", s: "Anche quando non ci sono checkout" },
         ]} />
         {stato.areaComune && stato.areaComune !== "no" && (
           <CampoBox label="Metri quadri dell'area comune (indicativi)">
@@ -742,10 +743,10 @@ export function PreventivoWizard() {
 
       case "zona": return stato.tipo === "case" ? (<>
         <h1>Dove si trovano le tue case?</h1>
-        <p className="pv-sotto">Ogni casa può stare in una zona diversa: indicale tutte, ci servono per il giro e per confermarti la copertura.</p>
+        <p className="pv-sotto">Ogni casa può stare in una zona diversa: indicale tutte. Ci servono per organizzare i percorsi dei nostri operatori e confermarti la copertura.</p>
         {[...stato.unitaCompletate, stato.unita].map((x, i) => (
           <div key={i} className="pv-zona-unita">
-            <div className="pv-zona-unita-nome">{x.nome.trim() || `Unit\u00e0 ${i + 1}`}</div>
+            <div className="pv-zona-unita-nome">{x.nome.trim() || `Casa ${i + 1}`}</div>
             <CampoBox label="Quartiere / zona">
               <input placeholder="es. Trastevere, Prati, Aurelio…" value={x.zona}
                 onChange={(e) => setUnitaZona(i, "zona", e.target.value)} />
@@ -760,9 +761,10 @@ export function PreventivoWizard() {
             </CampoBox>
           </div>
         ))}
+        <p className="pv-nota-campo">Ci serve solo per verificare che la zona rientri nei nostri percorsi. Non passiamo senza avvisarti.</p>
       </>) : (<>
         <h1>Dove si trova la struttura?</h1>
-        <p className="pv-sotto">Ci serve per organizzare il giro e confermarti la copertura.</p>
+        <p className="pv-sotto">Ci serve per organizzare i percorsi dei nostri operatori e confermarti la copertura.</p>
         <CampoBox label="Quartiere / zona">
           <input placeholder="es. Trastevere, Prati, Aurelio…" value={stato.zona} onChange={(e) => set("zona", e.target.value)} />
         </CampoBox>
@@ -773,6 +775,7 @@ export function PreventivoWizard() {
           <input placeholder="es. 00165" maxLength={5} inputMode="numeric" value={stato.cap}
             onChange={(e) => set("cap", e.target.value.replace(/[^0-9]/g, ""))} />
         </CampoBox>
+        <p className="pv-nota-campo">Ci serve solo per verificare che la zona rientri nei nostri percorsi. Non passiamo senza avvisarti.</p>
       </>);
 
       case "foto": {
@@ -787,7 +790,7 @@ export function PreventivoWizard() {
           <p className="pv-sotto">Carica le foto separatamente per ogni casa: così sappiamo a quale appartamento si riferiscono.</p>
           {caseTutte.map((x, i) => (
             <div key={i} className="pv-zona-unita">
-              <div className="pv-zona-unita-nome">{x.nome.trim() || `Unità ${i + 1}`}</div>
+              <div className="pv-zona-unita-nome">{x.nome.trim() || `Casa ${i + 1}`}</div>
               <div className="pv-foto-zona" onClick={() => { fotoUnitaIdx.current = i; fileInput.current?.click(); }}>
                 <Icona nome="fotocamera" />
                 <b>Tocca per aggiungere foto</b>
@@ -806,13 +809,14 @@ export function PreventivoWizard() {
               )}
             </div>
           ))}
-          <p className="pv-facoltativo">Passaggio facoltativo: puoi anche saltarlo.</p>
+          <p className="pv-facoltativo">Passaggio facoltativo.</p>
+        <button type="button" className="pv-salta" onClick={avanti}>Salta questo passaggio</button>
           {inputFile}
         </>);
         }
         return (<>
         <h1>Vuoi mostrarci la struttura? <span className="pv-facoltativo">facoltativo</span></h1>
-        <p className="pv-sotto">Due o tre foto degli ambienti ci aiutano a prepararti un preventivo più preciso al sopralluogo.</p>
+        <p className="pv-sotto">Due o tre foto degli ambienti ci aiutano ad arrivare al sopralluogo già preparati.</p>
         <div className="pv-foto-zona" onClick={() => fileInput.current?.click()}>
           <Icona nome="fotocamera" />
           <b>Tocca per aggiungere foto</b>
@@ -831,6 +835,7 @@ export function PreventivoWizard() {
             ))}
           </div>
         )}
+        <button type="button" className="pv-salta" onClick={avanti}>Salta questo passaggio</button>
       </>);
       }
 
@@ -839,11 +844,13 @@ export function PreventivoWizard() {
         <p className="pv-sotto">Lo vedi subito qui e te lo inviamo anche via email.</p>
         <CampoBox label="Nome"><input value={stato.nome} autoComplete="name" placeholder="Il tuo nome" onChange={(e) => set("nome", e.target.value)} /></CampoBox>
         <CampoBox label="Email"><input type="email" value={stato.email} autoComplete="email" placeholder="nome@esempio.it" onChange={(e) => set("email", e.target.value)} /></CampoBox>
-        <CampoBox label="Telefono"><input type="tel" value={stato.telefono} autoComplete="tel" placeholder="Per confermarti la disponibilità" onChange={(e) => set("telefono", e.target.value)} /></CampoBox>
+        <CampoBox label="Telefono"><input type="tel" value={stato.telefono} autoComplete="tel" placeholder="es. 333 1234567" onChange={(e) => set("telefono", e.target.value)} /></CampoBox>
+        <p className="pv-nota-campo">Lo usiamo solo per confermarti la disponibilità.</p>
         <label className="pv-consenso">
           <input type="checkbox" checked={stato.consensoNewsletter} onChange={(e) => set("consensoNewsletter", e.target.checked)} />
           <span>Voglio ricevere ogni tanto consigli utili per host e novità sul servizio. (Facoltativo: il preventivo lo ricevi comunque.)</span>
         </label>
+        <p className="pv-privacy">Compilando accetti che usiamo i tuoi dati per prepararti il preventivo e ricontattarti. Non li cediamo a nessuno.</p>
         {erroreInvio && <div className="pv-errore">{erroreInvio}</div>}
       </>);
 
@@ -882,13 +889,12 @@ export function PreventivoWizard() {
       chips.push(`${stato.camere.reduce((a, c) => a + c.persone, 0)} posti letto`);
       if (stato.areaComune && stato.areaComune !== "no") chips.push("Aree comuni");
     } else if (stato.tipo === "case") {
-      chips.push(`${stato.unitaCompletate.length + 1} unità`);
-      if (q.scontoPercento) chips.push(`-${q.scontoPercento}% multi-unità`);
+      chips.push(`${stato.unitaCompletate.length + 1} case`);
+      if (q.scontoPercento) chips.push(`-${q.scontoPercento}% multi-casa`);
     } else {
       const u = stato.unita;
       if (u.taglio) chips.push(nomi[u.taglio] + (u.mq ? ` · ${u.mq} mq` : ""));
-      const letti = u.matrimoniali + u.singoli + u.divani;
-      chips.push(`${letti} ${letti === 1 ? "posto letto" : "posti letto"}`);
+      chips.push(`${u.ospiti} ${u.ospiti === 1 ? "posto letto" : "posti letto"}`);
       chips.push(`${u.bagni} ${u.bagni === 1 ? "bagno" : "bagni"}`);
     }
     if (stato.zona) chips.push(stato.zona);
@@ -934,7 +940,7 @@ export function PreventivoWizard() {
           </div>
         ) : stato.tipo === "case" && q.unitaDettaglio && q.unitaDettaglio.length > 0 ? (
           <div className="pv-pannello">
-            <div className="tit">PREZZO PER SINGOLA STRUTTURA</div>
+            <div className="tit">PREZZO PER SINGOLA CASA</div>
             <div className="pv-cam-grid">
               {q.unitaDettaglio.map((u, i) => (
                 <div className="pv-cam-card" key={i}>
@@ -944,9 +950,9 @@ export function PreventivoWizard() {
                 </div>
               ))}
             </div>
-            {q.scontoPercento ? <div className="pv-sconto">sconto multi-struttura -{q.scontoPercento}% già applicato a ogni casa</div> : null}
+            {q.scontoPercento ? <div className="pv-sconto">sconto multi-casa -{q.scontoPercento}% già applicato a ogni casa</div> : null}
             <div className="pv-barra-rame" />
-            <div><span className="pv-stima">Ogni casa paga solo le proprie uscite — <b>nessun cumulo</b></span></div>
+            <div><span className="pv-stima">Nessun canone fisso: <b>paghi solo quando si pulisce</b></span></div>
             <div className="sub">prezzo definitivo confermato al sopralluogo gratuito</div>
           </div>
         ) : (
@@ -993,7 +999,7 @@ export function PreventivoWizard() {
 
   const ETICHETTE: Partial<Record<NomeStep, string>> = {
     tipo: "Struttura", taglio: "Appartamento", letti: "Posti letto", bagni: "Bagni",
-    cucina: "Cucina", esterno: "Esterni", ospitiUnita: "Ospiti", altraUnita: "Altre unità",
+    cucina: "Cucina", esterno: "Esterni", ospitiUnita: "Ospiti", altraUnita: "Altre case",
     biancheria: "Biancheria", kit: "Kit cortesia",
     camere: "Camere", frequenza: "Frequenza", areaComune: "Aree comuni",
     zona: "Zona", foto: "Foto", contatti: "Contatti", contattiHotel: "Contatti",
@@ -1002,13 +1008,13 @@ export function PreventivoWizard() {
     tipo: "Il preventivo si adatta al tuo tipo di attivit\u00e0.",
     taglio: "Scegli il taglio e indica i metri quadri.",
     letti: "Conta tutti i letti che vanno rifatti a ogni cambio ospite.",
-    bagni: "Contiamo anche i bagni di servizio.",
-    cucina: "Com'\u00e8 organizzata la cucina?",
+    bagni: "Contali tutti, anche quelli piccoli.",
+    cucina: "La cucina \u00e8 la stanza che porta via pi\u00f9 tempo.",
     esterno: "Balconi e terrazzi da tenere in ordine.",
-    ospitiUnita: "Quante persone pu\u00f2 ospitare l'unit\u00e0.",
-    altraUnita: "Gestisci pi\u00f9 unit\u00e0? Aggiungile qui.",
+    ospitiUnita: "Quante persone pu\u00f2 ospitare la casa.",
+    altraUnita: "Gestisci pi\u00f9 case? Aggiungile qui.",
     biancheria: "Lenzuola e teli, li portiamo noi.",
-    kit: "Il tocco da hotel per i tuoi ospiti.",
+    kit: "Il dettaglio che gli ospiti notano.",
     camere: "Aggiungi le camere della struttura.",
     frequenza: "Quando vuoi che puliamo.",
     areaComune: "Sala colazione, corridoi, reception.",
@@ -1032,7 +1038,7 @@ export function PreventivoWizard() {
           <div className="pv-brand">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASwAAAEKCAMAAACfVphsAAACf1BMVEUvZxcUFyCWHB5FoB8AKmoAdP9cPRdJQTFhX19/gIRgfLGMl6/nvsH816YSIyEUMlkAVaoFSKE8hR9/gH6dcxWAfXwAAP8AVQAAf38pRXpVAABAPUNVVQD1QT/5naAAAAD8/PwEOYXzIyn8qxUCAgMFNXcIQpH+tBjzHSUHJlEEFzICLHFPuCIBAAABAQEAAAAAAAEBAAABAADt6+0SFBD8tSdnZ2iztLVYWFjzFRzX19areBR4eHeoqaotVphUxCOUlZXNIydUdqzN1+f3rCEEHUJvExWHh4koGQenudWPpsouCQjWlhbIx8dODA392I4zIgyyHCE3NzeQGBr8ymr85bL0CxdTNwxKqCJqRgy8ISQoKChrh7eGWhDa4+9GaaX9xFUALYFIRkf2Z2pSExP1NDi3w9iUZRL5p6n768t7l8H4iIv619eEm8OuGh26gxXEiRb3lJb1R0r8vEf7xsf98tgiTJABDiEAFSz/whl7VA/2VVj6t7d7fIHJHCQ7Y6O3yOLxOUH73qQADigRIjZFKwp4krz3XWP+wSU6YZ3CzeP3dHj80XkA//9eYWFDmB1HmSJY0SSbsND83uATKAmCgX6jbhLpnA4GFxAVNAoAPHgxW6RdYF9EZZ1bgblkDhEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABireP6AAAAoHRSTlP9Bf7+BgL9/////////+r/A//+//7/AQMC/wP/A///AP/+/v78/v7+/v7+/v5OLq/Rj2///v7///////7////+//7////+/P/8///8/v/9//3+//3////9//3+///9/////////f///v////////7+/v////////0M//3////+/////9T//f////////8B//7+/v///P/+/gv/BP/////+w5y2hQAAHetJREFUeNrtnYl/20S+wNWFBfa+3/1eJFuHLdXyncZp4rZ20iZp0jQ3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" alt="" className="pv-logo-img" />
-            <span className="pv-brand-nome">Puliziacasevacanze.it<small>Il preventivo per la tua struttura, in due minuti.</small></span>
+            <span className="pv-brand-nome">Puliziacasevacanze.it<small>In due minuti sai quanto costa. Nessuna attesa, nessuna telefonata.</small></span>
           </div>
         </div>
 
@@ -1081,7 +1087,7 @@ export function PreventivoWizard() {
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASwAAAEKCAMAAACfVphsAAACf1BMVEUvZxcUFyCWHB5FoB8AKmoAdP9cPRdJQTFhX19/gIRgfLGMl6/nvsH816YSIyEUMlkAVaoFSKE8hR9/gH6dcxWAfXwAAP8AVQAAf38pRXpVAABAPUNVVQD1QT/5naAAAAD8/PwEOYXzIyn8qxUCAgMFNXcIQpH+tBjzHSUHJlEEFzICLHFPuCIBAAABAQEAAAAAAAEBAAABAADt6+0SFBD8tSdnZ2iztLVYWFjzFRzX19areBR4eHeoqaotVphUxCOUlZXNIydUdqzN1+f3rCEEHUJvExWHh4koGQenudWPpsouCQjWlhbIx8dODA392I4zIgyyHCE3NzeQGBr8ymr85bL0CxdTNwxKqCJqRgy8ISQoKChrh7eGWhDa4+9GaaX9xFUALYFIRkf2Z2pSExP1NDi3w9iUZRL5p6n768t7l8H4iIv619eEm8OuGh26gxXEiRb3lJb1R0r8vEf7xsf98tgiTJABDiEAFSz/whl7VA/2VVj6t7d7fIHJHCQ7Y6O3yOLxOUH73qQADigRIjZFKwp4krz3XWP+wSU6YZ3CzeP3dHj80XkA//9eYWFDmB1HmSJY0SSbsND83uATKAmCgX6jbhLpnA4GFxAVNAoAPHgxW6RdYF9EZZ1bgblkDhEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABireP6AAAAoHRSTlP9Bf7+BgL9/////////+r/A//+//7/AQMC/wP/A///AP/+/v78/v7+/v7+/v5OLq/Rj2///v7///////7////+//7////+/P/8///8/v/9//3+//3////9//3+///9/////////f///v////////7+/v////////0M//3////+/////9T//f////////8B//7+/v///P/+/gv/BP/////+w5y2hQAAHetJREFUeNrtnYl/20S+wNWFBfa+3/1eJFuHLdXyncZp4rZ20iZp0jQ3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" alt="" className="pv-logo-img" /><span>Puliziacasevacanze.it</span>
           </div>
-          <div className="pv-claim">Il preventivo per la tua struttura, in due minuti.</div>
+          <div className="pv-claim">In due minuti sai quanto costa. Nessuna attesa, nessuna telefonata.</div>
           <div className="pv-progress"><i style={{ width: `${Math.round((idx / Math.max(1, flusso.length - 1)) * 100)}%` }} /></div>
         </div>
 

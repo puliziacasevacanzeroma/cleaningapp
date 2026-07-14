@@ -393,3 +393,14 @@ img.pv-ic-mini.pv-ic-img{width:46px;max-width:46px;height:46px;margin:0}
 /* Logo immagine nell'header (sostituisce la casetta SVG) */
 .pv-brand .pv-logo-img{height:34px;width:auto;display:block}
 .pv-side .pv-brand .pv-logo-img{height:40px}
+
+/* ── note piccole sotto i campi (mq, indirizzo, telefono) ── */
+.pv-nota-campo{font-size:12px;line-height:1.45;color:var(--grigio);margin:6px 0 0}
+
+/* ── riga privacy nello step contatti ── */
+.pv-privacy{font-size:12px;line-height:1.5;color:var(--grigio);margin:14px 0 0;opacity:.9}
+
+/* ── bottone "Salta questo passaggio" (step foto) ── */
+.pv-salta{display:block;margin:14px auto 0;background:none;border:none;padding:6px 4px;cursor:pointer;
+  font-size:13px;font-weight:700;color:var(--grigio);text-decoration:underline;text-underline-offset:3px}
+.pv-salta:hover{color:var(--blu-scuro)}

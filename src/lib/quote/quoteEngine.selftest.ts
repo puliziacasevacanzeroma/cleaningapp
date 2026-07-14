@@ -111,8 +111,14 @@ console.log('\n\u2500\u2500 v2: PI\u00d9 CASE VACANZE \u2500\u2500');
 {
   const bilo: DatiCasa = { ...base, taglio:'bilo', mq:55, matrimoniali:1, singoli:1 };
   const r = calcolaCase([{ ...bilo, nome:'Casa Trastevere' }, bilo]);
-  check('Nomi unit\u00e0 nel dettaglio', r.unitaDettaglio[0]!.nome==='Casa Trastevere' && r.unitaDettaglio[1]!.nome==='Unit\u00e0 2', r.unitaDettaglio.map(u=>u.nome).join('/'));
+  check('Nomi casa nel dettaglio', r.unitaDettaglio[0]!.nome==='Casa Trastevere' && r.unitaDettaglio[1]!.nome==='Casa 2', r.unitaDettaglio.map(u=>u.nome).join('/'));
   check('2 bilocali: 90 -5% = 85,50 \u2192 range 85\u2013100', r.puntuale===85.5 && r.min===85 && r.max===100 && r.scontoPercento===5, `${r.puntuale}/${r.min}-${r.max}/${r.scontoPercento}%`);
+  // v4: lo sconto multi-casa deve comparire ANCHE nel prezzo della singola casa
+  // (bilo puntuale 45 -> 42,75 scontato -> range 40-50; senza sconto era 45-50)
+  check('Sconto -5% applicato al prezzo di OGNI casa', r.unitaDettaglio[0]!.min===40 && r.unitaDettaglio[0]!.max===50, `${r.unitaDettaglio[0]!.min}-${r.unitaDettaglio[0]!.max}`);
+  check('Somma per-casa coerente col totale scontato', r.puntuale===85.5);
+  const uno = calcolaCase([{ ...bilo, nome:'Unica' }]);
+  check('1 sola casa: prezzo pieno, nessuno sconto sulla card', uno.unitaDettaglio[0]!.min===45 && uno.unitaDettaglio[0]!.max===50, `${uno.unitaDettaglio[0]!.min}-${uno.unitaDettaglio[0]!.max}`);
   const solo = calcolaCase([bilo]);
   check('1 unit\u00e0 sola: nessuno sconto', solo.scontoPercento===0 && solo.puntuale===45);
   const conGrande = calcolaCase([bilo, { ...base, taglio:'quadri', mq:150 }]);
