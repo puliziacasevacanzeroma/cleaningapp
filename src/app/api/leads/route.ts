@@ -75,7 +75,7 @@ function valida(body: LeadBody): { ok: true } | { ok: false; errore: string } {
 }
 
 function normalizzaCasa(c: Partial<DatiCasa> & { cap?: string }): DatiCasa & { cap?: string } {
-  const tagli = ['mono', 'bilo', 'trilo', 'quadri'];
+  const tagli = ['mono', 'bilo', 'trilo', 'quadri', 'grande', 'villa'];
   const capU = str(c.cap, 5);
   return {
     nome: str(c.nome, 60),
@@ -83,13 +83,14 @@ function normalizzaCasa(c: Partial<DatiCasa> & { cap?: string }): DatiCasa & { c
     indirizzo: str((c as { indirizzo?: string }).indirizzo, 160),
     ...(/^\d{5}$/.test(capU) ? { cap: capU } : {}),
     taglio: tagli.includes(c.taglio as string) ? (c.taglio as DatiCasa['taglio']) : 'mono',
-    mq: int(c.mq, 15, 400),
+    mq: int(c.mq, 15, 2000),
     matrimoniali: int(c.matrimoniali, 0, 20),
     singoli: int(c.singoli, 0, 20),
     divani: int(c.divani, 0, 20),
     bagni: int(c.bagni, 1, 20),
     cucina: ['angolo', 'sep', 'abit'].includes(c.cucina as string) ? (c.cucina as DatiCasa['cucina']) : 'angolo',
-    esterno: ['no', 'balcone', 'terrazzo', 'terrazzoGrande'].includes(c.esterno as string) ? (c.esterno as DatiCasa['esterno']) : 'no',
+    esterno: ['no', 'balcone', 'terrazzo', 'terrazzoGrande', 'giardino'].includes(c.esterno as string) ? (c.esterno as DatiCasa['esterno']) : 'no',
+    giardinoMq: int((c as { giardinoMq?: number }).giardinoMq, 0, 100000),
     vuoleBiancheria: c.vuoleBiancheria === true,
     vuoleKit: c.vuoleKit === true,
     ospiti: int(c.ospiti, 1, 30),

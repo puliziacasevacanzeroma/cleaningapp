@@ -32,9 +32,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 // ─────────────────────────── Tipi ───────────────────────────
 
 type Tipo = "casa" | "case" | "bnb" | "hotel";
-type Taglio = "mono" | "bilo" | "trilo" | "quadri";
+type Taglio = "mono" | "bilo" | "trilo" | "quadri" | "grande" | "villa";
 type Cucina = "angolo" | "sep" | "abit";
-type Esterno = "no" | "balcone" | "terrazzo" | "terrazzoGrande";
+type Esterno = "no" | "balcone" | "terrazzo" | "terrazzoGrande" | "giardino";
 type Frequenza = "checkout" | "giornaliera";
 type AreaComune = "no" | "inloco" | "dedicata";
 
@@ -51,12 +51,13 @@ interface UnitaCasa {
   bagni: number;
   cucina: Cucina | null;
   esterno: Esterno | null;
+  giardinoMq: number | null;
   ospiti: number;
 }
 const UNITA_VUOTA: UnitaCasa = {
   nome: "", zona: "", indirizzo: "", cap: "",
   taglio: null, mq: null, matrimoniali: 1, singoli: 0, divani: 0,
-  bagni: 1, cucina: null, esterno: null, ospiti: 2,
+  bagni: 1, cucina: null, esterno: null, giardinoMq: null, ospiti: 2,
 };
 
 interface CameraBnb { persone: number }
@@ -225,6 +226,8 @@ const IMG_ICONE: Record<string, string> = {
   bilo: "/preventivo-icone/bilo.png",
   trilo: "/preventivo-icone/trilo.png",
   quadri: "/preventivo-icone/quadri.png",
+  casaGrande: "/preventivo-icone/casaGrande.png",
+  villa: "/preventivo-icone/villa.png",
   matrimoniale: "/preventivo-icone/matrimoniale.png",
   singolo: "/preventivo-icone/singolo.png",
   divano: "/preventivo-icone/divano.png",
@@ -236,6 +239,7 @@ const IMG_ICONE: Record<string, string> = {
   balcone: "/preventivo-icone/balcone.png",
   terrazzo: "/preventivo-icone/terrazzo.png",
   terrazzoGrande: "/preventivo-icone/terrazzoGrande.png",
+  giardino: "/preventivo-icone/giardino.png",
   ospiti: "/preventivo-icone/ospiti.png",
   biancheriaSi: "/preventivo-icone/biancheriaSi.png",
   biancheriaNo: "/preventivo-icone/biancheriaNo.png",
@@ -368,6 +372,10 @@ export function PreventivoWizard() {
 
   const flusso = useMemo<NomeStep[]>(() => {
     if (stato.tipo === "hotel") return ["tipo", "contattiHotel", "fineHotel"];
+    // Villa (solo casa singola): come l'hotel, preventivo dedicato. Percorso corto:
+    // taglio (per i mq) → zona (per capire dov'è) → contatti → schermata "su misura".
+    if (stato.tipo === "casa" && stato.unita.taglio === "villa")
+      return ["tipo", "taglio", "zona", "contatti", "risultato"];
     if (stato.tipo === "bnb")
       return ["tipo", "camere", "frequenza", "areaComune", "kit", "zona", "foto", "contatti", "risultato"];
     const loop: NomeStep[] = ["taglio", "letti", "bagni", "cucina", "esterno", "ospitiUnita"];
@@ -375,7 +383,7 @@ export function PreventivoWizard() {
       stato.tipo === "case" ? "altraUnita" : null,
       "biancheria", "kit", "zona", "foto", "contatti", "risultato"];
     return f.filter(Boolean) as NomeStep[];
-  }, [stato.tipo]);
+  }, [stato.tipo, stato.unita.taglio]);
 
   const step = flusso[idx] ?? "tipo";
   const finale = step === "risultato" || step === "fineHotel";
@@ -388,7 +396,7 @@ export function PreventivoWizard() {
       case "taglio": return !!u.taglio && !!u.mq && (stato.tipo !== "case" || u.nome.trim().length > 1);
       case "letti": return u.matrimoniali + u.singoli + u.divani > 0;
       case "cucina": return !!u.cucina;
-      case "esterno": return !!u.esterno;
+      case "esterno": return !!u.esterno && (u.esterno !== "giardino" || (u.giardinoMq ?? 0) >= 1);
       case "camere": return stato.camere.length > 0;
       case "frequenza": return stato.frequenza !== null;
       case "areaComune": return stato.areaComune !== null && (stato.areaComune === "no" || stato.areaComuneMq >= 1);
@@ -501,6 +509,7 @@ export function PreventivoWizard() {
         nome: u.nome, zona: u.zona, indirizzo: u.indirizzo, cap: u.cap, taglio: u.taglio, mq: u.mq,
         matrimoniali: u.matrimoniali, singoli: u.singoli, divani: u.divani,
         bagni: u.bagni, cucina: u.cucina, esterno: u.esterno,
+        giardinoMq: u.esterno === "giardino" ? (u.giardinoMq ?? 0) : 0,
         vuoleBiancheria: stato.vuoleBiancheria === true,
         vuoleKit: stato.vuoleKit === true,
         ospiti: u.ospiti,
@@ -593,12 +602,14 @@ export function PreventivoWizard() {
           { v: "bilo" as Taglio, ic: "bilo", t: "Bilocale", s: "Camera + soggiorno" },
           { v: "trilo" as Taglio, ic: "trilo", t: "Trilocale", s: "2 camere + soggiorno" },
           { v: "quadri" as Taglio, ic: "quadri", t: "Quadrilocale", s: "3 camere + soggiorno" },
+          { v: "grande" as Taglio, ic: "casaGrande", t: "Casa grande", s: "4 o più camere" },
+          ...(stato.tipo === "casa" ? [{ v: "villa" as Taglio, ic: "villa", t: "Villa", s: "Casa indipendente con esterni" }] : []),
         ]} />
         <CampoBox label="Metri quadri (indicativi)">
           <input type="number" inputMode="numeric" placeholder="es. 65" min={15} max={400}
             value={u.mq ?? ""} onChange={(e) => setU("mq", parseInt(e.target.value) || null)} />
         </CampoBox>
-        <p className="pv-nota-campo">Sopra i 120 mq prepariamo un preventivo su misura.</p>
+        <p className="pv-nota-campo">{u.taglio === "villa" ? "Per le ville prepariamo sempre un preventivo dedicato: bastano i contatti." : "Fino a 400 mq calcoliamo tutto online. Oltre, prepariamo un preventivo su misura."}</p>
       </>);
 
       case "letti": return (<>
@@ -637,7 +648,14 @@ export function PreventivoWizard() {
           { v: "balcone" as Esterno, ic: "balcone", t: "Balcone arredato", s: "Ringhiera con tavolino, sedie o piante" },
           { v: "terrazzo" as Esterno, ic: "terrazzo", t: "Terrazzo", s: "Ombrellone e tavolo per mangiare fuori" },
           { v: "terrazzoGrande" as Esterno, ic: "terrazzoGrande", t: "Grande terrazzo", s: "Salottino esterno, più zone arredate" },
+          { v: "giardino" as Esterno, ic: "giardino", t: "Giardino", s: "Prato e verde di cui prenderci cura" },
         ]} />
+        {u.esterno === "giardino" && (
+          <CampoBox label="Metri quadri del giardino (indicativi)">
+            <input type="number" inputMode="numeric" placeholder="es. 30" min={1} max={5000}
+              value={u.giardinoMq ?? ""} onChange={(e) => setU("giardinoMq", parseInt(e.target.value) || null)} />
+          </CampoBox>
+        )}
       </>);
 
       case "ospitiUnita": return (<>
@@ -650,7 +668,7 @@ export function PreventivoWizard() {
 
       case "altraUnita": {
         const tutte = [...stato.unitaCompletate, stato.unita];
-        const nomi: Record<Taglio, string> = { mono: "Monolocale", bilo: "Bilocale", trilo: "Trilocale", quadri: "Quadrilocale" };
+        const nomi: Record<Taglio, string> = { mono: "Monolocale", bilo: "Bilocale", trilo: "Trilocale", quadri: "Quadrilocale", grande: "Casa grande", villa: "Villa" };
         return (<>
           <h1>Vuoi aggiungere un'altra casa?</h1>
           <p className="pv-sotto">Da 2 case in su, -5% sul prezzo di ogni pulizia.</p>
@@ -881,7 +899,7 @@ export function PreventivoWizard() {
     if (!risposta) return null;
     const { quote: q, copertura } = risposta;
     const eur = (v: number) => "€ " + v.toFixed(2).replace(".", ",");
-    const nomi: Record<Taglio, string> = { mono: "Monolocale", bilo: "Bilocale", trilo: "Trilocale", quadri: "Quadrilocale" };
+    const nomi: Record<Taglio, string> = { mono: "Monolocale", bilo: "Bilocale", trilo: "Trilocale", quadri: "Quadrilocale", grande: "Casa grande", villa: "Villa" };
     const chips: string[] = [];
     if (stato.tipo === "bnb") {
       chips.push("B&B / Affittacamere");

@@ -1568,7 +1568,7 @@ function numOrUndef(...vals: unknown[]): number | undefined {
   return undefined;
 }
 
-const TAGLIO_LABEL: Record<string, string> = { mono: "Monolocale", bilo: "Bilocale", trilo: "Trilocale", triloGrande: "Trilocale grande", quadri: "Quadrilocale" };
+const TAGLIO_LABEL: Record<string, string> = { mono: "Monolocale", bilo: "Bilocale", trilo: "Trilocale", triloGrande: "Trilocale grande", quadri: "Quadrilocale", grande: "Casa grande", villa: "Villa" };
 const CUCINA_LABEL: Record<string, string> = { angolo: "angolo cottura", sep: "cucina separata", abit: "cucina abitabile" };
 const ESTERNO_LABEL: Record<string, string> = { balcone: "balcone", terrazzo: "terrazzo", terrazzoGrande: "terrazzo grande" };
 

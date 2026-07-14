@@ -71,9 +71,9 @@ export function validaParams(p: unknown): { ok: true } | { ok: false; errore: st
     if (isPlainObject(sc) && typeof sc.percento === 'number' && sc.percento > 100) {
       problemi.push('scontoMultiUnita.percento non può superare 100');
     }
-    const mqMax = (p as Record<string, unknown>).MQ_MAX;
+    const mqMax = (p as Record<string, unknown>).mqMax;
     if (typeof mqMax === 'number' && (mqMax < 30 || mqMax > 2000)) {
-      problemi.push('MQ_MAX deve essere tra 30 e 2000');
+      problemi.push('mqMax deve essere tra 30 e 2000');
     }
   }
   return problemi.length ? { ok: false, errore: problemi.slice(0, 5).join('; ') } : { ok: true };
