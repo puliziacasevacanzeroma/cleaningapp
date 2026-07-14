@@ -13,6 +13,8 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { calcolaCasa, calcolaBnbV2, formatEuro } from "~/lib/quote/quoteEngine";
+import type { EngineParams, DatiCasa, Taglio, TipoCucina, TipoEsterno, AreaComune, FrequenzaBnb } from "~/lib/quote/quoteEngine";
 
 // ─────────────────────────── Tipi ───────────────────────────
 
@@ -775,6 +777,199 @@ const SEZIONI: { key: string; titolo: string; nota?: string; icona?: string; cam
   },
 ];
 
+
+// ─────────────────────── Simulatore prezzi (client, zero API) ───────────────────────
+// Riproduce le scelte del wizard e calcola col motore PURO importato qui:
+// nessuna richiesta, nessun lead, nessuna email. Usa i parametri in editing (cfg),
+// quindi mostra i prezzi come sarebbero DOPO il salvataggio.
+
+const SIM_TAGLI: { v: Taglio; t: string }[] = [
+  { v: "mono", t: "Monolocale" }, { v: "bilo", t: "Bilocale" }, { v: "trilo", t: "Trilocale" },
+  { v: "quadri", t: "Quadrilocale" }, { v: "grande", t: "Casa grande" }, { v: "villa", t: "Villa" },
+];
+const SIM_CUCINE: { v: TipoCucina; t: string }[] = [
+  { v: "angolo", t: "Angolo cottura" }, { v: "sep", t: "Cucina separata" }, { v: "abit", t: "Cucina abitabile" },
+];
+const SIM_ESTERNI: { v: TipoEsterno; t: string }[] = [
+  { v: "no", t: "Nessuno" }, { v: "balcone", t: "Balcone" }, { v: "terrazzo", t: "Terrazzo" },
+  { v: "terrazzoGrande", t: "Grande terrazzo" }, { v: "giardino", t: "Giardino" },
+];
+
+function SimNum({ label, v, set, min = 0, max = 20 }: { label: string; v: number; set: (n: number) => void; min?: number; max?: number }) {
+  return (
+    <label className="flex items-center justify-between gap-2 text-xs text-slate-300">
+      <span>{label}</span>
+      <input type="number" value={v} min={min} max={max}
+        onChange={(e) => set(Math.max(min, Math.min(max, parseInt(e.target.value) || min)))}
+        className="w-16 px-2 py-1 rounded-lg bg-white/10 border border-white/10 text-white text-right text-xs" />
+    </label>
+  );
+}
+
+function SimulatorePrezzi({ cfg }: { cfg: EngineParams | null }) {
+  const [modo, setModo] = useState<"casa" | "bnb">("casa");
+  // casa
+  const [taglio, setTaglio] = useState<Taglio>("bilo");
+  const [mq, setMq] = useState(55);
+  const [matr, setMatr] = useState(1);
+  const [sing, setSing] = useState(1);
+  const [div, setDiv] = useState(0);
+  const [bagni, setBagni] = useState(1);
+  const [cucina, setCucina] = useState<TipoCucina>("angolo");
+  const [esterno, setEsterno] = useState<TipoEsterno>("no");
+  const [giardinoMq, setGiardinoMq] = useState(30);
+  const [ospiti, setOspiti] = useState(4);
+  const [bianch, setBianch] = useState(false);
+  const [kit, setKit] = useState(false);
+  const [nCase, setNCase] = useState(1);
+  // bnb
+  const [camere, setCamere] = useState<number[]>([2, 2]);
+  const [frequenza, setFrequenza] = useState<FrequenzaBnb>("checkout");
+  const [area, setArea] = useState<AreaComune>("no");
+  const [areaMq, setAreaMq] = useState(25);
+  const [kitBnb, setKitBnb] = useState(false);
+
+  const casa = useMemo(() => {
+    if (!cfg) return null;
+    const d: DatiCasa = {
+      taglio, mq, matrimoniali: matr, singoli: sing, divani: div, bagni, cucina, esterno,
+      giardinoMq: esterno === "giardino" ? giardinoMq : 0,
+      vuoleBiancheria: bianch, vuoleKit: kit, ospiti,
+    };
+    const r = calcolaCasa(d, cfg);
+    // sconto multi-casa applicato al prezzo della singola casa (stessa logica del wizard)
+    const sc = nCase >= (cfg.scontoMultiUnita?.daUnita ?? 2) ? (cfg.scontoMultiUnita?.percento ?? 0) : 0;
+    if (r.suMisura || sc === 0) return { ...r, sconto: sc };
+    const f = 1 - sc / 100;
+    return { ...r, min: Math.floor((r.puntuale * f) / 5) * 5, max: Math.round((r.puntuale * f * 1.15) / 5) * 5, sconto: sc };
+  }, [cfg, taglio, mq, matr, sing, div, bagni, cucina, esterno, giardinoMq, ospiti, bianch, kit, nCase]);
+
+  const bnb = useMemo(() => {
+    if (!cfg) return null;
+    return calcolaBnbV2({
+      camere: camere.map((p) => ({ persone: p })),
+      frequenza, areaComune: area, areaComuneMq: area === "no" ? 0 : areaMq, vuoleKit: kitBnb,
+    }, cfg);
+  }, [cfg, camere, frequenza, area, areaMq, kitBnb]);
+
+  const sel = "w-full px-2 py-1.5 rounded-lg bg-white/10 border border-white/10 text-white text-xs";
+  const chip = (on: boolean) => `px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors ${on ? "bg-white text-slate-900" : "bg-white/10 text-slate-300 hover:bg-white/20"}`;
+
+  return (
+    <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-4 text-white">
+      <div className="font-semibold">Prova i prezzi</div>
+      <div className="text-xs text-slate-300 mt-0.5">Scegli come farebbe il cliente: il prezzo usa i numeri che stai editando, prima di salvare. Niente lead, niente email.</div>
+
+      <div className="flex gap-1.5 mt-3">
+        <button type="button" className={chip(modo === "casa")} onClick={() => setModo("casa")}>Casa</button>
+        <button type="button" className={chip(modo === "bnb")} onClick={() => setModo("bnb")}>B&amp;B</button>
+      </div>
+
+      {modo === "casa" ? (
+        <div className="mt-3 space-y-2">
+          <div className="grid grid-cols-2 gap-2">
+            <select className={sel} value={taglio} onChange={(e) => setTaglio(e.target.value as Taglio)}>
+              {SIM_TAGLI.map((t) => <option key={t.v} value={t.v} className="text-slate-900">{t.t}</option>)}
+            </select>
+            <label className="flex items-center gap-1.5 text-xs text-slate-300">
+              <input type="number" value={mq} min={15} max={2000}
+                onChange={(e) => setMq(Math.max(15, Math.min(2000, parseInt(e.target.value) || 15)))}
+                className="w-full px-2 py-1.5 rounded-lg bg-white/10 border border-white/10 text-white text-right text-xs" />
+              <span className="flex-none">mq</span>
+            </label>
+          </div>
+          <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+            <SimNum label="Matrimoniali" v={matr} set={setMatr} />
+            <SimNum label="Singoli" v={sing} set={setSing} />
+            <SimNum label="Divani letto" v={div} set={setDiv} />
+            <SimNum label="Bagni" v={bagni} set={setBagni} min={1} />
+            <SimNum label="Ospiti max" v={ospiti} set={setOspiti} min={1} max={30} />
+            <SimNum label="N. case (sconto)" v={nCase} set={setNCase} min={1} max={8} />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <select className={sel} value={cucina} onChange={(e) => setCucina(e.target.value as TipoCucina)}>
+              {SIM_CUCINE.map((c) => <option key={c.v} value={c.v} className="text-slate-900">{c.t}</option>)}
+            </select>
+            <select className={sel} value={esterno} onChange={(e) => setEsterno(e.target.value as TipoEsterno)}>
+              {SIM_ESTERNI.map((c) => <option key={c.v} value={c.v} className="text-slate-900">{c.t}</option>)}
+            </select>
+          </div>
+          {esterno === "giardino" && <SimNum label="Mq giardino" v={giardinoMq} set={setGiardinoMq} min={1} max={5000} />}
+          <div className="flex gap-3">
+            <label className="flex items-center gap-1.5 text-xs text-slate-300"><input type="checkbox" checked={bianch} onChange={(e) => setBianch(e.target.checked)} />Biancheria</label>
+            <label className="flex items-center gap-1.5 text-xs text-slate-300"><input type="checkbox" checked={kit} onChange={(e) => setKit(e.target.checked)} />Kit cortesia</label>
+          </div>
+
+          <div className="bg-white/10 rounded-xl p-3 mt-1">
+            {!casa ? "…" : casa.suMisura ? (
+              <div>
+                <div className="text-xl font-bold">SU MISURA</div>
+                <div className="text-xs text-slate-300 mt-0.5">{taglio === "villa" ? "Le ville vanno sempre a preventivo dedicato." : `Oltre ${cfg?.mqMax ?? 400} mq: lead salvato + email “ti contattiamo”.`}</div>
+              </div>
+            ) : (
+              <div>
+                <div className="text-xl font-bold">€{casa.min} - €{casa.max}</div>
+                <div className="text-xs text-slate-300 mt-0.5">
+                  puntuale interno {formatEuro(casa.puntuale)}{casa.sconto ? ` · sconto multi-casa -${casa.sconto}% incluso` : ""}
+                </div>
+                {(casa.biancheria > 0 || casa.kit > 0) && (
+                  <div className="text-xs text-slate-300 mt-1">
+                    {casa.biancheria > 0 && <span>biancheria +{formatEuro(casa.biancheria)} </span>}
+                    {casa.kit > 0 && <span>kit +{formatEuro(casa.kit)}</span>}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="mt-3 space-y-2">
+          <div className="space-y-1.5">
+            {camere.map((p, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <span className="text-xs text-slate-300 w-16 flex-none">Camera {i + 1}</span>
+                <input type="number" value={p} min={1} max={6}
+                  onChange={(e) => setCamere(camere.map((x, j) => j === i ? Math.max(1, Math.min(6, parseInt(e.target.value) || 1)) : x))}
+                  className="w-14 px-2 py-1 rounded-lg bg-white/10 border border-white/10 text-white text-right text-xs" />
+                <span className="text-xs text-slate-400">pers.</span>
+                {camere.length > 1 && (
+                  <button type="button" className="text-slate-400 hover:text-white text-sm" onClick={() => setCamere(camere.filter((_, j) => j !== i))}>×</button>
+                )}
+              </div>
+            ))}
+            <button type="button" className="text-xs font-semibold text-slate-300 hover:text-white"
+              onClick={() => camere.length < 15 && setCamere([...camere, 2])}>+ Aggiungi camera</button>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <select className={sel} value={frequenza} onChange={(e) => setFrequenza(e.target.value as FrequenzaBnb)}>
+              <option value="checkout" className="text-slate-900">Solo checkout</option>
+              <option value="giornaliera" className="text-slate-900">Anche giornaliera</option>
+            </select>
+            <select className={sel} value={area} onChange={(e) => setArea(e.target.value as AreaComune)}>
+              <option value="no" className="text-slate-900">No aree comuni</option>
+              <option value="inloco" className="text-slate-900">Aree: in loco</option>
+              <option value="dedicata" className="text-slate-900">Aree: dedicata</option>
+            </select>
+          </div>
+          {area !== "no" && <SimNum label="Mq area comune" v={areaMq} set={setAreaMq} min={1} max={500} />}
+          <label className="flex items-center gap-1.5 text-xs text-slate-300"><input type="checkbox" checked={kitBnb} onChange={(e) => setKitBnb(e.target.checked)} />Kit cortesia</label>
+
+          <div className="bg-white/10 rounded-xl p-3 mt-1">
+            {!bnb ? "…" : (
+              <div className="space-y-0.5 text-sm font-semibold">
+                {bnb.camereDettaglio.map((c, i) => <div key={i}>{c.etichetta}: €{c.prezzo}</div>)}
+                {bnb.rifacimentoPerCamera > 0 && <div className="text-xs font-normal text-slate-300">rifacimento €{bnb.rifacimentoPerCamera}/camera + €{bnb.rifacimentoUscita} uscita</div>}
+                {bnb.areaComuneImporto > 0 && <div className="text-xs font-normal text-slate-300">aree comuni {formatEuro(bnb.areaComuneImporto)}</div>}
+                {bnb.kit > 0 && <div className="text-xs font-normal text-slate-300">kit +{formatEuro(bnb.kit)}</div>}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function getPath(obj: unknown, path: string[]): number {
   let cur: unknown = obj;
   for (const k of path) cur = (cur as Record<string, unknown> | undefined)?.[k];
@@ -854,9 +1049,6 @@ function TabConfig() {
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<{ tipo: "ok" | "err"; testo: string } | null>(null);
 
-  // simulatore
-  const [sim, setSim] = useState<{ casa: { min: number; max: number; suMisura: boolean } | null; bnb: { camere: { etichetta: string; prezzo: number }[] } | null }>({ casa: null, bnb: null });
-  const simTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const carica = useCallback(async () => {
     setLoading(true);
@@ -874,30 +1066,6 @@ function TabConfig() {
 
   useEffect(() => { carica(); }, [carica]);
 
-  // simulatore live: ricalcola (debounced) a ogni modifica dei parametri
-  useEffect(() => {
-    if (!cfg) return;
-    if (simTimer.current) clearTimeout(simTimer.current);
-    simTimer.current = setTimeout(async () => {
-      try {
-        const [casa, bnb] = await Promise.all([
-          fetch("/api/admin/engine-config", {
-            method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ params: cfg, caso: { tipo: "casa", casa: { taglio: "bilo", mq: 55, matrimoniali: 1, singoli: 1, bagni: 1, cucina: "abit", esterno: "balcone", ospiti: 4 } } }),
-          }).then((r) => r.json()),
-          fetch("/api/admin/engine-config", {
-            method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ params: cfg, caso: { tipo: "bnb", camere: [{ persone: 1 }, { persone: 2 }, { persone: 3 }] } }),
-          }).then((r) => r.json()),
-        ]);
-        setSim({
-          casa: casa.ok ? { min: casa.quote.min, max: casa.quote.max, suMisura: casa.quote.suMisura } : null,
-          bnb: bnb.ok ? { camere: bnb.quote.camereDettaglio || [] } : null,
-        });
-      } catch { /* silenzioso: il simulatore è solo un aiuto */ }
-    }, 450);
-    return () => { if (simTimer.current) clearTimeout(simTimer.current); };
-  }, [cfg]);
 
   const salva = useCallback(async () => {
     if (!cfg) return;
@@ -1047,23 +1215,7 @@ function TabConfig() {
 
       {/* colonna simulatore + azioni (sticky) */}
       <div className="space-y-4 lg:sticky lg:top-4">
-        <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-4 text-white">
-          <div className="font-semibold">Anteprima live</div>
-          <div className="text-xs text-slate-300 mt-0.5">Ricalcolata con i numeri che stai editando, prima di salvare.</div>
-
-          <div className="mt-3 bg-white/10 rounded-xl p-3">
-            <div className="text-xs text-slate-300">Bilocale 55mq · 2 letti · 1 bagno · cucina abitabile · balcone</div>
-            <div className="text-xl font-bold mt-1">
-              {sim.casa ? (sim.casa.suMisura ? "SU MISURA" : `€${sim.casa.min} - €${sim.casa.max}`) : "…"}
-            </div>
-          </div>
-          <div className="mt-2 bg-white/10 rounded-xl p-3">
-            <div className="text-xs text-slate-300">B&amp;B: singola + doppia + tripla (a checkout)</div>
-            <div className="text-sm font-semibold mt-1 space-y-0.5">
-              {sim.bnb ? sim.bnb.camere.map((c, i) => <div key={i}>{c.etichetta}: €{c.prezzo}</div>) : "…"}
-            </div>
-          </div>
-        </div>
+        <SimulatorePrezzi cfg={cfg as unknown as EngineParams} />
 
         <div className="bg-white rounded-2xl border border-slate-200 p-4 space-y-2">
           <div className="text-sm text-slate-600">
