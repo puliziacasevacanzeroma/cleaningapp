@@ -404,3 +404,14 @@ img.pv-ic-mini.pv-ic-img{width:46px;max-width:46px;height:46px;margin:0}
 .pv-salta{display:block;margin:14px auto 0;background:none;border:none;padding:6px 4px;cursor:pointer;
   font-size:13px;font-weight:700;color:var(--grigio);text-decoration:underline;text-underline-offset:3px}
 .pv-salta:hover{color:var(--blu-scuro)}
+
+/* ── BANNER MOBILE v3 (variante A: logo largo, una riga, barra a tutta larghezza) ── */
+.pv-head{padding:10px 14px 0}
+.pv-head .pv-brand{gap:11px;align-items:center;font-weight:800}
+.pv-head .pv-brand .pv-logo-img{height:44px;width:auto;filter:drop-shadow(0 2px 6px rgba(0,0,0,.22))}
+.pv-head .pv-brand-nome{font-weight:800;font-size:15px;line-height:1.1;letter-spacing:-.01em;min-width:0}
+.pv-head .pv-brand-nome small{display:block;font-size:11.5px;font-weight:500;opacity:.82;margin-top:2px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* barra: esce dal padding e va a filo, sotto il banner ma dentro l'header (resta sticky) */
+.pv-head .pv-progress{height:4px;border-radius:0;margin:10px -14px 0;background:rgba(255,255,255,.2)}
+.pv-head .pv-progress i{border-radius:0}
