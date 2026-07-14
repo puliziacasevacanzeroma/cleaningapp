@@ -1,22 +1,30 @@
 /**
  * quoteEngine.ts — Motore di calcolo preventivi Puliziacasevacanze.it
- * v4 — 14/07/2026: I MQ ENTRANO NEL PREZZO. Ogni taglio ha una soglia di mq
- *      inclusi (mqInclusi); oltre, si paga euroMq per ogni mq extra. Le vecchie
- *      "promozioni di taglio da mq" sono ELIMINATE (avrebbero contato i mq due
- *      volte). Nuovi tagli: 'grande' (calcolato fino a mqMax) e 'villa'
- *      (SEMPRE su misura: sopralluogo). Nuovo esterno 'giardino' a fasce.
- *      Tetto calcolo: mqMax = 400 (oltre: su misura + email). La chiave è stata
- *      RINOMINATA da MQ_MAX a mqMax di proposito: un eventuale override vecchio
- *      su Firestore (config/preventivatore) non può riportare il tetto a 120.
- *      Lo sconto multi-casa è applicato anche al prezzo mostrato di OGNI casa.
- * v3 — 08/07/2026: parametri INIETTABILI (EngineParams opzionale, default ENGINE).
- * v2 — 07/07/2026: multi-unità (-5% da 2), camere B&B a persone, aree comuni,
- *      passaggio infra-soggiorno.
- * v1 — parametri base congelati il 06/07/2026 (prototipo HTML v6)
+ *
+ * v6 — 14/07/2026: MODELLO ADDITIVO. ZERO ANOMALIE PER COSTRUZIONE.
+ *      Il vecchio modello era a GRADINI: il taglio cambiava base, soglia mq,
+ *      letti inclusi e persino il prezzo dei correttivi, tutto insieme. Ogni
+ *      gradino poteva far SCENDERE il prezzo, e dichiarare un taglio piccolo
+ *      poteva costare PIU' di uno grande (bug reale: bilocale 93mq > quadrilocale 93mq).
+ *
+ *      Ora:
+ *        prezzo = MAX( minimo , base + mq*euroMq + letti*euroLetto + bagni*euroBagno
+ *                               + cucina + esterno (+ giardino a fasce) )
+ *
+ *      Tutte le voci sono positive e additive => il prezzo NON PUO' calare se la
+ *      casa cresce, e due case identiche costano uguale QUALUNQUE taglio sia stato
+ *      dichiarato (il taglio NON entra nel prezzo: e' descrittivo, serve al lead).
+ *      Calibrato sulle ancore validate da Ariele il 14/07/2026 (scarto max 3,30 EUR).
+ *
+ *      Tagli: 'villa' => sempre su misura (scelta commerciale). Oltre mqMax (400)
+ *      => su misura: lead salvato + email "ti contattiamo" (gia' gestiti a valle).
+ *
+ * v5/v4 — 14/07: mq nel prezzo, tagli grande/villa, giardino, tetto 400 (superati da v6).
+ * v3 — 08/07: parametri INIETTABILI (EngineParams opzionale, default ENGINE).
+ * v2 — 07/07: multi-unita' (-5% da 2), camere B&B a persone, aree comuni, passaggio.
  *
  * REGOLE:
  * - Modulo PURO: nessun import da Firebase/Next, nessun side effect.
- *   Tutta la logica prezzi passa SOLO da qui (stesso principio di linenCore).
  * - Ogni modifica ai parametri o alla logica richiede il rerun del selftest.
  */
 
@@ -34,6 +42,7 @@ export interface DatiCasa {
   zona?: string;
   /** indirizzo preciso dell'unità (via e civico) */
   indirizzo?: string;
+  /** DESCRITTIVO: non entra nel prezzo (v6). 'villa' => su misura. */
   taglio: Taglio;
   mq: number;
   matrimoniali: number;
@@ -68,26 +77,26 @@ export interface QuoteResult {
   biancheria: number;
   /** costo kit cortesia (0 se non richiesto) */
   kit: number;
-  /** taglio effettivo (per il salvataggio lead; da v4 coincide col dichiarato) */
+  /** taglio dichiarato (v6: descrittivo, non influenza il prezzo) */
   taglioEffettivo?: string;
 }
 
-// ────────────────────── Parametri (default congelati v1) ──────────────────────
-
-export interface CorrTaglio {
-  letto: number; bagno: number; cucinaSep: number; cucinaAbit: number;
-  balcone: number; terrazzo: number; terrazzoGrande: number;
-}
+// ────────────────────── Parametri (default v6, calibrati 14/07/2026) ──────────────────────
 
 export interface EngineParams {
-  basi: Record<string, number>;
-  lettiInclusi: Record<string, number>;
-  /** v4: mq già compresi nel prezzo base di ogni taglio (taratura B, misure tipiche) */
-  mqInclusi: Record<string, number>;
-  /** v4: € per ogni mq oltre quelli inclusi nel taglio */
-  euroMq: number;
-  corr: { piccolo: CorrTaglio; grande: CorrTaglio };
-  /** v4: giardino a fasce (esterno 'giardino'): <= piccoloMaxMq → piccolo, <= medioMaxMq → medio, oltre → grande */
+  /** v6: modello additivo — nessun gradino, tutte le voci positive */
+  casa: {
+    base: number;        // costo di uscita, sempre presente
+    euroMq: number;      // per ogni mq
+    euroLetto: number;   // per ogni letto da rifare
+    euroBagno: number;   // per ogni bagno
+    cucinaSep: number;   // cucina separata (angolo = 0)
+    cucinaAbit: number;  // cucina abitabile
+    balcone: number;
+    terrazzo: number;
+    terrazzoGrande: number;
+    minimo: number;      // prezzo minimo di uscita: sotto non si scende
+  };
   giardino: { piccoloMaxMq: number; medioMaxMq: number; piccolo: number; medio: number; grande: number };
   biancheria: { matrimoniale: number; singolo: number; setOspite: number; tappetino: number; canavaccio: number };
   kitCortesia: number;
@@ -95,21 +104,24 @@ export interface EngineParams {
   areaComune: { sogliaMq: number; inLocoBase: number; inLocoMqExtra: number; dedicataBase: number; dedicataMqExtra: number };
   passaggio: { uscita: number; perLetto: number };
   scontoMultiUnita: { daUnita: number; percento: number };
-  /** v4: tetto del calcolo automatico (oltre: su misura). Rinominato da MQ_MAX. */
+  /** tetto del calcolo automatico (oltre: su misura + email) */
   mqMax: number;
 }
 
 export const ENGINE: EngineParams = {
-  basi: { mono: 40, bilo: 45, trilo: 52, quadri: 60, grande: 60 },
-  lettiInclusi: { mono: 1, bilo: 2, trilo: 3, quadri: 4, grande: 4 },
-  /** taratura B (14/07/2026, validata con Ariele): soglia = misura TIPICA del taglio */
-  mqInclusi: { mono: 40, bilo: 55, trilo: 75, quadri: 100, grande: 120 },
-  euroMq: 0.30,
-  corr: {
-    piccolo: { letto: 3, bagno: 7, cucinaSep: 4, cucinaAbit: 6, balcone: 3, terrazzo: 6, terrazzoGrande: 10 },
-    grande:  { letto: 2, bagno: 5, cucinaSep: 4, cucinaAbit: 5, balcone: 3, terrazzo: 5, terrazzoGrande: 8 },
+  /** calibrati sulle 9 ancore validate da Ariele (scarto max 3,30 EUR) */
+  casa: {
+    base: 18,
+    euroMq: 0.28,
+    euroLetto: 2.5,
+    euroBagno: 5,
+    cucinaSep: 4,
+    cucinaAbit: 5,
+    balcone: 3,
+    terrazzo: 4,
+    terrazzoGrande: 7,
+    minimo: 40,
   },
-  /** fasce giardino validate con Ariele il 14/07/2026 */
   giardino: { piccoloMaxMq: 20, medioMaxMq: 60, piccolo: 15, medio: 25, grande: 50 },
   biancheria: { matrimoniale: 5.60, singolo: 4.30, setOspite: 3.80, tappetino: 1.00, canavaccio: 1.50 },
   /** doccia-shampoo 0,48 + sapone mani 0,28 + body lotion 0,50 (listino OKIKO) */
@@ -132,11 +144,6 @@ function range(puntuale: number): { min: number; max: number } {
   };
 }
 
-/** true per i tagli che usano la tabella correttivi "grande" */
-function isTaglioGrande(t: string): boolean {
-  return t === 'trilo' || t === 'quadri' || t === 'grande';
-}
-
 /** Supplemento giardino a fasce. 0 se mq non validi. */
 export function prezzoGiardino(giardinoMq: number, P: EngineParams = ENGINE): number {
   const g = P.giardino;
@@ -153,30 +160,34 @@ const RISULTATO_SU_MISURA = (taglio?: string): QuoteResult => ({
 
 // ─────────────────────────────── Calcoli ───────────────────────────────
 
+/**
+ * Prezzo pulizia di una casa (v6, additivo).
+ * NB: il taglio NON compare. Due case identiche costano uguale, qualunque taglio
+ * sia stato dichiarato: è questo che rende impossibili le anomalie.
+ */
+export function prezzoPuliziaCasa(d: DatiCasa, P: EngineParams = ENGINE): number {
+  const c = P.casa;
+  const letti = Math.max(0, d.matrimoniali) + Math.max(0, d.singoli) + Math.max(0, d.divani);
+  let v = c.base;
+  v += Math.max(0, d.mq) * c.euroMq;
+  v += letti * c.euroLetto;
+  v += Math.max(0, d.bagni) * c.euroBagno;
+  if (d.cucina === 'sep') v += c.cucinaSep;
+  if (d.cucina === 'abit') v += c.cucinaAbit;
+  if (d.esterno === 'balcone') v += c.balcone;
+  if (d.esterno === 'terrazzo') v += c.terrazzo;
+  if (d.esterno === 'terrazzoGrande') v += c.terrazzoGrande;
+  if (d.esterno === 'giardino') v += prezzoGiardino(d.giardinoMq ?? 0, P);
+  return round2(Math.max(c.minimo, v));
+}
+
 export function calcolaCasa(d: DatiCasa, P: EngineParams = ENGINE): QuoteResult {
   // Villa: SEMPRE preventivo dedicato (scelta commerciale: si vede di persona).
   if (d.taglio === 'villa') return RISULTATO_SU_MISURA('villa');
   // Oltre il tetto: su misura (lead salvato + email "ti contattiamo", già gestiti a valle).
   if (d.mq > P.mqMax) return RISULTATO_SU_MISURA(d.taglio);
-  // Taglio sconosciuto (config sporca su Firestore): mai NaN in produzione.
-  if (typeof P.basi[d.taglio] !== 'number') return RISULTATO_SU_MISURA(d.taglio);
 
-  const taglio: string = d.taglio;
-  const c = isTaglioGrande(taglio) ? P.corr.grande : P.corr.piccolo;
-
-  const lettiTot = d.matrimoniali + d.singoli + d.divani;
-  let tot = P.basi[taglio];
-  // v4: i mq pesano sul prezzo — solo la parte OLTRE la soglia inclusa nel taglio.
-  tot += Math.max(0, d.mq - (P.mqInclusi[taglio] ?? 0)) * P.euroMq;
-  tot += Math.max(0, lettiTot - P.lettiInclusi[taglio]) * c.letto;
-  tot += Math.max(0, d.bagni - 1) * c.bagno;
-  if (d.cucina === 'sep') tot += c.cucinaSep;
-  if (d.cucina === 'abit') tot += c.cucinaAbit;
-  if (d.esterno === 'balcone') tot += c.balcone;
-  if (d.esterno === 'terrazzo') tot += c.terrazzo;
-  if (d.esterno === 'terrazzoGrande') tot += c.terrazzoGrande;
-  if (d.esterno === 'giardino') tot += prezzoGiardino(d.giardinoMq ?? 0, P);
-  tot = round2(tot);
+  const tot = prezzoPuliziaCasa(d, P);
 
   let biancheria = 0;
   if (d.vuoleBiancheria) {
@@ -190,7 +201,7 @@ export function calcolaCasa(d: DatiCasa, P: EngineParams = ENGINE): QuoteResult 
   return {
     suMisura: false, min, max, puntuale: tot,
     biancheria: round2(biancheria), kit: round2(kit),
-    taglioEffettivo: taglio,
+    taglioEffettivo: d.taglio,
   };
 }
 
@@ -214,7 +225,7 @@ export function verificaCopertura(cap: string, capCoperti: string[]): EsitoCoper
   return capCoperti.includes(cap.trim()) ? 'coperta' : 'in_valutazione';
 }
 
-// ────────────────── v2: Più case vacanze (somma + sconto) ──────────────────
+// ────────────────── Più case vacanze (somma + sconto) ──────────────────
 
 export interface QuoteMultiResult extends QuoteResult {
   unitaDettaglio: {
@@ -229,15 +240,21 @@ export interface QuoteMultiResult extends QuoteResult {
 export function calcolaCase(unita: DatiCasa[], P: EngineParams = ENGINE): QuoteMultiResult {
   const dettagli = unita.map((u) => calcolaCasa(u, P));
   const vuoto = { min: 0, max: 0, puntuale: 0, biancheria: 0, kit: 0 };
+  const riga = (d: QuoteResult, i: number, min: number, max: number) => ({
+    nome: unita[i]?.nome || 'Casa ' + (i + 1), zona: unita[i]?.zona || '', indirizzo: unita[i]?.indirizzo || '',
+    min, max, suMisura: d.suMisura,
+    taglio: unita[i]?.taglio || '', mq: unita[i]?.mq || 0, bagni: unita[i]?.bagni || 0,
+    postiLetto: unita[i]?.ospiti || 0,
+    matrimoniali: unita[i]?.matrimoniali || 0, singoli: unita[i]?.singoli || 0, divani: unita[i]?.divani || 0,
+    cucina: unita[i]?.cucina || '', esterno: unita[i]?.esterno || '',
+  });
+
   if (dettagli.some((d) => d.suMisura) || unita.length === 0) {
-    return { suMisura: true, ...vuoto, unitaDettaglio: dettagli.map((d, i) => ({
-      nome: unita[i]?.nome || 'Casa ' + (i + 1), zona: unita[i]?.zona || '', indirizzo: unita[i]?.indirizzo || '',
-      min: d.min, max: d.max, suMisura: d.suMisura,
-      taglio: unita[i]?.taglio || '', mq: unita[i]?.mq || 0, bagni: unita[i]?.bagni || 0,
-      postiLetto: unita[i]?.ospiti || 0,
-      matrimoniali: unita[i]?.matrimoniali || 0, singoli: unita[i]?.singoli || 0, divani: unita[i]?.divani || 0,
-      cucina: unita[i]?.cucina || '', esterno: unita[i]?.esterno || '',
-    })), scontoPercento: 0 };
+    return {
+      suMisura: true, ...vuoto,
+      unitaDettaglio: dettagli.map((d, i) => riga(d, i, d.min, d.max)),
+      scontoPercento: 0,
+    };
   }
   let sommaPulizia = dettagli.reduce((a, d) => a + d.puntuale, 0);
   const sconto = unita.length >= P.scontoMultiUnita.daUnita ? P.scontoMultiUnita.percento : 0;
@@ -246,25 +263,20 @@ export function calcolaCase(unita: DatiCasa[], P: EngineParams = ENGINE): QuoteM
   // il totale nel wizard non viene mai mostrato, quindi senza questo lo sconto
   // sarebbe dichiarato ma invisibile nei numeri letti dall'utente.
   const fatt = 1 - sconto / 100;
-  const rangeScontato = (d: QuoteResult) => range(d.puntuale * fatt);
   const biancheria = round2(dettagli.reduce((a, d) => a + d.biancheria, 0));
   const kit = round2(dettagli.reduce((a, d) => a + d.kit, 0));
   const { min, max } = range(sommaPulizia);
   return {
     suMisura: false, min, max, puntuale: round2(sommaPulizia), biancheria, kit,
-    unitaDettaglio: dettagli.map((d, i) => ({
-      nome: unita[i]?.nome || 'Casa ' + (i + 1), zona: unita[i]?.zona || '', indirizzo: unita[i]?.indirizzo || '',
-      min: rangeScontato(d).min, max: rangeScontato(d).max, suMisura: d.suMisura,
-      taglio: unita[i]?.taglio || '', mq: unita[i]?.mq || 0, bagni: unita[i]?.bagni || 0,
-      postiLetto: unita[i]?.ospiti || 0,
-      matrimoniali: unita[i]?.matrimoniali || 0, singoli: unita[i]?.singoli || 0, divani: unita[i]?.divani || 0,
-      cucina: unita[i]?.cucina || '', esterno: unita[i]?.esterno || '',
-    })),
+    unitaDettaglio: dettagli.map((d, i) => {
+      const r = range(d.puntuale * fatt);
+      return riga(d, i, r.min, r.max);
+    }),
     scontoPercento: sconto,
   };
 }
 
-// ────────────────── v2: B&B a camere dinamiche + extra ──────────────────
+// ────────────────── B&B a camere dinamiche + extra ──────────────────
 
 export interface CameraBnb { persone: number }
 export type FrequenzaBnb = 'checkout' | 'giornaliera';
@@ -297,14 +309,10 @@ export function prezzoAreaComuneDedicata(mq: number, P: EngineParams = ENGINE): 
 }
 
 export interface QuoteBnbV2 extends QuoteResult {
-  /** dettaglio per camera: tipo leggibile e prezzo a checkout */
   camereDettaglio: { persone: number; etichetta: string; prezzo: number }[];
-  /** rifacimento letti giornaliero, PER USCITA (assunzione: 1 letto per camera) — uso interno/back-office */
   rifacimentoGiornaliero: number;
-  /** componenti unitarie del riassetto: al cliente si mostrano SOLO queste, mai la somma */
   rifacimentoPerCamera: number;
   rifacimentoUscita: number;
-  /** area comune: per passaggio (inloco) o per uscita (dedicata); 0 se 'no' */
   areaComuneImporto: number;
   areaComuneTipo: AreaComune;
 }
@@ -344,7 +352,7 @@ export function calcolaBnbV2(d: DatiBnbV2, P: EngineParams = ENGINE): QuoteBnbV2
   };
 }
 
-// ────────────────── v2: Passaggio infra-soggiorno (case) ──────────────────
+// ────────────────── Passaggio infra-soggiorno (case) ──────────────────
 
 /** Rifacimento letti + eventuale cambio biancheria e ricarica kit DURANTE il soggiorno */
 export function calcolaPassaggioSoggiorno(d: DatiCasa, P: EngineParams = ENGINE): { totale: number; uscita: number; letti: number; biancheria: number; kit: number } {

@@ -75,6 +75,26 @@ export function validaParams(p: unknown): { ok: true } | { ok: false; errore: st
     if (typeof mqMax === 'number' && (mqMax < 30 || mqMax > 2000)) {
       problemi.push('mqMax deve essere tra 30 e 2000');
     }
+    // v6: gli ordini che tengono il modello coerente. Se un admin li rompe dal pannello,
+    // il preventivatore ricomincerebbe a produrre anomalie (es. terrazzo che costa meno del balcone).
+    const casa = (p as Record<string, unknown>).casa;
+    if (isPlainObject(casa)) {
+      const n = (k: string) => (typeof casa[k] === 'number' ? (casa[k] as number) : undefined);
+      const cs = n('cucinaSep'), ca = n('cucinaAbit');
+      if (cs !== undefined && ca !== undefined && ca < cs) problemi.push('casa.cucinaAbit non può costare meno di casa.cucinaSep');
+      const bal = n('balcone'), ter = n('terrazzo'), tg = n('terrazzoGrande');
+      if (bal !== undefined && ter !== undefined && ter < bal) problemi.push('casa.terrazzo non può costare meno di casa.balcone');
+      if (ter !== undefined && tg !== undefined && tg < ter) problemi.push('casa.terrazzoGrande non può costare meno di casa.terrazzo');
+    }
+    const g = (p as Record<string, unknown>).giardino;
+    if (isPlainObject(g)) {
+      const n = (k: string) => (typeof g[k] === 'number' ? (g[k] as number) : undefined);
+      const pi = n('piccolo'), me = n('medio'), gr = n('grande');
+      if (pi !== undefined && me !== undefined && me < pi) problemi.push('giardino.medio non può costare meno di giardino.piccolo');
+      if (me !== undefined && gr !== undefined && gr < me) problemi.push('giardino.grande non può costare meno di giardino.medio');
+      const p1 = n('piccoloMaxMq'), m1 = n('medioMaxMq');
+      if (p1 !== undefined && m1 !== undefined && m1 <= p1) problemi.push('giardino.medioMaxMq deve essere maggiore di giardino.piccoloMaxMq');
+    }
   }
   return problemi.length ? { ok: false, errore: problemi.slice(0, 5).join('; ') } : { ok: true };
 }

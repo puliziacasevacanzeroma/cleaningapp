@@ -652,7 +652,7 @@ export function PreventivoWizard() {
           <input ref={mqInput} type="number" inputMode="numeric" placeholder="es. 65" min={15} max={2000}
             value={u.mq ?? ""} onChange={(e) => { setU("mq", parseInt(e.target.value) || null); setManca(null); }} />
         </CampoBox>
-        <p className="pv-nota-campo">{u.taglio === "villa" ? "Per le ville prepariamo sempre un preventivo dedicato: bastano i contatti." : "Fino a 400 mq calcoliamo tutto online. Oltre, prepariamo un preventivo su misura."}</p>
+        <p className="pv-nota-campo">{u.taglio === "villa" ? "Per le ville prepariamo sempre un preventivo dedicato: bastano i contatti." : "I metri quadri contano nel prezzo: indicali il più precisi possibile. Fino a 400 mq calcoliamo online, oltre prepariamo un preventivo su misura."}</p>
       </>);
 
       case "letti": return (<>

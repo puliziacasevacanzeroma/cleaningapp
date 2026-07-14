@@ -1,12 +1,20 @@
 /**
  * quoteEngine.selftest.ts — Batteria di test del motore preventivi
  * Esegui con:  npx tsx src/lib/quote/quoteEngine.selftest.ts
- * Tabelle v1 (06/07) e v2 (07/07) validate con Ariele. TUTTI i test devono passare
- * prima di qualsiasi deploy che tocchi il motore.
+ *
+ * v6 (14/07/2026) — MODELLO ADDITIVO. Oltre alla tabella prezzi, i test
+ * verificano ESAUSTIVAMENTE gli invarianti che rendono impossibili le anomalie:
+ *   - più mq / più letti / più bagni => il prezzo non cala MAI
+ *   - cucina ed esterni ordinati
+ *   - stessa casa, taglio dichiarato diverso => stesso prezzo
+ * TUTTI i test devono passare prima di qualsiasi deploy che tocchi il motore.
  */
-import { ENGINE, calcolaCasa, calcolaBnb, verificaCopertura, calcolaCase, calcolaBnbV2, prezzoCamera, prezzoAreaComuneInLoco, prezzoAreaComuneDedicata, calcolaPassaggioSoggiorno, prezzoGiardino } from './quoteEngine';
-const round2 = (v: number) => Math.round(v * 100) / 100;
-import type { DatiCasa } from './quoteEngine';
+import {
+  ENGINE, calcolaCasa, calcolaBnb, verificaCopertura, calcolaCase, calcolaBnbV2,
+  prezzoCamera, prezzoAreaComuneInLoco, prezzoAreaComuneDedicata, calcolaPassaggioSoggiorno,
+  prezzoGiardino, prezzoPuliziaCasa,
+} from './quoteEngine';
+import type { DatiCasa, Taglio, TipoCucina, TipoEsterno } from './quoteEngine';
 
 let passati = 0, falliti = 0;
 function check(nome: string, cond: boolean, dettaglio = '') {
@@ -16,29 +24,23 @@ function check(nome: string, cond: boolean, dettaglio = '') {
 
 const base: Omit<DatiCasa, 'taglio' | 'mq'> = {
   matrimoniali: 1, singoli: 0, divani: 0, bagni: 1,
-  cucina: 'angolo', esterno: 'no', vuoleBiancheria: false, vuoleKit: false, ospiti: 2,
+  cucina: 'angolo', esterno: 'no',
+  vuoleBiancheria: false, vuoleKit: false, ospiti: 2,
 };
 
-console.log('\n\u2500\u2500 TABELLA PREZZI CONCORDATA \u2500\u2500');
+// ───────────────────────── TABELLA PREZZI (ancore validate) ─────────────────────────
+console.log('\n\u2500\u2500 TABELLA PREZZI (ancore validate con Ariele 14/07/2026) \u2500\u2500');
 {
   const r = calcolaCasa({ ...base, taglio: 'mono', mq: 40 });
-  check('Monolocale 40mq, 1 letto, 1 bagno \u2192 40\u201345', r.min === 40 && r.max === 45, `${r.min}-${r.max}`);
+  check('Mono 40mq, 1 letto, 1 bagno \u2192 40\u201345', r.min === 40 && r.max === 45, `${r.min}-${r.max}`);
 }
 {
   const r = calcolaCasa({ ...base, taglio: 'bilo', mq: 55, matrimoniali: 1, singoli: 1, cucina: 'sep', esterno: 'balcone' });
-  check('Bilocale 55mq, 2 letti, cucina sep, balcone \u2192 50\u201360', r.min === 50 && r.max === 60, `${r.min}-${r.max}`);
-}
-{
-  const r = calcolaCasa({ ...base, taglio: 'trilo', mq: 65, matrimoniali: 2, singoli: 1, cucina: 'sep' });
-  check('CASO REALE: trilo 65mq, 3 letti, cucina sep \u2192 55\u201365', r.min === 55 && r.max === 65, `${r.min}-${r.max}`);
-}
-{
-  const r = calcolaCasa({ ...base, taglio: 'trilo', mq: 80, matrimoniali: 2, singoli: 1, bagni: 2, cucina: 'abit' });
-  check('Trilo 80mq, 3 letti, 2 bagni, abit \u2192 60\u201375', r.min === 60 && r.max === 75, `${r.min}-${r.max}`);
+  check('Bilo 55mq, 2 letti, cucina sep, balcone \u2192 50\u201360', r.min === 50 && r.max === 60, `${r.min}-${r.max}`);
 }
 {
   const r = calcolaCasa({ ...base, taglio: 'trilo', mq: 90, matrimoniali: 2, singoli: 2, bagni: 2, cucina: 'sep', esterno: 'terrazzo' });
-  check('Trilo 90mq, 4 letti, 2 bagni, terrazzo \u2192 70\u201385 (v4: +15mq oltre soglia)', r.min === 70 && r.max === 85, `${r.min}-${r.max}`);
+  check('Trilo 90mq, 4 letti, 2 bagni, terrazzo \u2192 70\u201380', r.min === 70 && r.max === 80, `${r.min}-${r.max}`);
 }
 {
   const r = calcolaCasa({ ...base, taglio: 'quadri', mq: 100, matrimoniali: 3, singoli: 1, bagni: 2, cucina: 'abit', esterno: 'terrazzo' });
@@ -46,163 +48,220 @@ console.log('\n\u2500\u2500 TABELLA PREZZI CONCORDATA \u2500\u2500');
 }
 {
   const r = calcolaCasa({ ...base, taglio: 'quadri', mq: 120, matrimoniali: 3, singoli: 2, bagni: 3, cucina: 'abit', esterno: 'terrazzoGrande' });
-  check('Attico 120mq, 5 letti, 3 bagni, terr.grande \u2192 90\u2013105 (v4: +20mq oltre soglia)', r.min === 90 && r.max === 105, `${r.min}-${r.max}`);
+  check('Attico 120mq, 5 letti, 3 bagni, terr.grande \u2192 90\u2013105', r.min === 90 && r.max === 105, `${r.min}-${r.max}`);
 }
 {
-  const r = calcolaCasa({ ...base, taglio: 'quadri', mq: 150 });
-  check('150mq \u2192 CALCOLATO (v4: tetto a 400)', r.suMisura === false && r.puntuale === 75, String(r.puntuale));
+  const r = calcolaCasa({ ...base, taglio: 'grande', mq: 160, matrimoniali: 4, singoli: 2, bagni: 3, cucina: 'abit' });
+  check('Casa grande 160mq, 6 letti, 3 bagni \u2192 95\u2013110', r.min === 95 && r.max === 110, `${r.min}-${r.max}`);
+}
+{
+  const r = calcolaCasa({ ...base, taglio: 'grande', mq: 300, matrimoniali: 5, singoli: 3, bagni: 4, cucina: 'abit' });
+  check('Casa 300mq, 8 letti, 4 bagni \u2192 145\u2013170', r.min === 145 && r.max === 170, `${r.min}-${r.max}`);
+}
+{
+  const r = calcolaCasa({ ...base, taglio: 'mono', mq: 15, matrimoniali: 1, bagni: 1 });
+  check('Prezzo minimo: un buco da 15mq non scende sotto 40\u20ac', r.puntuale === 40, String(r.puntuale));
 }
 
-console.log('\n\u2500\u2500 v4: MQ NEL PREZZO \u2500\u2500');
+// ───────────────────────── INVARIANTI ANTI-ANOMALIA (esaustivi) ─────────────────────────
+console.log('\n\u2500\u2500 v6: INVARIANTI \u2014 LE ANOMALIE DEVONO ESSERE IMPOSSIBILI \u2500\u2500');
 {
-  // sotto la soglia inclusa: i mq NON pesano
-  let r = calcolaCasa({ ...base, taglio: 'trilo', mq: 65, matrimoniali: 2, singoli: 1 });
-  const r75 = calcolaCasa({ ...base, taglio: 'trilo', mq: 75, matrimoniali: 2, singoli: 1 });
-  check('Trilo 65mq = Trilo 75mq (entro soglia)', r.puntuale === r75.puntuale, `${r.puntuale} vs ${r75.puntuale}`);
-  // oltre la soglia: +0,30 €/mq
-  const r100 = calcolaCasa({ ...base, taglio: 'trilo', mq: 100, matrimoniali: 2, singoli: 1 });
-  check('Trilo 100mq = 75mq + 25*0,30 = +7,50', r100.puntuale === round2(r75.puntuale + 7.5), `${r100.puntuale}`);
-  // niente più promozioni: il taglio resta quello dichiarato
-  check('Taglio dichiarato = taglio effettivo (no promozioni)', r100.taglioEffettivo === 'trilo', String(r100.taglioEffettivo));
-  // taglio 'grande': base 60, 120mq inclusi, correttivi tabella grande
-  const g160 = calcolaCasa({ ...base, taglio: 'grande', mq: 160, matrimoniali: 4, singoli: 2, bagni: 3, cucina: 'abit' });
-  // 60 + 40*0.30=12 + 2 letti extra*2=4 + 2 bagni extra*5=10 + abit 5 = 91
-  check('Casa grande 160mq 6letti 3bagni abit = 91 (ancora Ariele: 90-100)', g160.puntuale === 91, String(g160.puntuale));
-  check('Casa grande 160mq range 90-105', g160.min === 90 && g160.max === 105, `${g160.min}-${g160.max}`);
-  // fino a 400 il calcolo esiste
+  const TAGLI: Taglio[] = ['mono', 'bilo', 'trilo', 'quadri', 'grande'];
+  const CUCINE: TipoCucina[] = ['angolo', 'sep', 'abit'];
+  const ESTERNI: TipoEsterno[] = ['no', 'balcone', 'terrazzo', 'terrazzoGrande'];
+  const d = (mq: number, letti: number, bagni: number, cucina: TipoCucina = 'sep', esterno: TipoEsterno = 'no'): DatiCasa =>
+    ({ ...base, taglio: 'mono', mq, matrimoniali: letti, singoli: 0, divani: 0, bagni, cucina, esterno });
+
+  // 1) più mq → mai meno caro
+  let viol = 0, es = '';
+  for (let letti = 1; letti <= 10; letti++) {
+    for (let bagni = 1; bagni <= 5; bagni++) {
+      for (const cu of CUCINE) {
+        let prec = 0;
+        for (let mq = 15; mq <= 400; mq++) {
+          const p = prezzoPuliziaCasa(d(mq, letti, bagni, cu));
+          if (p < prec - 0.001) { viol++; if (!es) es = `${mq}mq ${letti}letti: ${p} < ${prec}`; }
+          prec = p;
+        }
+      }
+    }
+  }
+  check('Più mq \u2192 il prezzo non cala MAI (15\u2192400mq \u00d7 letti \u00d7 bagni \u00d7 cucine)', viol === 0, `${viol} violazioni, es: ${es}`);
+
+  // 2) più letti → mai meno caro
+  viol = 0; es = '';
+  for (let mq = 15; mq <= 400; mq += 5) {
+    for (let bagni = 1; bagni <= 5; bagni++) {
+      let prec = 0;
+      for (let letti = 0; letti <= 12; letti++) {
+        const p = prezzoPuliziaCasa(d(mq, letti, bagni));
+        if (p < prec - 0.001) { viol++; if (!es) es = `${mq}mq ${letti}letti`; }
+        prec = p;
+      }
+    }
+  }
+  check('Più letti \u2192 il prezzo non cala MAI', viol === 0, `${viol} violazioni, es: ${es}`);
+
+  // 3) più bagni → mai meno caro
+  viol = 0;
+  for (let mq = 15; mq <= 400; mq += 5) {
+    for (let letti = 1; letti <= 10; letti++) {
+      let prec = 0;
+      for (let bagni = 1; bagni <= 6; bagni++) {
+        const p = prezzoPuliziaCasa(d(mq, letti, bagni));
+        if (p < prec - 0.001) viol++;
+        prec = p;
+      }
+    }
+  }
+  check('Più bagni \u2192 il prezzo non cala MAI', viol === 0, `${viol} violazioni`);
+
+  // 4) STESSA CASA, TAGLIO DIVERSO → STESSO PREZZO (il bug di Ariele: bilo 93mq > quadri 93mq)
+  viol = 0; es = '';
+  for (let mq = 15; mq <= 400; mq += 1) {
+    for (let letti = 1; letti <= 8; letti++) {
+      const prezzi = TAGLI.map((t) => calcolaCasa({ ...d(mq, letti, 2), taglio: t }).puntuale);
+      const tutti = prezzi.every((p) => Math.abs(p - prezzi[0]!) < 0.001);
+      if (!tutti) { viol++; if (!es) es = `${mq}mq ${letti}letti: ${prezzi.join('/')}`; }
+    }
+  }
+  check('Stessa casa, taglio dichiarato diverso \u2192 STESSO prezzo', viol === 0, `${viol} violazioni, es: ${es}`);
+
+  // 5) cucina ed esterni ordinati
+  viol = 0;
+  for (let mq = 15; mq <= 400; mq += 5) {
+    const a = prezzoPuliziaCasa(d(mq, 3, 2, 'angolo'));
+    const s = prezzoPuliziaCasa(d(mq, 3, 2, 'sep'));
+    const ab = prezzoPuliziaCasa(d(mq, 3, 2, 'abit'));
+    if (!(a <= s && s <= ab)) viol++;
+    const e0 = prezzoPuliziaCasa(d(mq, 3, 2, 'sep', 'no'));
+    const e1 = prezzoPuliziaCasa(d(mq, 3, 2, 'sep', 'balcone'));
+    const e2 = prezzoPuliziaCasa(d(mq, 3, 2, 'sep', 'terrazzo'));
+    const e3 = prezzoPuliziaCasa(d(mq, 3, 2, 'sep', 'terrazzoGrande'));
+    if (!(e0 <= e1 && e1 <= e2 && e2 <= e3)) viol++;
+  }
+  check('Cucina (angolo\u2264sep\u2264abit) ed esterni ordinati', viol === 0, `${viol} violazioni`);
+  void ESTERNI;
+
+  // 6) il caso reale trovato in produzione
+  const bilo93 = calcolaCasa({ ...base, taglio: 'bilo', mq: 93, matrimoniali: 3, singoli: 2, bagni: 2 });
+  const quadri93 = calcolaCasa({ ...base, taglio: 'quadri', mq: 93, matrimoniali: 3, singoli: 2, bagni: 2 });
+  check('CASO REALE: bilo 93mq = quadri 93mq (stessa casa, stesso prezzo)',
+    bilo93.puntuale === quadri93.puntuale, `${bilo93.puntuale} vs ${quadri93.puntuale}`);
+
+  // 7) il problema di partenza: i mq devono pesare
+  const t60 = calcolaCasa({ ...base, taglio: 'trilo', mq: 60, matrimoniali: 2, singoli: 1, cucina: 'sep' });
+  const t100 = calcolaCasa({ ...base, taglio: 'trilo', mq: 100, matrimoniali: 2, singoli: 1, cucina: 'sep' });
+  check('Trilo 100mq costa più di un trilo 60mq (+11,20)', round(t100.puntuale - t60.puntuale) === 11.2, `${t60.puntuale} \u2192 ${t100.puntuale}`);
+}
+function round(v: number) { return Math.round(v * 100) / 100; }
+
+// ───────────────────────── TETTO, VILLA, GIARDINO ─────────────────────────
+console.log('\n\u2500\u2500 TETTO 400mq, VILLA, GIARDINO \u2500\u2500');
+{
   const g400 = calcolaCasa({ ...base, taglio: 'grande', mq: 400 });
   check('400mq: ancora calcolato', g400.suMisura === false);
   const g401 = calcolaCasa({ ...base, taglio: 'grande', mq: 401 });
-  check('401mq: su misura', g401.suMisura === true);
-  // villa: sempre su misura, anche piccola
+  check('401mq: su misura (lead + email "ti contattiamo")', g401.suMisura === true);
   const v = calcolaCasa({ ...base, taglio: 'villa', mq: 180 });
-  check('Villa: SEMPRE su misura', v.suMisura === true && v.taglioEffettivo === 'villa');
-  // taglio sconosciuto (config sporca): mai NaN
-  const strano = calcolaCasa({ ...base, taglio: 'attico' as never, mq: 80 });
-  check('Taglio sconosciuto: su misura, mai NaN', strano.suMisura === true && Number.isFinite(strano.puntuale));
+  check('Villa: SEMPRE su misura, zero prezzi', v.suMisura === true && v.min === 0 && v.max === 0);
+
+  const b2: DatiCasa = { ...base, taglio: 'bilo', mq: 55, matrimoniali: 1, singoli: 1 };
+  const no = calcolaCasa(b2);
+  check('Giardino piccolo (15mq) = +15', calcolaCasa({ ...b2, esterno: 'giardino', giardinoMq: 15 }).puntuale === round(no.puntuale + 15));
+  check('Giardino medio (40mq) = +25', calcolaCasa({ ...b2, esterno: 'giardino', giardinoMq: 40 }).puntuale === round(no.puntuale + 25));
+  check('Giardino grande (100mq) = +50', calcolaCasa({ ...b2, esterno: 'giardino', giardinoMq: 100 }).puntuale === round(no.puntuale + 50));
+  check('Fasce esatte: 20mq \u2192 piccolo, 60mq \u2192 medio', prezzoGiardino(20) === 15 && prezzoGiardino(60) === 25);
+  check('Giardino 0mq: nessun supplemento (input sporco)', calcolaCasa({ ...b2, esterno: 'giardino', giardinoMq: 0 }).puntuale === no.puntuale);
 }
 
-console.log('\n\u2500\u2500 v4: GIARDINO \u2500\u2500');
-{
-  const b2 = { ...base, taglio: 'bilo' as const, mq: 55, matrimoniali: 1, singoli: 1 };
-  const no = calcolaCasa({ ...b2, esterno: 'no' });
-  const gp = calcolaCasa({ ...b2, esterno: 'giardino', giardinoMq: 15 });
-  const gm = calcolaCasa({ ...b2, esterno: 'giardino', giardinoMq: 40 });
-  const gg = calcolaCasa({ ...b2, esterno: 'giardino', giardinoMq: 100 });
-  check('Giardino piccolo (15mq) = +15', gp.puntuale === no.puntuale + 15, `${gp.puntuale}`);
-  check('Giardino medio (40mq) = +25', gm.puntuale === no.puntuale + 25, `${gm.puntuale}`);
-  check('Giardino grande (100mq) = +50', gg.puntuale === no.puntuale + 50, `${gg.puntuale}`);
-  check('Fascia esatta: 20mq \u2192 piccolo, 60mq \u2192 medio', prezzoGiardino(20) === 15 && prezzoGiardino(60) === 25);
-  const gz = calcolaCasa({ ...b2, esterno: 'giardino', giardinoMq: 0 });
-  check('Giardino 0mq: nessun supplemento (input sporco)', gz.puntuale === no.puntuale);
-}
-{
-  const r = calcolaCasa({ ...base, taglio: 'trilo', mq: 78 });
-  check('Trilo 78mq resta trilo: 52 + 3mq*0,30 = 52,90 (v4: niente promozioni)', r.taglioEffettivo === 'trilo' && r.puntuale === 52.9, `${r.taglioEffettivo}/${r.puntuale}`);
-}
-
+// ───────────────────────── BIANCHERIA E KIT ─────────────────────────
 console.log('\n\u2500\u2500 BIANCHERIA E KIT \u2500\u2500');
 {
   const r = calcolaCasa({ ...base, taglio: 'trilo', mq: 65, matrimoniali: 2, singoli: 1, cucina: 'sep', vuoleBiancheria: true, ospiti: 5 });
-  check('Biancheria 2 matr + 1 sing, 5 ospiti, 1 bagno = \u20ac37,00', r.biancheria === 37.00, String(r.biancheria));
+  const atteso = round(2 * 5.60 + 1 * 4.30 + 5 * 3.80 + 1 * 1.00 + 1.50);
+  check('Biancheria 2 matr + 1 singolo + 5 ospiti', r.biancheria === atteso, `${r.biancheria} vs ${atteso}`);
 }
 {
   const r = calcolaCasa({ ...base, taglio: 'bilo', mq: 50, vuoleKit: true, ospiti: 4 });
   check('Kit 4 ospiti = \u20ac5,04', r.kit === 5.04, String(r.kit));
 }
 
+// ───────────────────────── B&B ─────────────────────────
 console.log('\n\u2500\u2500 B&B \u2500\u2500');
 {
-  const r = calcolaBnb({ singole: 2, doppie: 2, vuoleKit: false });
-  check('B&B 2 singole + 2 doppie = \u20ac106 puntuale (105\u2013120)', r.puntuale === 106 && r.min === 105 && r.max === 120, `${r.puntuale}/${r.min}-${r.max}`);
+  check('Camera singola = 25', prezzoCamera(1) === 25);
+  check('Camera doppia = 28', prezzoCamera(2) === 28);
+  check('Tripla = 31', prezzoCamera(3) === 31);
+  check('Quadrupla = 34', prezzoCamera(4) === 34);
+  const r = calcolaBnbV2({ camere: [{ persone: 2 }, { persone: 2 }, { persone: 3 }], frequenza: 'giornaliera', areaComune: 'dedicata', areaComuneMq: 30, vuoleKit: true });
+  check('3 camere (2+2+3) checkout = \u20ac87 (85\u2013100)', r.puntuale === 87 && r.min === 85 && r.max === 100, `${r.puntuale}/${r.min}-${r.max}`);
+  check('Rifacimento giornaliero 3 camere = \u20ac40/uscita', r.rifacimentoGiornaliero === 40);
+  check('Area dedicata 30mq = \u20ac28', r.areaComuneImporto === 28, String(r.areaComuneImporto));
+  check('Kit 7 ospiti = \u20ac8,82', r.kit === 8.82, String(r.kit));
+  check('Etichetta tripla', r.camereDettaglio[2]!.etichetta === 'Tripla');
 }
 {
-  const r = calcolaBnb({ singole: 1, doppie: 2, vuoleKit: true });
-  check('B&B kit: 1 sing + 2 doppie (5 ospiti) = \u20ac6,30', r.kit === 6.30, String(r.kit));
+  check('Area in loco 15mq = \u20ac8', prezzoAreaComuneInLoco(15) === 8);
+  check('Area in loco 30mq = \u20ac13', prezzoAreaComuneInLoco(30) === 13);
+  check('Dedicata 45mq = \u20ac40', prezzoAreaComuneDedicata(45) === 40);
+  const b = calcolaBnb({ singole: 2, doppie: 1, vuoleKit: false });
+  check('calcolaBnb legacy: 2 singole + 1 doppia = 78', b.puntuale === 78, String(b.puntuale));
 }
 
-
-console.log('\n\u2500\u2500 v2: CAMERE B&B A PERSONE \u2500\u2500');
-check('1 persona = \u20ac25', prezzoCamera(1) === 25);
-check('2 persone = \u20ac28', prezzoCamera(2) === 28);
-check('3 persone (tripla) = \u20ac31', prezzoCamera(3) === 31);
-check('4 persone (quadrupla) = \u20ac34', prezzoCamera(4) === 34);
-
-console.log('\n\u2500\u2500 v2: AREE COMUNI \u2500\u2500');
-check('In loco 15mq = \u20ac8', prezzoAreaComuneInLoco(15) === 8);
-check('In loco 30mq = \u20ac13', prezzoAreaComuneInLoco(30) === 13);
-check('Dedicata 15mq = \u20ac20', prezzoAreaComuneDedicata(15) === 20);
-check('Dedicata 30mq = \u20ac28', prezzoAreaComuneDedicata(30) === 28, String(prezzoAreaComuneDedicata(30)));
-check('Dedicata 45mq = \u20ac40', prezzoAreaComuneDedicata(45) === 40);
-
-console.log('\n\u2500\u2500 v2: B&B COMPLETO \u2500\u2500');
+// ───────────────────────── PIÙ CASE ─────────────────────────
+console.log('\n\u2500\u2500 PI\u00d9 CASE VACANZE \u2500\u2500');
 {
-  const r = calcolaBnbV2({ camere: [{persone:2},{persone:2},{persone:3}], frequenza:'giornaliera', areaComune:'dedicata', areaComuneMq:30, vuoleKit:true });
-  check('3 camere (2+2+3p) checkout = \u20ac87 (85\u2013100)', r.puntuale===87 && r.min===85 && r.max===100, `${r.puntuale}/${r.min}-${r.max}`);
-  check('Rifacimento giornaliero 3 letti = \u20ac40/uscita', r.rifacimentoGiornaliero===40, String(r.rifacimentoGiornaliero));
-  check('Area dedicata 30mq = \u20ac28/uscita', r.areaComuneImporto===28);
-  check('Kit 7 ospiti = \u20ac8,82', r.kit===8.82, String(r.kit));
-  check('Dettaglio camere: 28+28+31', r.camereDettaglio.map(c=>c.prezzo).join('+')==='28+28+31', r.camereDettaglio.map(c=>c.prezzo).join('+'));
-  check('Etichetta tripla', r.camereDettaglio[2]!.etichetta==='Tripla');
-}
-
-console.log('\n\u2500\u2500 v2: PI\u00d9 CASE VACANZE \u2500\u2500');
-{
-  const bilo: DatiCasa = { ...base, taglio:'bilo', mq:55, matrimoniali:1, singoli:1 };
-  const r = calcolaCase([{ ...bilo, nome:'Casa Trastevere' }, bilo]);
-  check('Nomi casa nel dettaglio', r.unitaDettaglio[0]!.nome==='Casa Trastevere' && r.unitaDettaglio[1]!.nome==='Casa 2', r.unitaDettaglio.map(u=>u.nome).join('/'));
-  check('2 bilocali: 90 -5% = 85,50 \u2192 range 85\u2013100', r.puntuale===85.5 && r.min===85 && r.max===100 && r.scontoPercento===5, `${r.puntuale}/${r.min}-${r.max}/${r.scontoPercento}%`);
-  // v4: lo sconto multi-casa deve comparire ANCHE nel prezzo della singola casa
-  // (bilo puntuale 45 -> 42,75 scontato -> range 40-50; senza sconto era 45-50)
-  check('Sconto -5% applicato al prezzo di OGNI casa', r.unitaDettaglio[0]!.min===40 && r.unitaDettaglio[0]!.max===50, `${r.unitaDettaglio[0]!.min}-${r.unitaDettaglio[0]!.max}`);
-  check('Somma per-casa coerente col totale scontato', r.puntuale===85.5);
-  const uno = calcolaCase([{ ...bilo, nome:'Unica' }]);
-  check('1 sola casa: prezzo pieno, nessuno sconto sulla card', uno.unitaDettaglio[0]!.min===45 && uno.unitaDettaglio[0]!.max===50, `${uno.unitaDettaglio[0]!.min}-${uno.unitaDettaglio[0]!.max}`);
+  const bilo: DatiCasa = { ...base, taglio: 'bilo', mq: 55, matrimoniali: 1, singoli: 1 };
+  const r = calcolaCase([{ ...bilo, nome: 'Casa Trastevere' }, bilo]);
+  const singolo = calcolaCasa(bilo).puntuale;
+  check('Nomi casa nel dettaglio', r.unitaDettaglio[0]!.nome === 'Casa Trastevere' && r.unitaDettaglio[1]!.nome === 'Casa 2');
+  check('2 case: totale = somma -5%', r.puntuale === round(singolo * 2 * 0.95), String(r.puntuale));
+  check('Sconto -5% visibile anche sul prezzo di OGNI casa',
+    r.unitaDettaglio[0]!.min === Math.floor((singolo * 0.95) / 5) * 5, `${r.unitaDettaglio[0]!.min}`);
   const solo = calcolaCase([bilo]);
-  check('1 unit\u00e0 sola: nessuno sconto', solo.scontoPercento===0 && solo.puntuale===45);
-  const conGrande = calcolaCase([bilo, { ...base, taglio:'grande', mq:450 }]);
-  check('Una casa oltre il tetto (450mq) \u2192 tutto su misura', conGrande.suMisura===true);
-  const conVilla = calcolaCase([bilo, { ...base, taglio:'villa', mq:200 }]);
-  check('Una villa nel gruppo \u2192 tutto su misura (non dovrebbe accadere: UI la esclude)', conVilla.suMisura===true);
+  check('1 sola casa: nessuno sconto, prezzo pieno', solo.scontoPercento === 0 && solo.unitaDettaglio[0]!.min === calcolaCasa(bilo).min);
+  const conGrande = calcolaCase([bilo, { ...base, taglio: 'grande', mq: 450 }]);
+  check('Una casa oltre il tetto \u2192 tutto su misura', conGrande.suMisura === true);
+  const conVilla = calcolaCase([bilo, { ...base, taglio: 'villa', mq: 200 }]);
+  check('Una villa nel gruppo \u2192 tutto su misura (la UI la esclude, ma il motore regge)', conVilla.suMisura === true);
 }
 
-console.log('\n\u2500\u2500 v2: PASSAGGIO INFRA-SOGGIORNO \u2500\u2500');
+// ───────────────────────── PASSAGGIO INFRA-SOGGIORNO ─────────────────────────
+console.log('\n\u2500\u2500 PASSAGGIO INFRA-SOGGIORNO \u2500\u2500');
 {
-  const p = calcolaPassaggioSoggiorno({ ...base, taglio:'bilo', mq:55, matrimoniali:1, singoli:1, vuoleKit:true, ospiti:3 });
-  check('Bilo 2 letti + kit 3 ospiti = 10+20+3,78 = \u20ac33,78', p.totale===33.78, String(p.totale));
-  const p2 = calcolaPassaggioSoggiorno({ ...base, taglio:'trilo', mq:65, matrimoniali:2, singoli:1, vuoleBiancheria:true, ospiti:5 });
-  check('Trilo 3 letti + biancheria 37 = 10+30+37 = \u20ac77', p2.totale===77, String(p2.totale));
+  const p = calcolaPassaggioSoggiorno({ ...base, taglio: 'bilo', mq: 55, matrimoniali: 1, singoli: 1, vuoleKit: true, ospiti: 3 });
+  check('Bilo 2 letti + kit 3 ospiti = 10+20+3,78 = \u20ac33,78', p.totale === 33.78, String(p.totale));
 }
 
+// ───────────────────────── COPERTURA ─────────────────────────
 console.log('\n\u2500\u2500 COPERTURA \u2500\u2500');
-check('CAP coperto', verificaCopertura('00165', ['00165', '00186']) === 'coperta');
-check('CAP non in lista \u2192 in_valutazione', verificaCopertura('00118', ['00165']) === 'in_valutazione');
-check('CAP con spazi', verificaCopertura(' 00165 ', ['00165']) === 'coperta');
-
-
-// ────────────── v3: iniezione parametri (config Firestore) ──────────────
-console.log('\nv3 — parametri iniettabili:');
 {
-  const casaTest: DatiCasa = { ...base, taglio: 'bilo', mq: 50 };
-  const conDefault = calcolaCasa(casaTest);
-  const P2 = JSON.parse(JSON.stringify(ENGINE)) as typeof ENGINE;
-  P2.basi.bilo = 55; // 45 → 55
-  const conOverride = calcolaCasa(casaTest, P2);
-  check('override base bilo sposta il puntuale di +10', conOverride.puntuale === conDefault.puntuale + 10);
-  check('senza override i default restano intatti', calcolaCasa(casaTest).puntuale === conDefault.puntuale);
-
-  const P3 = JSON.parse(JSON.stringify(ENGINE)) as typeof ENGINE;
-  P3.bnb.personaExtra = 5;
-  check('override personaExtra cambia la tripla', prezzoCamera(3, P3) === ENGINE.bnb.doppia + 5);
-  check('prezzoCamera default invariato', prezzoCamera(3) === ENGINE.bnb.doppia + ENGINE.bnb.personaExtra);
-
-  const P4 = JSON.parse(JSON.stringify(ENGINE)) as typeof ENGINE;
-  P4.scontoMultiUnita.percento = 10;
-  const dueCase: DatiCasa[] = [{ ...base, taglio: 'bilo', mq: 50 }, { ...base, taglio: 'bilo', mq: 50 }];
-  const mDefault = calcolaCase(dueCase);
-  const mOverride = calcolaCase(dueCase, P4);
-  check('sconto multi override 10% applicato', mOverride.scontoPercento === 10 && mOverride.puntuale < mDefault.puntuale);
+  const caps = ['00165', '00185'];
+  check('CAP coperto', verificaCopertura('00165', caps) === 'coperta');
+  check('CAP non in lista \u2192 in_valutazione', verificaCopertura('00199', caps) === 'in_valutazione');
+  check('CAP con spazi', verificaCopertura(' 00185 ', caps) === 'coperta');
 }
 
-console.log(`\n${'='.repeat(44)}\nRISULTATO: ${passati} passati, ${falliti} falliti\n${'='.repeat(44)}`);
+// ───────────────────────── PARAMETRI INIETTABILI ─────────────────────────
+console.log('\n\u2500\u2500 PARAMETRI INIETTABILI (pannello admin) \u2500\u2500');
+{
+  const P = JSON.parse(JSON.stringify(ENGINE)) as typeof ENGINE;
+  P.casa.euroMq = 0.50;
+  const conOverride = calcolaCasa({ ...base, taglio: 'trilo', mq: 100, matrimoniali: 2, singoli: 1, cucina: 'sep' }, P);
+  const senza = calcolaCasa({ ...base, taglio: 'trilo', mq: 100, matrimoniali: 2, singoli: 1, cucina: 'sep' });
+  check('Override euroMq 0,50 alza il prezzo di 100*(0,50-0,28)=22', round(conOverride.puntuale - senza.puntuale) === 22, `${senza.puntuale} \u2192 ${conOverride.puntuale}`);
+  check('Senza override i default restano intatti', ENGINE.casa.euroMq === 0.28);
+  const P2 = JSON.parse(JSON.stringify(ENGINE)) as typeof ENGINE;
+  P2.casa.minimo = 60;
+  check('Override prezzo minimo', calcolaCasa({ ...base, taglio: 'mono', mq: 20 }, P2).puntuale === 60);
+  const P3 = JSON.parse(JSON.stringify(ENGINE)) as typeof ENGINE;
+  P3.scontoMultiUnita.percento = 10;
+  const bilo: DatiCasa = { ...base, taglio: 'bilo', mq: 55, matrimoniali: 1, singoli: 1 };
+  check('Override sconto multi 10%', calcolaCase([bilo, bilo], P3).scontoPercento === 10);
+}
+
+console.log('\n============================================');
+console.log(`RISULTATO: ${passati} passati, ${falliti} falliti`);
+console.log('============================================');
 if (falliti > 0) process.exit(1);

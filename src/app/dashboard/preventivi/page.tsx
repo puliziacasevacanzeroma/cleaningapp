@@ -13,7 +13,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { calcolaCasa, calcolaBnbV2, formatEuro } from "~/lib/quote/quoteEngine";
+import { calcolaCasa, calcolaCase, calcolaBnbV2, formatEuro } from "~/lib/quote/quoteEngine";
 import type { EngineParams, DatiCasa, Taglio, TipoCucina, TipoEsterno, AreaComune, FrequenzaBnb } from "~/lib/quote/quoteEngine";
 
 // ─────────────────────────── Tipi ───────────────────────────
@@ -658,51 +658,36 @@ function DettaglioQuote({ lead: l }: { lead: Lead }) {
 /** Etichette leggibili per ogni sezione/campo del motore. */
 const SEZIONI: { key: string; titolo: string; nota?: string; icona?: string; campi: { path: string[]; label: string; unit: string; step?: number; help?: string }[] }[] = [
   {
-    key: "basi", titolo: "Prezzo base per taglio", icona: "home",
-    nota: "Il punto di partenza del calcolo. In base ai mq, l'appartamento viene classificato in un taglio e parte da questo prezzo.",
+    key: "casa", titolo: "Pulizia casa \u2014 la formula", icona: "home",
+    nota: "Il prezzo \u00e8 una SOMMA: base + mq + letti + bagni + cucina + esterni. Niente scaglioni, niente \"tagli\": due case identiche costano uguale, che il cliente le chiami bilocale o quadrilocale. Ogni voce \u00e8 positiva, quindi il prezzo non pu\u00f2 mai calare se la casa cresce.",
     campi: [
-      { path: ["basi", "mono"], label: "Monolocale", unit: "€", help: "Prezzo di partenza per un monolocale. Es: se metti 40, un monolocale standard parte da 40€ e poi si aggiungono eventuali extra (letti in più, bagni, esterni)." },
-      { path: ["basi", "bilo"], label: "Bilocale", unit: "€", help: "Prezzo di partenza per un bilocale (una camera + soggiorno). Es: 45€ è la base, a cui si sommano i correttivi." },
-      { path: ["basi", "trilo"], label: "Trilocale", unit: "€", help: "Prezzo di partenza per un trilocale (due camere + soggiorno). Es: 52€." },
-      { path: ["basi", "quadri"], label: "Quadrilocale", unit: "€", help: "Prezzo di partenza per un quadrilocale (tre o più camere). Es: 60€." },
-      { path: ["basi", "grande"], label: "Casa grande (4+ camere)", unit: "€", help: "Prezzo di partenza per una casa grande, oltre il quadrilocale. Es: 60€, poi i mq oltre soglia fanno crescere il prezzo." },
+      { path: ["casa", "base"], label: "Base (uscita)", unit: "\u20ac", step: 0.5, help: "Costo fisso di ogni intervento: spostamento, prodotti, preparazione. Es: 18\u20ac. \u00c8 la parte che paghi anche per la casa pi\u00f9 piccola." },
+      { path: ["casa", "euroMq"], label: "Prezzo al mq", unit: "\u20ac/mq", step: 0.01, help: "Quanto pesa ogni metro quadro. Es: 0,28\u20ac \u2192 un 100mq porta 28\u20ac. \u00c8 questo che fa costare di pi\u00f9 un trilocale da 100mq rispetto a uno da 60mq." },
+      { path: ["casa", "euroLetto"], label: "Per ogni letto", unit: "\u20ac", step: 0.5, help: "Costo di ogni letto da rifare (matrimoniali, singoli, divani letto). Es: 2,50\u20ac a letto. Non ci sono pi\u00f9 \"letti inclusi\": si contano tutti." },
+      { path: ["casa", "euroBagno"], label: "Per ogni bagno", unit: "\u20ac", step: 0.5, help: "Costo di ogni bagno. Es: 5\u20ac. Si contano tutti, anche il primo." },
+      { path: ["casa", "minimo"], label: "Prezzo minimo", unit: "\u20ac", step: 1, help: "Sotto questa cifra non si scende, qualunque sia la casa. Es: 40\u20ac: un monolocale da 20mq costa comunque 40\u20ac." },
     ],
   },
   {
-    key: "lettiInclusi", titolo: "Letti inclusi nel prezzo base", icona: "bed",
-    nota: "Quanti posti letto sono già compresi nel prezzo base di ogni taglio. Ogni letto in più fa scattare il correttivo \"Letto extra\".",
+    key: "casaExtra", titolo: "Pulizia casa \u2014 cucina ed esterni", icona: "plus",
+    nota: "Supplementi che si aggiungono alla formula. Devono restare in ordine crescente (angolo \u2264 separata \u2264 abitabile, balcone \u2264 terrazzo \u2264 grande), altrimenti si creano incoerenze.",
     campi: [
-      { path: ["lettiInclusi", "mono"], label: "Monolocale", unit: "letti", step: 1, help: "Letti già inclusi nel prezzo base di un monolocale. Es: se metti 1, il 2° letto viene conteggiato come extra e costa in più." },
-      { path: ["lettiInclusi", "bilo"], label: "Bilocale", unit: "letti", step: 1, help: "Letti inclusi nel bilocale. Es: 2 letti inclusi; dal 3° si paga il correttivo letto extra." },
-      { path: ["lettiInclusi", "trilo"], label: "Trilocale", unit: "letti", step: 1, help: "Letti inclusi nel trilocale. Es: 3. Dal 4° scatta l'extra." },
-      { path: ["lettiInclusi", "quadri"], label: "Quadrilocale", unit: "letti", step: 1, help: "Letti inclusi nel quadrilocale. Es: 4. Dal 5° si paga l'extra." },
-      { path: ["lettiInclusi", "grande"], label: "Casa grande", unit: "letti", step: 1, help: "Letti inclusi nella casa grande. Es: 4." },
+      { path: ["casa", "cucinaSep"], label: "Cucina separata", unit: "\u20ac", step: 0.5, help: "Supplemento se la cucina \u00e8 una stanza a s\u00e9. L'angolo cottura non paga nulla. Es: 4\u20ac." },
+      { path: ["casa", "cucinaAbit"], label: "Cucina abitabile", unit: "\u20ac", step: 0.5, help: "Supplemento per cucina abitabile con tavolo da pranzo. Deve essere \u2265 della separata. Es: 5\u20ac." },
+      { path: ["casa", "balcone"], label: "Balcone arredato", unit: "\u20ac", step: 0.5, help: "Es: 3\u20ac." },
+      { path: ["casa", "terrazzo"], label: "Terrazzo", unit: "\u20ac", step: 0.5, help: "Es: 4\u20ac. Deve essere \u2265 del balcone." },
+      { path: ["casa", "terrazzoGrande"], label: "Grande terrazzo", unit: "\u20ac", step: 0.5, help: "Es: 7\u20ac. Deve essere \u2265 del terrazzo." },
     ],
   },
   {
-    key: "corrP", titolo: "Correttivi — appartamenti piccoli (mono/bilo)", icona: "plus",
-    nota: "Quanto si aggiunge al prezzo base per ogni caratteristica extra, negli appartamenti piccoli (mono e bilocali).",
+    key: "giardino", titolo: "Giardino", icona: "sofa",
+    nota: "Supplemento a fasce quando la casa ha un giardino di cui prenderci cura (step Spazi esterni del preventivatore).",
     campi: [
-      { path: ["corr", "piccolo", "letto"], label: "Letto extra", unit: "€", help: "Costo per ogni letto oltre quelli inclusi. Es: 3€ a letto. Un bilocale con 3 letti (2 inclusi) paga +3€." },
-      { path: ["corr", "piccolo", "bagno"], label: "Bagno extra", unit: "€", help: "Costo per ogni bagno oltre il primo. Es: 7€. Un bilocale con 2 bagni paga +7€." },
-      { path: ["corr", "piccolo", "cucinaSep"], label: "Cucina separata", unit: "€", help: "Supplemento se la cucina è una stanza separata (più superficie da pulire). Es: 4€." },
-      { path: ["corr", "piccolo", "cucinaAbit"], label: "Cucina abitabile", unit: "€", help: "Supplemento per cucina abitabile (con tavolo da pranzo). Es: 3€." },
-      { path: ["corr", "piccolo", "balcone"], label: "Balcone", unit: "€", help: "Supplemento se c'è un balcone da pulire. Es: 2€." },
-      { path: ["corr", "piccolo", "terrazzo"], label: "Terrazzo", unit: "€", help: "Supplemento per un terrazzo. Es: 4€." },
-      { path: ["corr", "piccolo", "terrazzoGrande"], label: "Terrazzo grande", unit: "€", help: "Supplemento per un terrazzo grande (oltre 20mq). Es: 6€." },
-    ],
-  },
-  {
-    key: "corrG", titolo: "Correttivi — appartamenti grandi (trilo+)", icona: "plus",
-    nota: "Stessi correttivi, ma applicati agli appartamenti grandi (trilocali e quadrilocali). Di solito un po' più alti, perché le superfici sono maggiori.",
-    campi: [
-      { path: ["corr", "grande", "letto"], label: "Letto extra", unit: "€", help: "Costo per ogni letto oltre quelli inclusi, nei grandi. Es: 4€ a letto." },
-      { path: ["corr", "grande", "bagno"], label: "Bagno extra", unit: "€", help: "Costo per ogni bagno oltre il primo, nei grandi. Es: 8€." },
-      { path: ["corr", "grande", "cucinaSep"], label: "Cucina separata", unit: "€", help: "Supplemento cucina separata nei grandi. Es: 5€." },
-      { path: ["corr", "grande", "cucinaAbit"], label: "Cucina abitabile", unit: "€", help: "Supplemento cucina abitabile nei grandi. Es: 4€." },
-      { path: ["corr", "grande", "balcone"], label: "Balcone", unit: "€", help: "Supplemento balcone nei grandi. Es: 3€." },
-      { path: ["corr", "grande", "terrazzo"], label: "Terrazzo", unit: "€", help: "Supplemento terrazzo nei grandi. Es: 5€." },
-      { path: ["corr", "grande", "terrazzoGrande"], label: "Terrazzo grande", unit: "€", help: "Supplemento terrazzo grande nei grandi. Es: 7€." },
+      { path: ["giardino", "piccoloMaxMq"], label: "Piccolo fino a", unit: "mq", step: 5, help: "Fino a questi mq il giardino \u00e8 in fascia \"piccolo\". Es: 20mq." },
+      { path: ["giardino", "medioMaxMq"], label: "Medio fino a", unit: "mq", step: 5, help: "Fino a questi mq \u00e8 fascia \"medio\"; oltre \u00e8 \"grande\". Es: 60mq." },
+      { path: ["giardino", "piccolo"], label: "Supplemento piccolo", unit: "\u20ac", help: "Es: 15\u20ac fino a 20mq." },
+      { path: ["giardino", "medio"], label: "Supplemento medio", unit: "\u20ac", help: "Es: 25\u20ac tra 20 e 60mq." },
+      { path: ["giardino", "grande"], label: "Supplemento grande", unit: "\u20ac", help: "Es: 50\u20ac oltre i 60mq." },
     ],
   },
   {
@@ -752,34 +737,17 @@ const SEZIONI: { key: string; titolo: string; nota?: string; icona?: string; cam
     ],
   },
   {
-    key: "mq", titolo: "Metri quadri nel prezzo", icona: "ruler",
-    nota: "Ogni taglio include un certo numero di mq nel prezzo base. I mq OLTRE la soglia si pagano al prezzo al mq. È questo che fa costare di più un trilocale da 100mq rispetto a uno da 60mq.",
+    key: "tetto", titolo: "Tetto del calcolo automatico", icona: "ruler",
+    nota: "Oltre questa metratura il preventivo automatico si ferma: il lead viene salvato e parte l'email \"ti contattiamo\".",
     campi: [
-      { path: ["mqInclusi", "mono"], label: "Mq inclusi — Monolocale", unit: "mq", step: 5, help: "Fino a questi mq il monolocale costa solo il prezzo base. Es: 40mq. Un mono da 50mq paga 10mq extra." },
-      { path: ["mqInclusi", "bilo"], label: "Mq inclusi — Bilocale", unit: "mq", step: 5, help: "Es: 55mq inclusi nel bilocale." },
-      { path: ["mqInclusi", "trilo"], label: "Mq inclusi — Trilocale", unit: "mq", step: 5, help: "Es: 75mq inclusi nel trilocale. Un trilo da 100mq paga 25mq extra." },
-      { path: ["mqInclusi", "quadri"], label: "Mq inclusi — Quadrilocale", unit: "mq", step: 5, help: "Es: 100mq inclusi nel quadrilocale." },
-      { path: ["mqInclusi", "grande"], label: "Mq inclusi — Casa grande", unit: "mq", step: 5, help: "Es: 120mq inclusi nella casa grande." },
-      { path: ["euroMq"], label: "Prezzo al mq extra", unit: "€", step: 0.05, help: "Quanto costa ogni mq oltre la soglia del taglio. Es: 0,30€/mq → 25mq extra = +7,50€." },
-      { path: ["mqMax"], label: "MQ massimi (oltre: su misura)", unit: "mq", step: 10, help: "Sopra questi mq il calcolo automatico si ferma: lead salvato e email \"ti contattiamo\". Es: 400mq." },
-    ],
-  },
-  {
-    key: "giardino", titolo: "Giardino", icona: "sofa",
-    nota: "Supplemento a fasce quando la casa ha un giardino di cui prenderci cura (step Spazi esterni).",
-    campi: [
-      { path: ["giardino", "piccoloMaxMq"], label: "Piccolo fino a", unit: "mq", step: 5, help: "Fino a questi mq il giardino è in fascia \"piccolo\". Es: 20mq." },
-      { path: ["giardino", "medioMaxMq"], label: "Medio fino a", unit: "mq", step: 5, help: "Fino a questi mq è fascia \"medio\"; oltre è \"grande\". Es: 60mq." },
-      { path: ["giardino", "piccolo"], label: "Supplemento piccolo", unit: "€", help: "Es: 15€ per un giardino fino a 20mq." },
-      { path: ["giardino", "medio"], label: "Supplemento medio", unit: "€", help: "Es: 25€ per un giardino 20–60mq." },
-      { path: ["giardino", "grande"], label: "Supplemento grande", unit: "€", help: "Es: 50€ oltre i 60mq." },
+      { path: ["mqMax"], label: "MQ massimi (oltre: su misura)", unit: "mq", step: 10, help: "Es: 400mq. Le ville vanno sempre a preventivo dedicato, a prescindere dai mq." },
     ],
   },
 ];
 
 
 // ─────────────────────── Simulatore prezzi (client, zero API) ───────────────────────
-// Riproduce le scelte del wizard e calcola col motore PURO importato qui:
+// Riproduce le scelte del wizard e calcola con lo STESSO motore puro del preventivatore:
 // nessuna richiesta, nessun lead, nessuna email. Usa i parametri in editing (cfg),
 // quindi mostra i prezzi come sarebbero DOPO il salvataggio.
 
@@ -808,7 +776,6 @@ function SimNum({ label, v, set, min = 0, max = 20 }: { label: string; v: number
 
 function SimulatorePrezzi({ cfg }: { cfg: EngineParams | null }) {
   const [modo, setModo] = useState<"casa" | "bnb">("casa");
-  // casa
   const [taglio, setTaglio] = useState<Taglio>("bilo");
   const [mq, setMq] = useState(55);
   const [matr, setMatr] = useState(1);
@@ -822,7 +789,6 @@ function SimulatorePrezzi({ cfg }: { cfg: EngineParams | null }) {
   const [bianch, setBianch] = useState(false);
   const [kit, setKit] = useState(false);
   const [nCase, setNCase] = useState(1);
-  // bnb
   const [camere, setCamere] = useState<number[]>([2, 2]);
   const [frequenza, setFrequenza] = useState<FrequenzaBnb>("checkout");
   const [area, setArea] = useState<AreaComune>("no");
@@ -837,11 +803,12 @@ function SimulatorePrezzi({ cfg }: { cfg: EngineParams | null }) {
       vuoleBiancheria: bianch, vuoleKit: kit, ospiti,
     };
     const r = calcolaCasa(d, cfg);
-    // sconto multi-casa applicato al prezzo della singola casa (stessa logica del wizard)
-    const sc = nCase >= (cfg.scontoMultiUnita?.daUnita ?? 2) ? (cfg.scontoMultiUnita?.percento ?? 0) : 0;
-    if (r.suMisura || sc === 0) return { ...r, sconto: sc };
-    const f = 1 - sc / 100;
-    return { ...r, min: Math.floor((r.puntuale * f) / 5) * 5, max: Math.round((r.puntuale * f * 1.15) / 5) * 5, sconto: sc };
+    if (r.suMisura || nCase <= 1) return { ...r, sconto: 0 };
+    // niente formule duplicate: stesso calcolaCase del wizard, con nCase copie della casa
+    const multi = calcolaCase(Array.from({ length: nCase }, () => d), cfg);
+    const u = multi.unitaDettaglio[0];
+    if (multi.suMisura || !u) return { ...r, sconto: 0 };
+    return { ...r, min: u.min, max: u.max, sconto: multi.scontoPercento };
   }, [cfg, taglio, mq, matr, sing, div, bagni, cucina, esterno, giardinoMq, ospiti, bianch, kit, nCase]);
 
   const bnb = useMemo(() => {
@@ -878,6 +845,7 @@ function SimulatorePrezzi({ cfg }: { cfg: EngineParams | null }) {
               <span className="flex-none">mq</span>
             </label>
           </div>
+          <div className="text-[11px] text-slate-400 -mt-1">Il taglio non cambia il prezzo (serve solo a descrivere la casa): a contare sono mq, letti, bagni, cucina ed esterni.</div>
           <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
             <SimNum label="Matrimoniali" v={matr} set={setMatr} />
             <SimNum label="Singoli" v={sing} set={setSing} />
@@ -901,16 +869,16 @@ function SimulatorePrezzi({ cfg }: { cfg: EngineParams | null }) {
           </div>
 
           <div className="bg-white/10 rounded-xl p-3 mt-1">
-            {!casa ? "…" : casa.suMisura ? (
+            {!casa ? "\u2026" : casa.suMisura ? (
               <div>
                 <div className="text-xl font-bold">SU MISURA</div>
-                <div className="text-xs text-slate-300 mt-0.5">{taglio === "villa" ? "Le ville vanno sempre a preventivo dedicato." : `Oltre ${cfg?.mqMax ?? 400} mq: lead salvato + email “ti contattiamo”.`}</div>
+                <div className="text-xs text-slate-300 mt-0.5">{taglio === "villa" ? "Le ville vanno sempre a preventivo dedicato." : `Oltre ${cfg?.mqMax ?? 400} mq: lead salvato + email \u201cti contattiamo\u201d.`}</div>
               </div>
             ) : (
               <div>
-                <div className="text-xl font-bold">€{casa.min} - €{casa.max}</div>
+                <div className="text-xl font-bold">\u20ac{casa.min} - \u20ac{casa.max}</div>
                 <div className="text-xs text-slate-300 mt-0.5">
-                  puntuale interno {formatEuro(casa.puntuale)}{casa.sconto ? ` · sconto multi-casa -${casa.sconto}% incluso` : ""}
+                  puntuale interno {formatEuro(casa.puntuale)}{casa.sconto ? ` \u00b7 sconto multi-casa -${casa.sconto}% incluso` : ""}
                 </div>
                 {(casa.biancheria > 0 || casa.kit > 0) && (
                   <div className="text-xs text-slate-300 mt-1">
@@ -933,7 +901,7 @@ function SimulatorePrezzi({ cfg }: { cfg: EngineParams | null }) {
                   className="w-14 px-2 py-1 rounded-lg bg-white/10 border border-white/10 text-white text-right text-xs" />
                 <span className="text-xs text-slate-400">pers.</span>
                 {camere.length > 1 && (
-                  <button type="button" className="text-slate-400 hover:text-white text-sm" onClick={() => setCamere(camere.filter((_, j) => j !== i))}>×</button>
+                  <button type="button" className="text-slate-400 hover:text-white text-sm" onClick={() => setCamere(camere.filter((_, j) => j !== i))}>\u00d7</button>
                 )}
               </div>
             ))}
@@ -955,10 +923,10 @@ function SimulatorePrezzi({ cfg }: { cfg: EngineParams | null }) {
           <label className="flex items-center gap-1.5 text-xs text-slate-300"><input type="checkbox" checked={kitBnb} onChange={(e) => setKitBnb(e.target.checked)} />Kit cortesia</label>
 
           <div className="bg-white/10 rounded-xl p-3 mt-1">
-            {!bnb ? "…" : (
+            {!bnb ? "\u2026" : (
               <div className="space-y-0.5 text-sm font-semibold">
-                {bnb.camereDettaglio.map((c, i) => <div key={i}>{c.etichetta}: €{c.prezzo}</div>)}
-                {bnb.rifacimentoPerCamera > 0 && <div className="text-xs font-normal text-slate-300">rifacimento €{bnb.rifacimentoPerCamera}/camera + €{bnb.rifacimentoUscita} uscita</div>}
+                {bnb.camereDettaglio.map((c, i) => <div key={i}>{c.etichetta}: \u20ac{c.prezzo}</div>)}
+                {bnb.rifacimentoPerCamera > 0 && <div className="text-xs font-normal text-slate-300">rifacimento \u20ac{bnb.rifacimentoPerCamera}/camera + \u20ac{bnb.rifacimentoUscita} uscita</div>}
                 {bnb.areaComuneImporto > 0 && <div className="text-xs font-normal text-slate-300">aree comuni {formatEuro(bnb.areaComuneImporto)}</div>}
                 {bnb.kit > 0 && <div className="text-xs font-normal text-slate-300">kit +{formatEuro(bnb.kit)}</div>}
               </div>
@@ -967,6 +935,44 @@ function SimulatorePrezzi({ cfg }: { cfg: EngineParams | null }) {
         </div>
       )}
     </div>
+  );
+}
+
+
+/** Campo numerico del calcolatore.
+ *  BUG risolto (14/07): con `value={numero}` + `Number(e.target.value)` il campo non
+ *  si poteva mai svuotare (cancellando tutto tornava 0/min e dovevi sovrascrivere).
+ *  Qui teniamo il TESTO in stato locale: mentre scrivi puoi lasciarlo vuoto,
+ *  e il parametro viene aggiornato solo quando il testo e' un numero valido.
+ *  All'uscita dal campo, se e' rimasto vuoto, si ripristina l'ultimo valore valido. */
+function CampoMotore({ valore, step, onCambia, className }: {
+  valore: number; step: number; onCambia: (n: number) => void; className: string;
+}) {
+  const [testo, setTesto] = useState<string>(String(valore));
+  const focus = useRef(false);
+  useEffect(() => { if (!focus.current) setTesto(String(valore)); }, [valore]);
+  return (
+    <input
+      type="number"
+      step={step}
+      min={0}
+      value={testo}
+      onFocus={() => { focus.current = true; }}
+      onChange={(e) => {
+        const t = e.target.value;
+        setTesto(t);
+        if (t.trim() === "") return;              // campo vuoto: non tocco il parametro
+        const n = Number(t.replace(",", "."));
+        if (Number.isFinite(n) && n >= 0) onCambia(n);
+      }}
+      onBlur={() => {
+        focus.current = false;
+        const n = Number(testo.replace(",", "."));
+        if (testo.trim() === "" || !Number.isFinite(n) || n < 0) setTesto(String(valore));
+        else setTesto(String(n));
+      }}
+      className={className}
+    />
   );
 }
 
@@ -1167,12 +1173,10 @@ function TabConfig() {
                       {c.help && <InfoTip testo={c.help} />}
                     </span>
                     <div className="flex items-center gap-1 mt-1">
-                      <input
-                        type="number"
+                      <CampoMotore
+                        valore={val}
                         step={c.step ?? 1}
-                        min={0}
-                        value={val}
-                        onChange={(e) => setCfg(setPath(cfg, c.path, Math.max(0, Number(e.target.value))))}
+                        onCambia={(n) => setCfg(setPath(cfg, c.path, n))}
                         className={`w-full px-2.5 py-2 border-2 rounded-lg text-sm focus:outline-none focus:border-sky-500 transition-all ${cambiato ? "border-violet-300 bg-violet-50/50" : "border-slate-200"}`}
                       />
                       <span className="text-xs text-slate-400 w-8">{c.unit}</span>
