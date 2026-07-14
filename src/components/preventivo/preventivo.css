@@ -415,3 +415,11 @@ img.pv-ic-mini.pv-ic-img{width:46px;max-width:46px;height:46px;margin:0}
 /* barra: esce dal padding e va a filo, sotto il banner ma dentro l'header (resta sticky) */
 .pv-head .pv-progress{height:4px;border-radius:0;margin:10px -14px 0;background:rgba(255,255,255,.2)}
 .pv-head .pv-progress i{border-radius:0}
+
+/* ── "Avanti" parlante: messaggio cosa-manca + flash sul campo ── */
+.pv-manca{max-width:680px;margin:0 auto;padding:8px 24px 0;font-size:13px;font-weight:600;color:#9A3412;
+  animation:pv-manca-in .25s ease-out both}
+@keyframes pv-manca-in{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.pv-btn.avanti.bloccato{opacity:.55;cursor:pointer}
+.pv-flash{animation:pv-flash-b .4s ease-in-out 2}
+@keyframes pv-flash-b{0%,100%{box-shadow:none}50%{box-shadow:0 0 0 3px rgba(176,118,74,.45)}}

@@ -363,6 +363,8 @@ export function PreventivoWizard() {
   const [altraScelta, setAltraScelta] = useState<"si" | "no" | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const fotoUnitaIdx = useRef<number | null>(null);
+  const mqInput = useRef<HTMLInputElement>(null);
+  const [manca, setManca] = useState<string | null>(null);
 
   const set = <K extends keyof Stato>(k: K, v: Stato[K]) => setStato((s) => ({ ...s, [k]: v }));
   const setU = <K extends keyof UnitaCasa>(k: K, v: UnitaCasa[K]) =>
@@ -417,12 +419,46 @@ export function PreventivoWizard() {
     }
   }
 
+  function cosaManca(nome: NomeStep): string {
+    const u = stato.unita;
+    switch (nome) {
+      case "tipo": return "Scegli il tipo di struttura.";
+      case "taglio":
+        if (stato.tipo === "case" && u.nome.trim().length <= 1) return "Dai un nome alla casa.";
+        if (!u.taglio) return "Scegli il taglio dell'appartamento.";
+        return "Inserisci i metri quadri (il campo \u00e8 qui sotto).";
+      case "letti": return "Aggiungi almeno un letto.";
+      case "cucina": return "Scegli il tipo di cucina.";
+      case "esterno":
+        if (!u.esterno) return "Scegli una delle opzioni.";
+        return "Indica i metri quadri del giardino.";
+      case "camere": return "Aggiungi almeno una camera.";
+      case "frequenza": return "Scegli quando puliamo.";
+      case "areaComune": return stato.areaComune ? "Indica i metri quadri dell'area comune." : "Scegli una delle opzioni.";
+      case "biancheria": case "kit": return "Scegli s\u00ec o no per continuare.";
+      case "altraUnita": return "Scegli se aggiungere un'altra casa.";
+      case "zona": return "Completa zona, indirizzo e CAP (5 cifre).";
+      case "contatti": case "contattiHotel": return "Controlla nome, email e telefono (min. 8 cifre).";
+      default: return "Completa questo passaggio per continuare.";
+    }
+  }
+
   function vaiA(nome: NomeStep) {
     const i = flusso.indexOf(nome);
     if (i >= 0) { setIdx(i); window.scrollTo({ top: 0, behavior: "smooth" }); }
   }
   function avanti() {
-    if (!valido(step)) return;
+    if (!valido(step)) {
+      setManca(cosaManca(step));
+      if (step === "taglio" && stato.unita.taglio && !stato.unita.mq) {
+        mqInput.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+        mqInput.current?.classList.add("pv-flash");
+        setTimeout(() => mqInput.current?.classList.remove("pv-flash"), 1200);
+        try { mqInput.current?.focus({ preventScroll: true }); } catch { /* best effort */ }
+      }
+      return;
+    }
+    setManca(null);
     if (step === "altraUnita") {
       if (altraScelta === "si") { setAltraScelta(null); aggiungiAltraUnita(); return; }
       setAltraScelta(null);
@@ -434,8 +470,9 @@ export function PreventivoWizard() {
     if (prossimo === "risultato" || prossimo === "fineHotel") { void submit(); return; }
     if (idx < flusso.length - 1) { setIdx(idx + 1); window.scrollTo({ top: 0, behavior: "smooth" }); }
   }
-  function indietro() { if (idx > 0) { setIdx(idx - 1); window.scrollTo({ top: 0, behavior: "smooth" }); } }
+  function indietro() { setManca(null); if (idx > 0) { setIdx(idx - 1); window.scrollTo({ top: 0, behavior: "smooth" }); } }
   function scegli<K extends keyof Stato>(campo: K, v: Stato[K], avanza: boolean) {
+    setManca(null);
     set(campo, v);
     if (avanza) setTimeout(() => { setIdx((i) => Math.min(i + 1, flusso.length - 1)); window.scrollTo({ top: 0, behavior: "smooth" }); }, 240);
   }
@@ -597,7 +634,13 @@ export function PreventivoWizard() {
               value={u.nome} onChange={(e) => setU("nome", e.target.value)} />
           </CampoBox>
         )}
-        <SceltaGriglia selezionato={u.taglio} onSel={(v) => setU("taglio", v)} opzioni={[
+        <SceltaGriglia selezionato={u.taglio} onSel={(v) => {
+          setU("taglio", v);
+          if (!u.mq) setTimeout(() => {
+            mqInput.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+            try { mqInput.current?.focus({ preventScroll: true }); } catch { /* best effort */ }
+          }, 260);
+        }} opzioni={[
           { v: "mono" as Taglio, ic: "mono", t: "Monolocale", s: "Una stanza unica + bagno" },
           { v: "bilo" as Taglio, ic: "bilo", t: "Bilocale", s: "Camera + soggiorno" },
           { v: "trilo" as Taglio, ic: "trilo", t: "Trilocale", s: "2 camere + soggiorno" },
@@ -606,8 +649,8 @@ export function PreventivoWizard() {
           ...(stato.tipo === "casa" ? [{ v: "villa" as Taglio, ic: "villa", t: "Villa", s: "Casa indipendente con esterni" }] : []),
         ]} />
         <CampoBox label="Metri quadri (indicativi)">
-          <input type="number" inputMode="numeric" placeholder="es. 65" min={15} max={400}
-            value={u.mq ?? ""} onChange={(e) => setU("mq", parseInt(e.target.value) || null)} />
+          <input ref={mqInput} type="number" inputMode="numeric" placeholder="es. 65" min={15} max={2000}
+            value={u.mq ?? ""} onChange={(e) => { setU("mq", parseInt(e.target.value) || null); setManca(null); }} />
         </CampoBox>
         <p className="pv-nota-campo">{u.taglio === "villa" ? "Per le ville prepariamo sempre un preventivo dedicato: bastano i contatti." : "Fino a 400 mq calcoliamo tutto online. Oltre, prepariamo un preventivo su misura."}</p>
       </>);
@@ -1113,12 +1156,20 @@ export function PreventivoWizard() {
         </div>
 
         {!finale && (
-          <div className="pv-nav">
-            <button className="pv-btn indietro" onClick={indietro} style={{ visibility: idx === 0 ? "hidden" : "visible" }}>← Indietro</button>
-            {!nascondiAvanti && (
-              <button className="pv-btn avanti" onClick={avanti} disabled={!valido(step) || invio}>{labelAvanti}</button>
-            )}
-          </div>
+          <>
+            {manca && <div className="pv-manca" role="alert">{manca}</div>}
+            <div className="pv-nav">
+              <button className="pv-btn indietro" onClick={indietro} style={{ visibility: idx === 0 ? "hidden" : "visible" }}>← Indietro</button>
+              {!nascondiAvanti && (
+                <button
+                  className={"pv-btn avanti" + (!valido(step) ? " bloccato" : "")}
+                  onClick={avanti}
+                  disabled={invio}
+                  aria-disabled={!valido(step)}
+                >{labelAvanti}</button>
+              )}
+            </div>
+          </>
         )}
       </div>
     </div>
