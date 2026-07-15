@@ -358,6 +358,8 @@ export function PreventivoWizard() {
   const [invio, setInvio] = useState(false);
   const [erroreInvio, setErroreInvio] = useState<string | null>(null);
   const [risposta, setRisposta] = useState<{ quote: QuoteRisposta; copertura: string; leadId: string } | null>(null);
+  const [confirmToken, setConfirmToken] = useState<string | null>(null);
+  const [confermaPrezzo, setConfermaPrezzo] = useState<"no" | "invio" | "fatto">("no");
   const [foto, setFoto] = useState<File[]>([]);
   const [fotoUnita, setFotoUnita] = useState<Record<number, File[]>>({});
   const [altraScelta, setAltraScelta] = useState<"si" | "no" | null>(null);
@@ -601,6 +603,7 @@ export function PreventivoWizard() {
       }
 
       setRisposta({ quote: data.quote, copertura: data.copertura ?? "in_valutazione", leadId: data.leadId });
+      setConfirmToken(typeof data.confirmToken === "string" ? data.confirmToken : null);
       setIdx(flusso.length - 1);
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (e) {
@@ -938,6 +941,23 @@ export function PreventivoWizard() {
     }
   }
 
+  async function confermaIlPrezzo() {
+    if (!confirmToken || confermaPrezzo !== "no") return;
+    setConfermaPrezzo("invio");
+    try {
+      const res = await fetch("/api/leads/confirm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: confirmToken }),
+      });
+      const data = await res.json();
+      if (data.ok) setConfermaPrezzo("fatto");
+      else setConfermaPrezzo("no");
+    } catch {
+      setConfermaPrezzo("no");
+    }
+  }
+
   function renderRisultato() {
     if (!risposta) return null;
     const { quote: q, copertura } = risposta;
@@ -1050,6 +1070,21 @@ export function PreventivoWizard() {
         )}
 
         <p className="pv-nota">Prezzi al netto di IVA. Il preventivo definitivo te lo confermiamo dopo un sopralluogo gratuito e senza impegno: prima di iniziare firmiamo insieme condizioni e costi, nessuna sorpresa.</p>
+        {!q.suMisura && confirmToken && (
+          confermaPrezzo === "fatto" ? (
+            <div className="pv-accetta fatto">
+              <b>✓ Prezzo confermato!</b>
+              <span>Ti ricontattiamo noi entro 24 ore per organizzare il sopralluogo gratuito e iniziare.</span>
+            </div>
+          ) : (
+            <div className="pv-accetta">
+              <button type="button" className="pv-btn-accetta" disabled={confermaPrezzo === "invio"} onClick={() => void confermaIlPrezzo()}>
+                {confermaPrezzo === "invio" ? "Un attimo…" : "✓ Confermo il prezzo — richiamatemi"}
+              </button>
+              <span>Nessun pagamento, nessun vincolo: confermi il prezzo e ti ricontattiamo noi per iniziare. Puoi farlo anche più tardi dal link nella mail.</span>
+            </div>
+          )
+        )}
         <div className="pv-conferma">✓ Preventivo inviato a {stato.email} — ti contattiamo al più presto</div>
         <button className="pv-riparti" onClick={riparti}>Calcola un altro preventivo</button>
       </div>

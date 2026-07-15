@@ -42,6 +42,8 @@ export interface DatiEmailPreventivo {
     areaComuneTipo?: string;
     passaggio?: { totale: number } | null;
   };
+  /** link di conferma prezzo (presente solo se il preventivo ha un prezzo, non per i su-misura) */
+  confirmUrl?: string;
 }
 
 /** Badge tondo con glifo: l'equivalente email-safe delle icone del widget */
@@ -221,6 +223,18 @@ export function buildEmailPreventivo(d: DatiEmailPreventivo): { subject: string;
         </td></tr>
 
         ${avvisoZona}
+
+        <!-- CTA CONFERMA PREZZO (solo preventivi con prezzo) -->
+        ${!suMisura && d.confirmUrl ? `
+        <tr><td align="center" style="padding:6px 0 2px 0">
+          <table role="presentation" cellpadding="0" cellspacing="0"><tr>
+            <td bgcolor="#1FA463" style="border-radius:14px">
+              <a href="${d.confirmUrl}" style="display:inline-block;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:bold;color:#ffffff;text-decoration:none;padding:15px 34px">\u2713&nbsp; Confermo il prezzo</a>
+            </td>
+          </tr></table>
+          <div style="font-family:Arial,Helvetica,sans-serif;font-size:12.5px;color:${GRIGIO};padding-top:8px">Un clic e ti ricontattiamo noi per organizzare l'avvio. Nessun pagamento, nessun vincolo.</div>
+        </td></tr>
+        ` : ''}
 
         <!-- CTA -->
         <tr><td align="center" style="padding:8px 0 6px 0">

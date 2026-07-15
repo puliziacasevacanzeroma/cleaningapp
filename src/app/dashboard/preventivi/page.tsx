@@ -41,6 +41,8 @@ interface Lead {
   stato: string;
   note: string;
   followUpAt: string | null;
+  prezzoAccettato?: boolean;
+  prezzoAccettatoAt?: string | null;
   motivoEsito?: string;
   numeroPreventivo?: string;
   foto?: string[];
@@ -215,10 +217,13 @@ function TabLeads() {
   }, [carica]);
 
   const [eliminando, setEliminando] = useState<string | null>(null);
-  const elimina = useCallback(async (l: Lead) => {
-    const chi = l.contatti?.nome || "questo lead";
-    if (!confirm(`Eliminare definitivamente il preventivo di ${chi}${l.numeroPreventivo ? ` (N°${l.numeroPreventivo})` : ""}?\n\nL'operazione NON è reversibile.`)) return;
-    if (!confirm("Sei proprio sicuro? Il lead sparirà per sempre.")) return;
+  const [daEliminare, setDaEliminare] = useState<Lead | null>(null);
+  // il click sul cestino apre la modale in-app (grafica del gestionale), non il confirm del browser
+  const chiediElimina = useCallback((l: Lead) => setDaEliminare(l), []);
+  const confermaElimina = useCallback(async () => {
+    const l = daEliminare;
+    if (!l) return;
+    setDaEliminare(null);
     setEliminando(l.id);
     const prima = leads;
     setLeads((prev) => prev.filter((x) => x.id !== l.id)); // ottimistico
@@ -236,10 +241,11 @@ function TabLeads() {
     } finally {
       setEliminando(null);
     }
-  }, [leads]);
+  }, [daEliminare, leads]);
 
+  const [daReinviare, setDaReinviare] = useState<Lead | null>(null);
+  const chiediReinvia = useCallback((l: Lead) => setDaReinviare(l), []);
   const reinvia = useCallback(async (l: Lead) => {
-    if (!confirm(`Reinviare il preventivo ${l.numeroPreventivo || ""} a ${l.contatti.email}?`)) return;
     setInviando(l.id);
     try {
       const res = await fetch("/api/leads/pdf", {
@@ -284,7 +290,8 @@ function TabLeads() {
   const filtrati = useMemo(() => {
     const q = search.trim().toLowerCase();
     return leads.filter((l) => {
-      if (filtroStato !== "tutti" && l.stato !== filtroStato) return false;
+      if (filtroStato === "accettati") { if (!l.prezzoAccettato) return false; }
+      else if (filtroStato !== "tutti" && l.stato !== filtroStato) return false;
       if (filtroTipo !== "tutti" && l.tipo !== filtroTipo) return false;
       if (q) {
         const blob = `${l.contatti?.nome} ${l.contatti?.email} ${l.contatti?.telefono} ${l.zona} ${l.cap} ${l.numeroPreventivo || ""}`.toLowerCase();
@@ -338,6 +345,7 @@ function TabLeads() {
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-3 space-y-3">
         <div className="flex flex-wrap gap-2">
           <FiltroPill attivo={filtroStato === "tutti"} onClick={() => setFiltroStato("tutti")} label={`Tutti (${leads.length})`} />
+          <FiltroPill attivo={filtroStato === "accettati"} onClick={() => setFiltroStato("accettati")} label={`✓ Prezzo accettato (${leads.filter((x) => x.prezzoAccettato).length})`} />
           {STATI.map((s) => (
             <FiltroPill key={s.id} attivo={filtroStato === s.id} onClick={() => setFiltroStato(s.id)} label={`${s.label} (${contaStato(s.id)})`} />
           ))}
@@ -382,9 +390,9 @@ function TabLeads() {
               espanso={espanso === l.id}
               onToggle={() => setEspanso(espanso === l.id ? null : l.id)}
               onPatch={(campi) => patch(l.id, campi)}
-              onElimina={() => elimina(l)}
+              onElimina={() => chiediElimina(l)}
               eliminando={eliminando === l.id}
-              onReinvia={() => reinvia(l)}
+              onReinvia={() => chiediReinvia(l)}
               salvando={salvando === l.id}
               inviando={inviando === l.id}
               noteDraft={noteDraft}
@@ -392,6 +400,112 @@ function TabLeads() {
           ))}
         </div>
       )}
+
+      <ModaleConferma
+        aperta={daEliminare !== null}
+        tono="pericolo"
+        titolo="Eliminare il preventivo?"
+        messaggio={daEliminare ? (
+          <>Stai per eliminare definitivamente il preventivo di{" "}
+            <span className="font-semibold text-slate-800">{daEliminare.contatti?.nome || "questo lead"}</span>
+            {daEliminare.numeroPreventivo ? <span className="text-slate-500"> (N°{daEliminare.numeroPreventivo})</span> : null}.</>
+        ) : null}
+        avviso="Operazione irreversibile: il lead sparirà per sempre."
+        labelConferma="Elimina definitivamente"
+        onAnnulla={() => setDaEliminare(null)}
+        onConferma={confermaElimina}
+      />
+
+      <ModaleConferma
+        aperta={daReinviare !== null}
+        tono="neutro"
+        titolo="Reinviare il preventivo?"
+        messaggio={daReinviare ? (
+          <>Invio di nuovo il preventivo{daReinviare.numeroPreventivo ? ` N°${daReinviare.numeroPreventivo}` : ""} all'indirizzo{" "}
+            <span className="font-semibold text-slate-800">{daReinviare.contatti?.email || "—"}</span>.</>
+        ) : null}
+        labelConferma="Reinvia email"
+        onAnnulla={() => setDaReinviare(null)}
+        onConferma={() => { const l = daReinviare; setDaReinviare(null); if (l) reinvia(l); }}
+      />
+    </div>
+  );
+}
+
+// ─────────────────────── Modale conferma riutilizzabile (grafica gestionale) ───────────────────────
+
+type TonoModale = "pericolo" | "neutro";
+function ModaleConferma({ aperta, titolo, messaggio, avviso, tono = "neutro", labelConferma, onAnnulla, onConferma }: {
+  aperta: boolean;
+  titolo: string;
+  messaggio: React.ReactNode;
+  avviso?: string;
+  tono?: TonoModale;
+  labelConferma: string;
+  onAnnulla: () => void;
+  onConferma: () => void;
+}) {
+  useEffect(() => {
+    if (!aperta) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onAnnulla(); };
+    window.addEventListener("keydown", onKey);
+    document.body.style.overflow = "hidden";
+    return () => { window.removeEventListener("keydown", onKey); document.body.style.overflow = ""; };
+  }, [aperta, onAnnulla]);
+
+  if (!aperta) return null;
+  const pericolo = tono === "pericolo";
+  const iconWrap = pericolo ? "bg-red-100" : "bg-sky-100";
+  const iconCol = pericolo ? "text-red-600" : "text-sky-600";
+  const btn = pericolo
+    ? "bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700"
+    : "bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700";
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-[fadeIn_.15s_ease-out]"
+      onClick={onAnnulla}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modal-title"
+    >
+      <style>{`@keyframes fadeIn{from{opacity:0}to{opacity:1}}@keyframes popIn{from{opacity:0;transform:scale(.94)}to{opacity:1;transform:none}}`}</style>
+      <div
+        className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-[popIn_.18s_cubic-bezier(.3,.9,.4,1)]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="p-6">
+          <div className="flex items-start gap-4">
+            <div className={`flex-none w-12 h-12 rounded-full flex items-center justify-center ${iconWrap}`}>
+              {pericolo ? (
+                <svg className={`w-6 h-6 ${iconCol}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              ) : (
+                <svg className={`w-6 h-6 ${iconCol}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              )}
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 id="modal-title" className="text-lg font-bold text-slate-800">{titolo}</h3>
+              <div className="text-sm text-slate-600 mt-1 leading-relaxed">{messaggio}</div>
+              {avviso && (
+                <div className="mt-3 flex items-center gap-2 rounded-lg bg-red-50 border border-red-200 px-3 py-2">
+                  <svg className="w-4 h-4 text-red-500 flex-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                  <span className="text-xs font-semibold text-red-700">{avviso}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+        <div className="flex gap-3 px-6 py-4 bg-slate-50 border-t border-slate-100">
+          <button type="button" onClick={onAnnulla}
+            className="flex-1 px-4 py-2.5 rounded-xl border-2 border-slate-200 text-slate-700 font-semibold hover:bg-slate-100 transition-colors">
+            Annulla
+          </button>
+          <button type="button" onClick={onConferma}
+            className={`flex-1 px-4 py-2.5 rounded-xl text-white font-semibold shadow-sm transition-all ${btn}`}>
+            {labelConferma}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -448,6 +562,9 @@ function LeadCard({ lead: l, espanso, onToggle, onPatch, onElimina, onReinvia, s
             <span className="font-semibold text-slate-800">{l.contatti?.nome || "—"}</span>
             <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${tipo.badge}`}>{tipo.label}</span>
             <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${info.badge}`}>{info.label}</span>
+            {l.prezzoAccettato && (
+              <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">✓ Prezzo accettato</span>
+            )}
             {l.copertura === "in_valutazione" && (
               <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-orange-50 text-orange-600 border border-orange-200">Zona da valutare</span>
             )}
@@ -1158,8 +1275,9 @@ function TabConfig() {
     }
   }, [cfg, carica]);
 
+  const [chiediReset, setChiediReset] = useState(false);
   const ripristina = useCallback(async () => {
-    if (!confirm("Ripristinare TUTTI i parametri ai valori di default? (lo storico resta)")) return;
+    setChiediReset(false);
     setSaving(true);
     try {
       const res = await fetch("/api/admin/engine-config", { method: "DELETE" });
@@ -1297,7 +1415,7 @@ function TabConfig() {
             {saving ? "Salvo…" : "💾 Salva — attivo da subito"}
           </button>
           <button
-            onClick={ripristina}
+            onClick={() => setChiediReset(true)}
             disabled={saving}
             className="w-full px-4 py-2 rounded-xl text-sm font-semibold bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors disabled:opacity-50"
           >
@@ -1319,6 +1437,16 @@ function TabConfig() {
           </div>
         )}
       </div>
+
+      <ModaleConferma
+        aperta={chiediReset}
+        tono="pericolo"
+        titolo="Ripristinare i valori di default?"
+        messaggio={<>Tutti i parametri del calcolatore torneranno ai valori originali. Le tue modifiche verranno perse; lo storico resta.</>}
+        labelConferma="Ripristina default"
+        onAnnulla={() => setChiediReset(false)}
+        onConferma={ripristina}
+      />
     </div>
   );
 }

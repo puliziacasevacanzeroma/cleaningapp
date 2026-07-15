@@ -15,6 +15,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { FieldValue } from 'firebase-admin/firestore';
 import { adminDb } from '~/lib/firebase/admin';
+import { randomBytes } from 'crypto';
+import { APP_URL } from '~/lib/email/config';
 import { requireAdmin } from '~/lib/api-auth';
 import { resend, FROM_EMAIL, isResendConfigured, logResendWarning } from '~/lib/email/config';
 import { calcolaCasa, calcolaCase, calcolaBnbV2, calcolaPassaggioSoggiorno, verificaCopertura, formatEuro } from '~/lib/quote/quoteEngine';
@@ -225,12 +227,17 @@ export async function POST(request: NextRequest) {
     updatedAt: FieldValue.serverTimestamp(),
   };
 
+  // ── Conferma prezzo: token generato QUI perché serve anche nella mail ──
+  const confirmToken = quote.suMisura ? null : randomBytes(24).toString('hex');
+  const confirmUrl = confirmToken ? APP_URL + '/preventivo/conferma?t=' + confirmToken : undefined;
+
   const mailCliente = buildEmailPreventivo({
     nome: leadDoc.contatti.nome,
     tipo: body.tipo,
     zona: leadDoc.zona,
     copertura,
     quote: leadDoc.quote as Parameters<typeof buildEmailPreventivo>[0]['quote'],
+    confirmUrl,
   });
   const mailAdmin = emailAdmin(leadDoc, quote);
 
@@ -266,6 +273,11 @@ export async function POST(request: NextRequest) {
   }
   (leadDoc as Record<string, unknown>).numeroPreventivo = numeroPreventivo;
 
+  // ── Conferma prezzo: campi sul lead (token generato sopra, prima della mail) ──
+  (leadDoc as Record<string, unknown>).confirmToken = confirmToken;
+  (leadDoc as Record<string, unknown>).prezzoAccettato = false;
+  (leadDoc as Record<string, unknown>).prezzoAccettatoAt = null;
+
   const ref = await adminDb.collection('leads').add(leadDoc);
 
   // Email best-effort: un errore email non deve far fallire il lead.
@@ -300,6 +312,7 @@ export async function POST(request: NextRequest) {
     leadId: ref.id,
     quote: leadDoc.quote,
     copertura,
+    confirmToken, // per il bottone "Confermo il prezzo" nella schermata risultato
   });
 }
 
@@ -322,6 +335,7 @@ export async function GET(request: NextRequest) {
       createdAt: data.createdAt?.toDate?.()?.toISOString() ?? null,
       updatedAt: data.updatedAt?.toDate?.()?.toISOString() ?? null,
       followUpAt: typeof data.followUpAt === 'string' ? data.followUpAt : (data.followUpAt?.toDate?.()?.toISOString()?.slice(0, 10) ?? null),
+      prezzoAccettatoAt: data.prezzoAccettatoAt?.toDate?.()?.toISOString() ?? null,
     };
   });
   return NextResponse.json({ ok: true, leads });

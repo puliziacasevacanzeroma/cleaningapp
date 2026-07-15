@@ -423,3 +423,15 @@ img.pv-ic-mini.pv-ic-img{width:46px;max-width:46px;height:46px;margin:0}
 .pv-btn.avanti.bloccato{opacity:.55;cursor:pointer}
 .pv-flash{animation:pv-flash-b .4s ease-in-out 2}
 @keyframes pv-flash-b{0%,100%{box-shadow:none}50%{box-shadow:0 0 0 3px rgba(176,118,74,.45)}}
+
+/* ── Conferma prezzo nella schermata risultato ── */
+.pv-accetta{max-width:680px;margin:18px auto 0;text-align:center;display:flex;flex-direction:column;gap:8px;align-items:center}
+.pv-accetta span{font-size:12.5px;color:var(--grigio);line-height:1.5;max-width:440px}
+.pv-btn-accetta{display:inline-block;border:none;cursor:pointer;border-radius:16px;padding:15px 30px;
+  font-size:16px;font-weight:800;color:#fff;background:linear-gradient(135deg,#1FA463,#178a52);
+  box-shadow:0 4px 14px rgba(31,164,99,.35);transition:transform .15s ease,box-shadow .15s ease}
+.pv-btn-accetta:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(31,164,99,.4)}
+.pv-btn-accetta:disabled{opacity:.6;cursor:default;transform:none}
+.pv-accetta.fatto{background:#ECFDF3;border:1.5px solid #A7F0C8;border-radius:16px;padding:16px 20px}
+.pv-accetta.fatto b{color:#177A4A;font-size:16px}
+.pv-accetta.fatto span{color:#1F6A45}
