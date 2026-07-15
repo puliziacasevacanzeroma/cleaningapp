@@ -214,6 +214,30 @@ function TabLeads() {
     }
   }, [carica]);
 
+  const [eliminando, setEliminando] = useState<string | null>(null);
+  const elimina = useCallback(async (l: Lead) => {
+    const chi = l.contatti?.nome || "questo lead";
+    if (!confirm(`Eliminare definitivamente il preventivo di ${chi}${l.numeroPreventivo ? ` (N°${l.numeroPreventivo})` : ""}?\n\nL'operazione NON è reversibile.`)) return;
+    if (!confirm("Sei proprio sicuro? Il lead sparirà per sempre.")) return;
+    setEliminando(l.id);
+    const prima = leads;
+    setLeads((prev) => prev.filter((x) => x.id !== l.id)); // ottimistico
+    try {
+      const res = await fetch("/api/leads", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: l.id }),
+      });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.errore);
+    } catch (e) {
+      alert("Eliminazione fallita: " + (e instanceof Error ? e.message : "errore"));
+      setLeads(prima); // ripristino
+    } finally {
+      setEliminando(null);
+    }
+  }, [leads]);
+
   const reinvia = useCallback(async (l: Lead) => {
     if (!confirm(`Reinviare il preventivo ${l.numeroPreventivo || ""} a ${l.contatti.email}?`)) return;
     setInviando(l.id);
@@ -358,6 +382,8 @@ function TabLeads() {
               espanso={espanso === l.id}
               onToggle={() => setEspanso(espanso === l.id ? null : l.id)}
               onPatch={(campi) => patch(l.id, campi)}
+              onElimina={() => elimina(l)}
+              eliminando={eliminando === l.id}
               onReinvia={() => reinvia(l)}
               salvando={salvando === l.id}
               inviando={inviando === l.id}
@@ -395,14 +421,16 @@ function FiltroPill({ attivo, onClick, label }: { attivo: boolean; onClick: () =
 
 // ─────────────────────────── Card lead ───────────────────────────
 
-function LeadCard({ lead: l, espanso, onToggle, onPatch, onReinvia, salvando, inviando, noteDraft }: {
+function LeadCard({ lead: l, espanso, onToggle, onPatch, onElimina, onReinvia, salvando, inviando, eliminando, noteDraft }: {
   lead: Lead;
   espanso: boolean;
   onToggle: () => void;
   onPatch: (campi: Record<string, unknown>) => void;
+  onElimina: () => void;
   onReinvia: () => void;
   salvando: boolean;
   inviando: boolean;
+  eliminando: boolean;
   noteDraft: React.MutableRefObject<Record<string, string>>;
 }) {
   const info = statoInfo(l.stato);
@@ -467,6 +495,20 @@ function LeadCard({ lead: l, espanso, onToggle, onPatch, onReinvia, salvando, in
             title="Data ricontatto"
             className="px-2.5 py-1.5 border-2 border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:border-sky-500 transition-all"
           />
+          <button
+            type="button"
+            onClick={onElimina}
+            disabled={eliminando}
+            title="Elimina definitivamente questo lead"
+            aria-label="Elimina lead"
+            className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-white border-2 border-slate-200 text-slate-400 hover:text-red-600 hover:border-red-300 hover:bg-red-50 transition-colors disabled:opacity-50"
+          >
+            {eliminando ? (
+              <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+            ) : (
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+            )}
+          </button>
         </div>
       </div>
 

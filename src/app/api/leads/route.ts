@@ -358,3 +358,26 @@ export async function PATCH(request: NextRequest) {
   await adminDb.collection('leads').doc(id).update(update);
   return NextResponse.json({ ok: true });
 }
+
+// ─────────────────────────────── DELETE (ADMIN) ───────────────────────────────
+// Elimina definitivamente un lead da Firestore. Irreversibile: la UI chiede
+// doppia conferma. Solo ADMIN, come il PATCH.
+
+export async function DELETE(request: NextRequest) {
+  const auth = await requireAdmin();
+  if ('error' in auth) return auth.error;
+
+  let body: { id?: string };
+  try { body = await request.json(); }
+  catch { return NextResponse.json({ ok: false, errore: 'Body non valido' }, { status: 400 }); }
+
+  const id = str(body.id, 40);
+  if (!id) return NextResponse.json({ ok: false, errore: 'ID mancante' }, { status: 400 });
+
+  const ref = adminDb.collection('leads').doc(id);
+  const snap = await ref.get();
+  if (!snap.exists) return NextResponse.json({ ok: false, errore: 'Lead non trovato' }, { status: 404 });
+
+  await ref.delete();
+  return NextResponse.json({ ok: true });
+}
