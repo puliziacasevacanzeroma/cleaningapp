@@ -659,35 +659,35 @@ function DettaglioQuote({ lead: l }: { lead: Lead }) {
 const SEZIONI: { key: string; titolo: string; nota?: string; icona?: string; campi: { path: string[]; label: string; unit: string; step?: number; help?: string }[] }[] = [
   {
     key: "casa", titolo: "Pulizia casa \u2014 la formula", icona: "home",
-    nota: "Il prezzo \u00e8 una SOMMA: base + mq + letti + bagni + cucina + esterni. Niente scaglioni, niente \"tagli\": due case identiche costano uguale, che il cliente le chiami bilocale o quadrilocale. Ogni voce \u00e8 positiva, quindi il prezzo non pu\u00f2 mai calare se la casa cresce.",
+    nota: "Il prezzo è una SOMMA: base + mq + letti + bagni + cucina + esterni. Niente scaglioni, niente \"tagli\": due case identiche costano uguale, che il cliente le chiami bilocale o quadrilocale. Ogni voce è positiva, quindi il prezzo non può mai calare se la casa cresce.",
     campi: [
-      { path: ["casa", "base"], label: "Base (uscita)", unit: "\u20ac", step: 0.5, help: "Costo fisso di ogni intervento: spostamento, prodotti, preparazione. Es: 18\u20ac. \u00c8 la parte che paghi anche per la casa pi\u00f9 piccola." },
-      { path: ["casa", "euroMq"], label: "Prezzo al mq", unit: "\u20ac/mq", step: 0.01, help: "Quanto pesa ogni metro quadro. Es: 0,28\u20ac \u2192 un 100mq porta 28\u20ac. \u00c8 questo che fa costare di pi\u00f9 un trilocale da 100mq rispetto a uno da 60mq." },
-      { path: ["casa", "euroLetto"], label: "Per ogni letto", unit: "\u20ac", step: 0.5, help: "Costo di ogni letto da rifare (matrimoniali, singoli, divani letto). Es: 2,50\u20ac a letto. Non ci sono pi\u00f9 \"letti inclusi\": si contano tutti." },
-      { path: ["casa", "euroBagno"], label: "Per ogni bagno", unit: "\u20ac", step: 0.5, help: "Costo di ogni bagno. Es: 5\u20ac. Si contano tutti, anche il primo." },
-      { path: ["casa", "minimo"], label: "Prezzo minimo", unit: "\u20ac", step: 1, help: "Sotto questa cifra non si scende, qualunque sia la casa. Es: 40\u20ac: un monolocale da 20mq costa comunque 40\u20ac." },
+      { path: ["casa", "base"], label: "Base (uscita)", unit: "€", step: 0.5, help: "Costo fisso di ogni intervento: spostamento, prodotti, preparazione. Es: 18€. È la parte che paghi anche per la casa più piccola." },
+      { path: ["casa", "euroMq"], label: "Prezzo al mq", unit: "€/mq", step: 0.01, help: "Quanto pesa ogni metro quadro. Es: 0,28€ → un 100mq porta 28€. È questo che fa costare di più un trilocale da 100mq rispetto a uno da 60mq." },
+      { path: ["casa", "euroLetto"], label: "Per ogni letto", unit: "€", step: 0.5, help: "Costo di ogni letto da rifare (matrimoniali, singoli, divani letto). Es: 2,50€ a letto. Non ci sono più \"letti inclusi\": si contano tutti." },
+      { path: ["casa", "euroBagno"], label: "Per ogni bagno", unit: "€", step: 0.5, help: "Costo di ogni bagno. Es: 5€. Si contano tutti, anche il primo." },
+      { path: ["casa", "minimo"], label: "Prezzo minimo", unit: "€", step: 1, help: "Sotto questa cifra non si scende, qualunque sia la casa. Es: 40€: un monolocale da 20mq costa comunque 40€." },
     ],
   },
   {
     key: "casaExtra", titolo: "Pulizia casa \u2014 cucina ed esterni", icona: "plus",
     nota: "Supplementi che si aggiungono alla formula. Devono restare in ordine crescente (angolo \u2264 separata \u2264 abitabile, balcone \u2264 terrazzo \u2264 grande), altrimenti si creano incoerenze.",
     campi: [
-      { path: ["casa", "cucinaSep"], label: "Cucina separata", unit: "\u20ac", step: 0.5, help: "Supplemento se la cucina \u00e8 una stanza a s\u00e9. L'angolo cottura non paga nulla. Es: 4\u20ac." },
-      { path: ["casa", "cucinaAbit"], label: "Cucina abitabile", unit: "\u20ac", step: 0.5, help: "Supplemento per cucina abitabile con tavolo da pranzo. Deve essere \u2265 della separata. Es: 5\u20ac." },
-      { path: ["casa", "balcone"], label: "Balcone arredato", unit: "\u20ac", step: 0.5, help: "Es: 3\u20ac." },
-      { path: ["casa", "terrazzo"], label: "Terrazzo", unit: "\u20ac", step: 0.5, help: "Es: 4\u20ac. Deve essere \u2265 del balcone." },
-      { path: ["casa", "terrazzoGrande"], label: "Grande terrazzo", unit: "\u20ac", step: 0.5, help: "Es: 7\u20ac. Deve essere \u2265 del terrazzo." },
+      { path: ["casa", "cucinaSep"], label: "Cucina separata", unit: "€", step: 0.5, help: "Supplemento se la cucina è una stanza a sé. L'angolo cottura non paga nulla. Es: 4€." },
+      { path: ["casa", "cucinaAbit"], label: "Cucina abitabile", unit: "€", step: 0.5, help: "Supplemento per cucina abitabile con tavolo da pranzo. Deve essere ≥ della separata. Es: 5€." },
+      { path: ["casa", "balcone"], label: "Balcone arredato", unit: "€", step: 0.5, help: "Es: 3€." },
+      { path: ["casa", "terrazzo"], label: "Terrazzo", unit: "€", step: 0.5, help: "Es: 4€. Deve essere ≥ del balcone." },
+      { path: ["casa", "terrazzoGrande"], label: "Grande terrazzo", unit: "€", step: 0.5, help: "Es: 7€. Deve essere ≥ del terrazzo." },
     ],
   },
   {
     key: "giardino", titolo: "Giardino", icona: "sofa",
     nota: "Supplemento a fasce quando la casa ha un giardino di cui prenderci cura (step Spazi esterni del preventivatore).",
     campi: [
-      { path: ["giardino", "piccoloMaxMq"], label: "Piccolo fino a", unit: "mq", step: 5, help: "Fino a questi mq il giardino \u00e8 in fascia \"piccolo\". Es: 20mq." },
-      { path: ["giardino", "medioMaxMq"], label: "Medio fino a", unit: "mq", step: 5, help: "Fino a questi mq \u00e8 fascia \"medio\"; oltre \u00e8 \"grande\". Es: 60mq." },
-      { path: ["giardino", "piccolo"], label: "Supplemento piccolo", unit: "\u20ac", help: "Es: 15\u20ac fino a 20mq." },
-      { path: ["giardino", "medio"], label: "Supplemento medio", unit: "\u20ac", help: "Es: 25\u20ac tra 20 e 60mq." },
-      { path: ["giardino", "grande"], label: "Supplemento grande", unit: "\u20ac", help: "Es: 50\u20ac oltre i 60mq." },
+      { path: ["giardino", "piccoloMaxMq"], label: "Piccolo fino a", unit: "mq", step: 5, help: "Fino a questi mq il giardino è in fascia \"piccolo\". Es: 20mq." },
+      { path: ["giardino", "medioMaxMq"], label: "Medio fino a", unit: "mq", step: 5, help: "Fino a questi mq è fascia \"medio\"; oltre è \"grande\". Es: 60mq." },
+      { path: ["giardino", "piccolo"], label: "Supplemento piccolo", unit: "€", help: "Es: 15€ fino a 20mq." },
+      { path: ["giardino", "medio"], label: "Supplemento medio", unit: "€", help: "Es: 25€ tra 20 e 60mq." },
+      { path: ["giardino", "grande"], label: "Supplemento grande", unit: "€", help: "Es: 50€ oltre i 60mq." },
     ],
   },
   {
@@ -763,13 +763,36 @@ const SIM_ESTERNI: { v: TipoEsterno; t: string }[] = [
   { v: "terrazzoGrande", t: "Grande terrazzo" }, { v: "giardino", t: "Giardino" },
 ];
 
+// input numerico "svuotabile": tieni il testo mentre scrivi (anche vuoto),
+// aggiorni il valore solo quando e' un numero valido, ripristini all'uscita.
+function InputNum({ v, set, min = 0, max = 9999, cls }: { v: number; set: (n: number) => void; min?: number; max?: number; cls: string }) {
+  const [t, setT] = useState(String(v));
+  const focus = useRef(false);
+  useEffect(() => { if (!focus.current) setT(String(v)); }, [v]);
+  return (
+    <input type="number" value={t} min={min} max={max} className={cls}
+      onFocus={() => { focus.current = true; }}
+      onChange={(e) => {
+        const raw = e.target.value; setT(raw);
+        if (raw.trim() === "") return;
+        const n = parseInt(raw, 10);
+        if (Number.isFinite(n)) set(Math.max(min, Math.min(max, n)));
+      }}
+      onBlur={() => {
+        focus.current = false;
+        const n = parseInt(t, 10);
+        if (t.trim() === "" || !Number.isFinite(n)) setT(String(v));
+        else { const c = Math.max(min, Math.min(max, n)); set(c); setT(String(c)); }
+      }} />
+  );
+}
+
 function SimNum({ label, v, set, min = 0, max = 20 }: { label: string; v: number; set: (n: number) => void; min?: number; max?: number }) {
   return (
     <label className="flex items-center justify-between gap-2 text-xs text-slate-300">
       <span>{label}</span>
-      <input type="number" value={v} min={min} max={max}
-        onChange={(e) => set(Math.max(min, Math.min(max, parseInt(e.target.value) || min)))}
-        className="w-16 px-2 py-1 rounded-lg bg-white/10 border border-white/10 text-white text-right text-xs" />
+      <InputNum v={v} set={set} min={min} max={max}
+        cls="w-16 px-2 py-1 rounded-lg bg-white/10 border border-white/10 text-white text-right text-xs" />
     </label>
   );
 }
@@ -839,9 +862,8 @@ function SimulatorePrezzi({ cfg }: { cfg: EngineParams | null }) {
               {SIM_TAGLI.map((t) => <option key={t.v} value={t.v} className="text-slate-900">{t.t}</option>)}
             </select>
             <label className="flex items-center gap-1.5 text-xs text-slate-300">
-              <input type="number" value={mq} min={15} max={2000}
-                onChange={(e) => setMq(Math.max(15, Math.min(2000, parseInt(e.target.value) || 15)))}
-                className="w-full px-2 py-1.5 rounded-lg bg-white/10 border border-white/10 text-white text-right text-xs" />
+              <InputNum v={mq} set={setMq} min={15} max={2000}
+                cls="w-full px-2 py-1.5 rounded-lg bg-white/10 border border-white/10 text-white text-right text-xs" />
               <span className="flex-none">mq</span>
             </label>
           </div>
@@ -869,16 +891,16 @@ function SimulatorePrezzi({ cfg }: { cfg: EngineParams | null }) {
           </div>
 
           <div className="bg-white/10 rounded-xl p-3 mt-1">
-            {!casa ? "\u2026" : casa.suMisura ? (
+            {!casa ? "…" : casa.suMisura ? (
               <div>
                 <div className="text-xl font-bold">SU MISURA</div>
-                <div className="text-xs text-slate-300 mt-0.5">{taglio === "villa" ? "Le ville vanno sempre a preventivo dedicato." : `Oltre ${cfg?.mqMax ?? 400} mq: lead salvato + email \u201cti contattiamo\u201d.`}</div>
+                <div className="text-xs text-slate-300 mt-0.5">{taglio === "villa" ? "Le ville vanno sempre a preventivo dedicato." : `Oltre ${cfg?.mqMax ?? 400} mq: lead salvato + email “ti contattiamo”.`}</div>
               </div>
             ) : (
               <div>
-                <div className="text-xl font-bold">\u20ac{casa.min} - \u20ac{casa.max}</div>
+                <div className="text-xl font-bold">€{casa.min} - €{casa.max}</div>
                 <div className="text-xs text-slate-300 mt-0.5">
-                  puntuale interno {formatEuro(casa.puntuale)}{casa.sconto ? ` \u00b7 sconto multi-casa -${casa.sconto}% incluso` : ""}
+                  puntuale interno {formatEuro(casa.puntuale)}{casa.sconto ? ` · sconto multi-casa -${casa.sconto}% incluso` : ""}
                 </div>
                 {(casa.biancheria > 0 || casa.kit > 0) && (
                   <div className="text-xs text-slate-300 mt-1">
@@ -896,12 +918,12 @@ function SimulatorePrezzi({ cfg }: { cfg: EngineParams | null }) {
             {camere.map((p, i) => (
               <div key={i} className="flex items-center gap-2">
                 <span className="text-xs text-slate-300 w-16 flex-none">Camera {i + 1}</span>
-                <input type="number" value={p} min={1} max={6}
-                  onChange={(e) => setCamere(camere.map((x, j) => j === i ? Math.max(1, Math.min(6, parseInt(e.target.value) || 1)) : x))}
-                  className="w-14 px-2 py-1 rounded-lg bg-white/10 border border-white/10 text-white text-right text-xs" />
+                <InputNum v={p} min={1} max={6}
+                  set={(n) => setCamere(camere.map((x, j) => j === i ? n : x))}
+                  cls="w-14 px-2 py-1 rounded-lg bg-white/10 border border-white/10 text-white text-right text-xs" />
                 <span className="text-xs text-slate-400">pers.</span>
                 {camere.length > 1 && (
-                  <button type="button" className="text-slate-400 hover:text-white text-sm" onClick={() => setCamere(camere.filter((_, j) => j !== i))}>\u00d7</button>
+                  <button type="button" className="text-slate-400 hover:text-white text-sm" onClick={() => setCamere(camere.filter((_, j) => j !== i))}>×</button>
                 )}
               </div>
             ))}
@@ -923,10 +945,10 @@ function SimulatorePrezzi({ cfg }: { cfg: EngineParams | null }) {
           <label className="flex items-center gap-1.5 text-xs text-slate-300"><input type="checkbox" checked={kitBnb} onChange={(e) => setKitBnb(e.target.checked)} />Kit cortesia</label>
 
           <div className="bg-white/10 rounded-xl p-3 mt-1">
-            {!bnb ? "\u2026" : (
+            {!bnb ? "…" : (
               <div className="space-y-0.5 text-sm font-semibold">
-                {bnb.camereDettaglio.map((c, i) => <div key={i}>{c.etichetta}: \u20ac{c.prezzo}</div>)}
-                {bnb.rifacimentoPerCamera > 0 && <div className="text-xs font-normal text-slate-300">rifacimento \u20ac{bnb.rifacimentoPerCamera}/camera + \u20ac{bnb.rifacimentoUscita} uscita</div>}
+                {bnb.camereDettaglio.map((c, i) => <div key={i}>{c.etichetta}: €{c.prezzo}</div>)}
+                {bnb.rifacimentoPerCamera > 0 && <div className="text-xs font-normal text-slate-300">rifacimento €{bnb.rifacimentoPerCamera}/camera + €{bnb.rifacimentoUscita} uscita</div>}
                 {bnb.areaComuneImporto > 0 && <div className="text-xs font-normal text-slate-300">aree comuni {formatEuro(bnb.areaComuneImporto)}</div>}
                 {bnb.kit > 0 && <div className="text-xs font-normal text-slate-300">kit +{formatEuro(bnb.kit)}</div>}
               </div>
