@@ -236,13 +236,13 @@ export function SplashOverlayHost() {
           animation: logoin .8s cubic-bezier(.22,1,.36,1) both, floaty 5s ease-in-out infinite 2.2s; }
         .logo-stack { position: relative; display: inline-flex; align-items: center; justify-content: center; }
         .logo { width: ${LOGO_W}px; height: auto; display: block; position: relative; z-index: 3;
-          filter: drop-shadow(0 14px 30px rgba(0,15,40,.4)); }
+          filter: drop-shadow(0 8px 16px rgba(0,15,40,.28)); }
         @keyframes logoin { 0% { opacity: 0; transform: scale(.55); } 60% { transform: scale(1.06); } 100% { opacity: 1; transform: scale(1); } }
         .halo { position: absolute; inset: -42px; border-radius: 50%; z-index: 1; opacity: .32;
           background: radial-gradient(circle, rgba(200,235,255,.6) 0%, rgba(200,235,255,0) 62%); }
         /* Maschera DOPPIA (sagoma logo in alto + sagoma scritta in basso):
            la stessa barra di luce attraversa entrambi come un pezzo solo. */
-        .shineMask { position: absolute; inset: 0; z-index: 4; pointer-events: none; overflow: hidden;
+        .shineMask { position: absolute; inset: 0; z-index: 6; pointer-events: none; overflow: hidden;
           -webkit-mask-repeat: no-repeat, no-repeat; mask-repeat: no-repeat, no-repeat;
           -webkit-mask-position: center top, center bottom; mask-position: center top, center bottom;
           -webkit-mask-size: ${LOGO_W}px auto, ${WORD_W}px auto; mask-size: ${LOGO_W}px auto, ${WORD_W}px auto; }
@@ -250,7 +250,8 @@ export function SplashOverlayHost() {
           background: linear-gradient(100deg, transparent, rgba(255,255,255,.9), transparent);
           animation: shine 3.4s ease-in-out infinite 1.4s; }
         @keyframes shine { 0% { transform: translateX(0) skewX(-18deg); } 22%,100% { transform: translateX(430%) skewX(-18deg); } }
-        .wordmark { width: ${WORD_W}px; height: auto; display: block; filter: drop-shadow(0 4px 14px rgba(0,15,40,.35)); }
+        .wordmark { width: ${WORD_W}px; height: auto; display: block; position: relative; z-index: 5;
+          filter: drop-shadow(0 3px 8px rgba(0,15,40,.3)); }
 
         .hello { max-height: 0; opacity: 0; overflow: hidden; transform: translateY(14px);
           transition: max-height .6s ease, opacity .6s ease, transform .6s ease; }
