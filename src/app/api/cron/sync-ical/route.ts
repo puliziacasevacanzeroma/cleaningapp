@@ -292,10 +292,18 @@ function isBlock(e: ICalEvent, s: string): boolean {
 
   // 🔒 Booking.com: TUTTE le prenotazioni hanno summary "CLOSED - Not available"
   // Non è possibile distinguere blocchi da prenotazioni reali nel feed iCal di Booking.
-  // Quindi NON filtrare MAI eventi Booking — sono tutti prenotazioni reali o blocchi
+  // ECCEZIONE: blocchi > 30 notti = CHIUSURA CALENDARIO (calendario non aperto alla
+  // vendita, stagione chiusa, orizzonte Booking): nessuna prenotazione turistica reale
+  // dura più di 30 notti. Trattarli come blocco evita prenotazioni e pulizie spazzatura
+  // (es. pulizie al 17/01/2028 = orizzonte del calendario Booking).
+  // Quindi NON filtrare MAI gli altri eventi Booking — sono prenotazioni reali o blocchi
   // che corrispondono a prenotazioni su altre piattaforme (sincronizzate via channel manager).
   // Le eventuali duplicazioni vengono gestite dal cross-source matching in findExistingBooking.
-  if (s === 'booking') return false;
+  if (s === 'booking') {
+    const nightsB = Math.round((e.dtend.getTime() - e.dtstart.getTime()) / 86400000);
+    if (nightsB > 30) return true;
+    return false;
+  }
 
   // Pattern blocco per gli altri source (Airbnb, Oktorate, etc.)
   const BLOCK_PATTERNS = ['not available', 'unavailable', 'blocked', 'closed', 'chiuso',

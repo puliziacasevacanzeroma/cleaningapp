@@ -198,7 +198,11 @@ function classifyEvent(event: ICalEvent, source: string): 'BOOKING' | 'BLOCK' {
   
   // Per Booking, i "CLOSED - Not available" possono essere sia blocchi che prenotazioni vere.
   // Il filtro principale è filterBookingContainerBlocks() che rimuove i contenitori.
+  // ECCEZIONE: blocchi > 30 notti = CHIUSURA CALENDARIO (nessuna prenotazione turistica
+  // reale dura più di 30 notti) → BLOCK, niente prenotazione/pulizia spazzatura.
   if (source === 'booking') {
+    const nightsB = Math.round((event.dtend.getTime() - event.dtstart.getTime()) / 86400000);
+    if (nightsB > 30) return 'BLOCK';
     if (summary.includes('owner') || summary.includes('proprietario')) return 'BLOCK';
     return 'BOOKING';
   }
