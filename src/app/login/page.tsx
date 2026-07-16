@@ -4,7 +4,9 @@ import { useState } from "react";
 import { useAuth } from "~/lib/firebase/AuthContext";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import LoginSplash from "~/components/LoginSplash";
+import { useQueryClient } from "@tanstack/react-query";
+import { splashOverlay } from "~/components/SplashOverlay";
+import { splashPrefetch } from "~/lib/splashPrefetch";
 
 const demoAccounts = [
   { label: "Admin", email: "admin@demo.com", password: "demo123", icon: "🛡️", color: "from-violet-500 to-purple-600" },
@@ -42,78 +44,75 @@ function getDestinationByUser(user: any): string {
   return "/dashboard";
 }
 
-// 🎬 SPLASH UNICO: stato del flusso di login.
-// null = form visibile; "auth" = autenticazione in corso; "load" = prefetch dati.
-type SplashState =
-  | null
-  | { phase: "auth" }
-  | { phase: "load"; userName: string; userId: string; destination: string };
+// 🎬 SPLASH UNICO GLOBALE: la pagina naviga SUBITO con lo splash ancora sopra;
+// la destinazione si monta e carica dietro. Lo splash chiude solo dopo
+// prefetch completato E finestra di grazia post-navigazione (per dare tempo
+// alla pagina di renderizzare i suoi dati). Regola qui se serve più margine.
+const GRACE_MS = 1100;
+
+const wait = (ms: number) => new Promise<void>(res => setTimeout(res, ms));
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  const [splash, setSplash] = useState<SplashState>(null);
+  const queryClient = useQueryClient();
   const [showPassword, setShowPassword] = useState(false); // 👁️ Visibilità password
   const { user, login, loginWithGoogle } = useAuth();
   const router = useRouter();
 
+  // Flusso condiviso post-autenticazione: overlay → prefetch → push subito
+  // (pagina si carica DIETRO lo splash) → chiusura quando tutto è pronto.
+  const runPostLogin = async (authUser: { id: string; name?: string }, destination: string) => {
+    // Pagine di onboarding: fuori dal flusso splash → redirect classico
+    if (
+      destination.startsWith("/accept-") ||
+      destination.startsWith("/complete-") ||
+      destination.startsWith("/pending-")
+    ) {
+      window.location.href = destination;
+      return;
+    }
+
+    splashOverlay.load(authUser.name || "Utente");
+    sessionStorage.setItem("splash-shown", "true");
+
+    // Prefetch dati (cache react-query) + prefetch del chunk JS della pagina
+    const dataPromise = splashPrefetch(queryClient, authUser.id, destination, (t) => splashOverlay.setText(t));
+    try { router.prefetch(destination); } catch { /* no-op */ }
+
+    // 🚀 Naviga SUBITO: lo splash (globale) resta sopra, la pagina carica dietro
+    router.push(destination);
+
+    // Chiudi solo quando: prefetch finito E passata la finestra di grazia
+    await Promise.allSettled([dataPromise, wait(GRACE_MS)]);
+    splashOverlay.finish();
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSplash({ phase: "auth" });
+    splashOverlay.show();
     setError("");
 
     try {
       const { user: authUser, destination } = await login(email, password, { noRedirect: true });
-
-      // Pagine di onboarding: fuori dal flusso splash → redirect classico
-      if (
-        destination.startsWith("/accept-") ||
-        destination.startsWith("/complete-") ||
-        destination.startsWith("/pending-")
-      ) {
-        window.location.href = destination;
-        return;
-      }
-
-      // Fase 2 dello stesso splash: prefetch dati, poi router.push
-      setSplash({
-        phase: "load",
-        userName: authUser.name || "Utente",
-        userId: authUser.id,
-        destination,
-      });
+      await runPostLogin(authUser, destination);
     } catch (err: any) {
       setError(err.message || "Credenziali non valide");
-      setSplash(null);
+      splashOverlay.hide();
     }
   };
 
   const handleGoogleLogin = async () => {
-    setSplash({ phase: "auth" });
+    splashOverlay.show();
     setError("");
 
     try {
       const { user: authUser, destination } = await loginWithGoogle({ noRedirect: true });
-
-      if (
-        destination.startsWith("/accept-") ||
-        destination.startsWith("/complete-") ||
-        destination.startsWith("/pending-")
-      ) {
-        window.location.href = destination;
-        return;
-      }
-
-      setSplash({
-        phase: "load",
-        userName: authUser.name || "Utente",
-        userId: authUser.id,
-        destination,
-      });
+      await runPostLogin(authUser, destination);
     } catch (err: any) {
       setError(err.message || "Errore durante l'accesso con Google");
-      setSplash(null);
+      splashOverlay.hide();
     }
   };
 
@@ -124,23 +123,8 @@ export default function LoginPage() {
 
 
 
-  // Splash unico: copre auth + prefetch, poi naviga con router.push
-  if (splash) {
-    return (
-      <LoginSplash
-        phase={splash.phase}
-        userName={splash.phase === "load" ? splash.userName : undefined}
-        userId={splash.phase === "load" ? splash.userId : undefined}
-        destination={splash.phase === "load" ? splash.destination : undefined}
-        onComplete={() => {
-          if (splash.phase === "load") {
-            sessionStorage.setItem("splash-shown", "true");
-            router.push(splash.destination);
-          }
-        }}
-      />
-    );
-  }
+  // Lo splash è ora un overlay GLOBALE (SplashOverlayHost in AppProviders):
+  // resta visibile anche dopo router.push, quindi qui non serve renderizzare nulla.
 
   return (
     <div className="fixed inset-0 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex flex-col overflow-hidden" style={{ overscrollBehavior: "none" }}>
