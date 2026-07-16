@@ -361,6 +361,22 @@ function findExistingBooking(bookings: any[], e: ICalEvent, source: string): any
     return ci && co && isSameDay(ci, e.dtstart) && isSameDay(co, e.dtend);
   });
   if (byExactDates) return byExactDates;
+  // 2.5 Match per SOVRAPPOSIZIONE stesso source — SOLO Booking.com
+  // I blocchi CLOSED di Booking cambiano UID (hash del contenuto) e DTSTART
+  // ogni volta che il feed "clippa" i giorni già passati o fonde prenotazioni
+  // contigue. Due blocchi Booking dello stesso feed non si sovrappongono MAI
+  // tra loro per costruzione (è un calendario di disponibilità), quindi un
+  // evento booking che si sovrappone a una prenotazione booking esistente
+  // È la stessa prenotazione → update, non creazione (stop ai fantasmi).
+  // Sovrapposizione STRETTA: la contiguità (checkout = checkin) non conta.
+  if (source === 'booking') {
+    const byOverlap = bookings.find(b => {
+      if (b.source !== 'booking') return false;
+      const ci = b.checkIn?.toDate?.(), co = b.checkOut?.toDate?.();
+      return ci && co && e.dtstart.getTime() < co.getTime() && e.dtend.getTime() > ci.getTime();
+    });
+    if (byOverlap) return byOverlap;
+  }
   // 3. Match cross-source: stesse date esatte da source diverso
   // Evita duplicati quando la stessa prenotazione appare in più feed
   // (es. Airbnb + Octorate che aggrega Airbnb)
@@ -867,12 +883,25 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
                   console.log(`[SYNC-DEBUG] Pulizia esistente trovata per booking ${existing.id} (cleaning ${cleaningForBooking.id}, locked=${cleaningForBooking.lockedFromSync}) — skip creazione`);
                 }
 
-                if (!ci || !co || !isSameDay(ci, e.dtstart) || !isSameDay(co, e.dtend) || !existing.icalUid) {
+                // 🔒 BOOKING CLIP-GUARD: il feed Booking taglia i giorni già passati
+                // dal blocco CLOSED (il DTSTART avanza giorno per giorno). Se il
+                // check-in in DB è NEL PASSATO e il feed ora parte più avanti, il
+                // taglio è dovuto solo al passare del tempo → manteniamo il check-in
+                // ORIGINALE. Se invece il taglio riguarda date future (cancellazione
+                // reale di una prenotazione), si aggiorna normalmente.
+                const todayStartUTC = new Date();
+                todayStartUTC.setUTCHours(0, 0, 0, 0);
+                const keepOriginalCheckIn = source === 'booking' && !!ci
+                  && ci.getTime() < e.dtstart.getTime()
+                  && ci.getTime() < todayStartUTC.getTime();
+                const effStart: Date = keepOriginalCheckIn ? ci : e.dtstart;
+
+                if (!ci || !co || !isSameDay(ci, effStart) || !isSameDay(co, e.dtend) || !existing.icalUid || existing.icalUid !== e.uid) {
                   const nowUpdate = new Date();
                   await adminDb.collection('bookings').doc(existing.id).update({
-                    checkIn: Timestamp.fromDate(e.dtstart), checkOut: Timestamp.fromDate(e.dtend),
+                    checkIn: Timestamp.fromDate(effStart), checkOut: Timestamp.fromDate(e.dtend),
                     icalUid: e.uid, guestName: existing.guestName || getGuestName(e, source), updatedAt: Timestamp.now(),
-                    historicBooking: e.dtstart < nowUpdate || e.dtend < nowUpdate,
+                    historicBooking: effStart < nowUpdate || e.dtend < nowUpdate,
                   });
                   stats.updated++;
                   if (co && !isSameDay(co, e.dtend)) {

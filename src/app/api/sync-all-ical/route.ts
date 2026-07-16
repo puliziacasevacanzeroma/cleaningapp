@@ -318,6 +318,21 @@ function findMatch(event: ICalEvent, bookings: Record<string, unknown>[], source
     if (ci && co && isSameDay(ci, event.dtstart) && isSameDay(co, event.dtend)) return b;
   }
   
+  // 2.5 Match per SOVRAPPOSIZIONE stesso source — SOLO Booking.com
+  // I blocchi CLOSED di Booking cambiano UID (hash) e DTSTART quando il feed
+  // clippa i giorni passati o fonde prenotazioni contigue. Due blocchi Booking
+  // dello stesso feed non si sovrappongono mai tra loro, quindi un evento che
+  // si sovrappone a una prenotazione booking esistente È la stessa prenotazione.
+  // Sovrapposizione STRETTA: la contiguità (checkout = checkin) non conta.
+  if (source === 'booking') {
+    for (const b of bookings) {
+      if (b.source !== 'booking') continue;
+      const ci = (b as any).checkIn?.toDate?.();
+      const co = (b as any).checkOut?.toDate?.();
+      if (ci && co && event.dtstart.getTime() < co.getTime() && event.dtend.getTime() > ci.getTime()) return b;
+    }
+  }
+  
   // 3. Match cross-source: stesse date esatte da source diverso
   // Evita duplicati quando la stessa prenotazione appare in più feed
   // (es. Airbnb + Oktorate che aggrega Airbnb)
@@ -608,12 +623,22 @@ export async function POST() {
                 const ci = existing.checkIn?.toDate?.();
                 // @ts-expect-error TODO-FIX: TS2339 Property 'toDate' does not exist on type '{}'.
                 const co = existing.checkOut?.toDate?.();
-                const changed = !ci || !co || !isSameDay(ci, event.dtstart) || !isSameDay(co, event.dtend);
+                // 🔒 BOOKING CLIP-GUARD: il feed Booking taglia i giorni già passati
+                // dal blocco (DTSTART avanza ogni giorno). Se il check-in in DB è nel
+                // passato e il feed ora parte più avanti → manteniamo il check-in
+                // originale. Taglio su date future = cancellazione reale → aggiorna.
+                const todayStartUTC = new Date();
+                todayStartUTC.setUTCHours(0, 0, 0, 0);
+                const keepOriginalCheckIn = source === 'booking' && !!ci
+                  && ci.getTime() < event.dtstart.getTime()
+                  && ci.getTime() < todayStartUTC.getTime();
+                const effStart: Date = keepOriginalCheckIn ? ci : event.dtstart;
+                const changed = !ci || !co || !isSameDay(ci, effStart) || !isSameDay(co, event.dtend);
                 
-                if (changed || !existing.icalUid) {
+                if (changed || !existing.icalUid || existing.icalUid !== event.uid) {
                   // @ts-expect-error TODO-FIX: TS2345 Argument of type 'unknown' is not assignable to parameter of type 'string'.
                   await adminDb.collection("bookings").doc(existing.id).update( {
-                    checkIn: Timestamp.fromDate(event.dtstart),
+                    checkIn: Timestamp.fromDate(effStart),
                     checkOut: Timestamp.fromDate(event.dtend),
                     guestName, icalUid: event.uid,
                     ...(code && { airbnbReservationCode: code }),
