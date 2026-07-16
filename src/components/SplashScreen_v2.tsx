@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import type { CSSProperties } from 'react';
 
 /**
  * SplashScreen — schermata di caricamento CleaningApp
@@ -78,8 +79,8 @@ export default function SplashScreen({ nome = '', durationMs = 2600, onComplete 
           <div key={`b${i}`} className="bubble" style={{
             width: b.size, height: b.size, left: `${b.left}%`, bottom: `${b.bottom}%`,
             animationDuration: `${b.dur}s`, animationDelay: `${b.delay}s`,
-            ['--wob' as string]: `${b.wob}px`,
-          }} />
+            '--wob': `${b.wob}px`,
+          } as CSSProperties} />
         ))}
         {parts?.sparks.map((s, i) => (
           <div key={`s${i}`} className="spark" style={{
