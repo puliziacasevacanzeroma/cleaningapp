@@ -227,18 +227,35 @@ function drawCheck(doc: Doc, cx: number, cy: number, r: number, circle: [number,
 interface CoverData { numero: string; data: string; cliente: string; indirizzo: string; badge: string }
 
 function pageCover(doc: Doc, a: Assets, d: CoverData) {
-  setFill(doc, BLUE);
-  doc.rect(0, 0, W, 32, "F");
-  doc.addImage(a.coverTop, "JPEG", 0, 32, W, 145.3);
+  // v3: la FOTO torna a tutta altezza (0 -> 177.3, com'era prima dell'arrivo del logo):
+  // niente piu' fascia blu che la comprime. Il logo sta SOPRA la foto, nella parte alta,
+  // appoggiato su una velatura blu che sfuma verso il basso per garantire il contrasto.
+  doc.addImage(a.coverTop, "JPEG", 0, 0, W, 177.3);
 
-  // logo centrato nella fascia blu superiore.
-  // v2: il logo nuovo (simbolo bordo scuro + scritta) e' molto piu' largo (ratio ~5.8:1):
-  // fissando l'ALTEZZA a 24mm la larghezza esplodeva a ~138mm. Ora fissiamo la larghezza
-  // e ricaviamo l'altezza, centrando in verticale nella fascia da 32mm.
+  const g = (doc as unknown as { setGState: (gs: unknown) => void; saveGraphicsState: () => void; restoreGraphicsState: () => void });
+  if (PdfGState) {
+    g.saveGraphicsState();
+    setFill(doc, BLUE);
+    // zona logo quasi piena, poi dissolvenza in 10 passi sottili (1,6mm):
+    // abbastanza fitti da leggersi come una sfumatura continua, a schermo e in stampa
+    g.setGState(new PdfGState({ opacity: 0.62 }));
+    doc.rect(0, 0, W, 20, "F");
+    for (let i = 0; i < 10; i++) {
+      g.setGState(new PdfGState({ opacity: 0.56 - i * 0.056 }));
+      doc.rect(0, 20 + i * 1.6, W, 1.62, "F");
+    }
+    g.restoreGraphicsState();
+  } else {
+    // fallback senza trasparenze: sottile fascia piena, comunque bassa (non comprime la foto)
+    setFill(doc, BLUE);
+    doc.rect(0, 0, W, 24, "F");
+  }
+
+  // logo centrato nella zona alta, sopra la velatura (larghezza fissa, ratio ~5.8:1)
   if (a.logo) {
-    const lw = 108; // larghezza logo in mm
+    const lw = 104;
     const lh = lw / (a.logoRatio || 5.78);
-    doc.addImage(a.logo, "PNG", W / 2 - lw / 2, Math.max(2, (32 - lh) / 2), lw, lh);
+    doc.addImage(a.logo, "PNG", W / 2 - lw / 2, Math.max(2.5, (24 - lh) / 2 + 1), lw, lh);
   }
 
   // badge tipo struttura
@@ -1396,9 +1413,14 @@ const BULLETS_CASA = [
   "CONTROLLO GENERALE FUNZIONAMENTO DELLA CASA (LUCI, ACQUA CALDA RISCALDAMENTO, ARIA CONDIZIONATA)",
 ];
 
+// GState del modulo jspdf (import dinamico): serve alla copertina per la velatura
+// semitrasparente sotto il logo. Valorizzata da makeDoc prima di ogni render.
+let PdfGState: (new (o: { opacity: number }) => unknown) | null = null;
+
 async function makeDoc(a: Assets): Promise<Doc> {
   const jspdfModule: any = await import("jspdf");
   const jsPDF = jspdfModule.jsPDF || jspdfModule.default;
+  PdfGState = jspdfModule.GState || null;
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4", compress: true });
   for (const [name, b64] of Object.entries(a.fonts)) doc.addFileToVFS(`${name}.ttf`, b64);
   doc.addFont("LeagueSpartan-Bold.ttf", "LeagueSpartan", "bold");
