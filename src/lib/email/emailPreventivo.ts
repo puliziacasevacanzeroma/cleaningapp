@@ -31,6 +31,7 @@ export interface DatiEmailPreventivo {
     min: number;
     max: number;
     biancheria: number;
+    biancheriaDaPersona?: number;
     kit: number;
     scontoPercento?: number;
     unitaDettaglio?: { nome: string; min: number; max: number }[] | null;
@@ -147,7 +148,7 @@ export function buildEmailPreventivo(d: DatiEmailPreventivo): { subject: string;
     if (!haCamere && !haUnita) {
       righe += riga('\u{1F3E0}', 'Pulizia completa', 'a ogni cambio ospite', 'da \u20ac ' + q.min);
     }
-    if (q.biancheria > 0) righe += riga('\u{1F9FA}', 'Biancheria a noleggio', 'a cambio \u00b7 consegna e ritiro inclusi', '+ ' + eur(q.biancheria));
+    if (q.biancheria > 0) righe += riga('\u{1F9FA}', 'Biancheria a noleggio', 'consegna e ritiro inclusi \u00b7 in base alla dotazione', 'da \u20ac' + (q.biancheriaDaPersona ?? 8) + ' a persona');
     if (q.kit > 0) righe += riga('\u{1F9F4}', 'Kit di cortesia', 'un set per ogni ospite', '+ ' + eur(q.kit));
     if (q.rifacimentoPerCamera) righe += riga('\u{1F4C5}', 'Rifacimento letti giornaliero', `+ \u20ac ${q.rifacimentoUscita ?? 0} di uscita, durante il soggiorno`, '\u20ac ' + q.rifacimentoPerCamera + ' /camera');
     else if (q.rifacimentoGiornaliero) righe += riga('\u{1F4C5}', 'Rifacimento letti giornaliero', 'a uscita, durante il soggiorno', eur(q.rifacimentoGiornaliero));

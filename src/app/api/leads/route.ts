@@ -186,6 +186,8 @@ export async function POST(request: NextRequest) {
     quote: {
       suMisura: quote.suMisura, min: quote.min, max: quote.max,
       puntuale: quote.puntuale, biancheria: quote.biancheria, kit: quote.kit,
+      biancheriaDaPersona: P.biancheriaDaPersona ?? 8, // "da X€ a persona" per wizard/mail
+
       taglioEffettivo: (quote as QuoteResult).taglioEffettivo ?? null,
       scontoPercento: (quote as QuoteMultiResult).scontoPercento ?? 0,
       unitaDettaglio: (quote as QuoteMultiResult).unitaDettaglio ?? null,

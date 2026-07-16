@@ -858,6 +858,7 @@ const SEZIONI: { key: string; titolo: string; nota?: string; icona?: string; cam
       { path: ["biancheria", "setOspite"], label: "Set bagno per ospite", unit: "€", step: 0.1, help: "Asciugamani per ogni ospite (viso + corpo). Es: 4€ a persona." },
       { path: ["biancheria", "tappetino"], label: "Tappetino (per bagno)", unit: "€", step: 0.1, help: "Tappetino da bagno, conteggiato per ogni bagno. Es: 1€." },
       { path: ["biancheria", "canavaccio"], label: "Canovaccio", unit: "€", step: 0.1, help: "Canovaccio da cucina. Es: 1€." },
+      { path: ["biancheriaDaPersona"], label: "\"Da X€ a persona\" (comunicazione)", unit: "€", step: 0.5, help: "Il valore mostrato al cliente nel preventivatore e nella mail come \"da X€ a persona\". NON cambia il calcolo del listino qui sopra: serve solo a comunicare un ordine di grandezza. Es: 8€." },
     ],
   },
   {

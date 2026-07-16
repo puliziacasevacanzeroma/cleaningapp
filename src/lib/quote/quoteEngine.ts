@@ -99,6 +99,8 @@ export interface EngineParams {
   };
   giardino: { piccoloMaxMq: number; medioMaxMq: number; piccolo: number; medio: number; grande: number };
   biancheria: { matrimoniale: number; singolo: number; setOspite: number; tappetino: number; canavaccio: number };
+  /** v6: prezzo "da X€ a persona" mostrato nel wizard e nella mail (comunicazione, non usato nel calcolo del listino) */
+  biancheriaDaPersona: number;
   kitCortesia: number;
   bnb: { singola: number; doppia: number; personaExtra: number; rifacimentoLetto: number; uscita: number };
   areaComune: { sogliaMq: number; inLocoBase: number; inLocoMqExtra: number; dedicataBase: number; dedicataMqExtra: number };
@@ -124,6 +126,7 @@ export const ENGINE: EngineParams = {
   },
   giardino: { piccoloMaxMq: 20, medioMaxMq: 60, piccolo: 15, medio: 25, grande: 50 },
   biancheria: { matrimoniale: 5.60, singolo: 4.30, setOspite: 3.80, tappetino: 1.00, canavaccio: 1.50 },
+  biancheriaDaPersona: 8,
   /** doccia-shampoo 0,48 + sapone mani 0,28 + body lotion 0,50 (listino OKIKO) */
   kitCortesia: 1.26,
   bnb: { singola: 25, doppia: 28, personaExtra: 3, rifacimentoLetto: 10, uscita: 10 },

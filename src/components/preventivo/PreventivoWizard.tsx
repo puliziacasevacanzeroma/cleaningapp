@@ -103,6 +103,7 @@ const STATO_INIZIALE: Stato = {
 interface QuoteRisposta {
   suMisura: boolean; min: number; max: number;
   biancheria: number; kit: number;
+  biancheriaDaPersona?: number;
   scontoPercento?: number;
   unitaDettaglio?: { nome: string; min: number; max: number }[];
   rifacimentoPerCamera?: number;
@@ -1058,7 +1059,7 @@ export function PreventivoWizard() {
           {stato.tipo !== "bnb" && stato.tipo !== "case" && (
             <div className="pv-riga"><Icona nome="casa" mini /><div className="txt">Pulizia completa<small>a ogni cambio ospite</small></div><b>da € {q.min}</b></div>
           )}
-          {q.biancheria > 0 && <div className="pv-riga"><Icona nome="biancheriaSi" mini /><div className="txt">Biancheria a noleggio<small>consegna e ritiro inclusi</small></div><b>+ {eur(q.biancheria)}</b></div>}
+          {q.biancheria > 0 && <div className="pv-riga"><Icona nome="biancheriaSi" mini /><div className="txt">Biancheria a noleggio<small>consegna e ritiro inclusi · in base alla dotazione</small></div><b>da {q.biancheriaDaPersona ?? 8}€/persona</b></div>}
           {q.kit > 0 && <div className="pv-riga"><Icona nome="kitSi" mini /><div className="txt">Kit di cortesia<small>un set per ogni ospite</small></div><b>+ {eur(q.kit)}</b></div>}
           {q.rifacimentoPerCamera ? <div className="pv-riga"><Icona nome="giornaliera" mini /><div className="txt">Rifacimento letti giornaliero<small>+ € {q.rifacimentoUscita ?? 0} di uscita, durante il soggiorno</small></div><b>€ {q.rifacimentoPerCamera} <small style={{ fontWeight: 600, color: "var(--grigio)" }}>/camera</small></b></div> : null}
           {q.areaComuneImporto ? <div className="pv-riga"><Icona nome="areaDedicata" mini /><div className="txt">Aree comuni<small>{q.areaComuneTipo === "dedicata" ? "a uscita dedicata" : "quando siamo già in struttura"}</small></div><b>{eur(q.areaComuneImporto)}</b></div> : null}
