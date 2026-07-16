@@ -645,9 +645,162 @@ export async function POST() {
                     updatedAt: Timestamp.now(),
                   });
                   stats.totalUpdated++;
-                  
-                  // Aggiorna pulizia se checkout cambiato
-                  if (co && !isSameDay(co, event.dtend)) {
+
+                  // ⚠️ FUSIONE A SINISTRA (solo Booking, solo notifica) — vedi cron/sync-ical
+                  if (source === 'booking' && ci && event.dtstart.getTime() < ci.getTime()) {
+                    try {
+                      const oldCiStr = ci.toISOString().split('T')[0];
+                      const newCiStr = event.dtstart.toISOString().split('T')[0];
+                      const alertKeyL = `leftmerge_${existing.id}_${newCiStr}_${oldCiStr}`;
+                      const alertDocL = await adminDb.collection('turnoverAlerts').doc(alertKeyL).get();
+                      if (!alertDocL.exists) {
+                        await adminDb.collection('turnoverAlerts').doc(alertKeyL).set({
+                          propertyId: property.id, propertyName: property.name, bookingId: existing.id,
+                          type: 'LEFT_MERGE', oldCheckIn: oldCiStr, newCheckIn: newCiStr, createdAt: Timestamp.now(),
+                        });
+                        const fmtItL = (s: string) => { const [y, m, d] = s.split('-'); return `${d}/${m}/${y}`; };
+                        const adminsSnapL = await adminDb.collection('users').where('role', '==', 'ADMIN').get();
+                        for (const adminDoc of adminsSnapL.docs) {
+                          await adminDb.collection('notifications').add({
+                            title: '⚠️ Blocco Booking anticipato',
+                            message: `🏠 ${property.name}\n\nIl blocco Booking ora inizia il ${fmtItL(newCiStr)} (prima iniziava il ${fmtItL(oldCiStr)}).\n\nPossibile prenotazione contigua fusa PRIMA del blocco → probabile turnover il ${fmtItL(oldCiStr)}.\n\n⚠️ Verifica sull'app Booking e crea la pulizia a mano se serve (nessuna pulizia creata automaticamente: potrebbe anche essere lo stesso ospite che anticipa).`,
+                            type: 'WARNING', recipientRole: 'ADMIN', recipientId: adminDoc.id,
+                            senderId: 'system', senderName: 'Sync iCal - Turnover Recovery',
+                            status: 'UNREAD', createdAt: Timestamp.now(), updatedAt: Timestamp.now(),
+                          });
+                        }
+                        try {
+                          const { sendPushNotification } = await import('~/lib/notifications/sendPushNotification');
+                          await sendPushNotification(
+                            { title: '⚠️ Blocco Booking anticipato', body: `${property.name}: possibile turnover il ${fmtItL(oldCiStr)} — verifica su Booking.` },
+                            { role: 'ADMIN', priority: 'high' }
+                          );
+                        } catch {}
+                      }
+                    } catch (notifErrL) {
+                      console.error('[LEFT-MERGE] Errore notifica:', notifErrL);
+                    }
+                  }
+
+                  // 🔁 TURNOVER RECOVERY (solo Booking) — stessa logica di cron/sync-ical:
+                  // blocco esteso a destra con check-in invariato = probabile prenotazione
+                  // contigua fusa → NON spostare la pulizia al vecchio checkout, creare
+                  // nuova pulizia al nuovo checkout, notificare gli admin.
+                  const isBookingRightExtension = source === 'booking'
+                    && !!co && event.dtend.getTime() > co.getTime()
+                    && !!ci && isSameDay(ci, effStart);
+
+                  if (co && !isSameDay(co, event.dtend) && isBookingRightExtension) {
+                    const oldCoStr = co.toISOString().split('T')[0];
+                    const newCoStr = event.dtend.toISOString().split('T')[0];
+
+                    // 1. Blocca al vecchio checkout le pulizie collegate
+                    const toLock = cleanings.filter((c: any) =>
+                      c.bookingId === existing.id &&
+                      !CONFIG.PROTECTED_CLEANING_STATUSES.includes(c.status) &&
+                      (() => { const d = c.scheduledDate?.toDate?.(); return d && isSameDay(d, co); })()
+                    );
+                    for (const cL of toLock) {
+                      await adminDb.collection('cleanings').doc((cL as any).id).update({
+                        lockedFromSync: true,
+                        turnoverRecovered: true,
+                        originalScheduledDate: Timestamp.fromDate(co),
+                        updatedAt: Timestamp.now(),
+                      });
+                      (cL as any).lockedFromSync = true;
+                      console.log(`[TURNOVER-RECOVERY] Pulizia ${(cL as any).id} mantenuta al ${oldCoStr} (blocco esteso a ${newCoStr})`);
+                    }
+
+                    // 2. Nuova pulizia al nuovo checkout — anti-duplicato SOLO per data
+                    const isExcludedR = exclusions.some((ex: Record<string, unknown>) => {
+                      const ed = (ex as any).originalDate?.toDate?.();
+                      return ed && isSameDay(ed, event.dtend);
+                    });
+                    const dupLocalR = cleanings.find((c: any) => {
+                      const d = c.scheduledDate?.toDate?.();
+                      return d && isSameDay(d, event.dtend);
+                    });
+                    if (!isExcludedR && !dupLocalR) {
+                      const dsR = new Date(event.dtend); dsR.setUTCHours(0, 0, 0, 0);
+                      const deR = new Date(event.dtend); deR.setUTCHours(23, 59, 59, 999);
+                      const qR = await adminDb.collection('cleanings')
+                        .where('propertyId', '==', property.id)
+                        .where('scheduledDate', '>=', Timestamp.fromDate(dsR))
+                        .where('scheduledDate', '<=', Timestamp.fromDate(deR))
+                        .limit(1).get();
+                      if (qR.empty) {
+                        const cpR = (property as any).cleaningPrice || (property as any).contractPrice || 0;
+                        const holR = getHolidayFee(event.dtend, cpR, holidays);
+                        const cleaningRefR = await adminDb.collection('cleanings').add({
+                          propertyId: property.id, propertyName: property.name,
+                          scheduledDate: Timestamp.fromDate(event.dtend),
+                          scheduledTime: property.checkOutTime || '10:00',
+                          status: 'SCHEDULED', guestsCount: property.maxGuests || 2,
+                          bookingSource: source, bookingId: existing.id, guestName,
+                          hasLinenOrder: !property.usesOwnLinen,
+                          price: cpR, contractPrice: cpR,
+                          serviceType: 'STANDARD', serviceTypeName: 'Pulizia Standard',
+                          type: 'CHECKOUT', turnoverRecovered: true,
+                          ...(holR.fee > 0 ? { holidayFee: holR.fee, holidayName: holR.name } : {}),
+                          createdAt: Timestamp.now(), updatedAt: Timestamp.now(),
+                        });
+                        stats.totalCleaningsCreated++;
+                        cleanings.push({ id: cleaningRefR.id, bookingId: existing.id, scheduledDate: Timestamp.fromDate(event.dtend), status: 'SCHEDULED' } as any);
+                        const orderResultR = await createLinenOrderForCleaning({
+                          cleaningId: cleaningRefR.id,
+                          property,
+                          scheduledDate: event.dtend,
+                          // @ts-expect-error TODO-FIX: TS2322 Type '{}' is not assignable to type 'number'.
+                          guestsCount: property.maxGuests || 2,
+                        });
+                        if (orderResultR.success && !orderResultR.skipped) {
+                          stats.linenOrdersCreated++;
+                        }
+                        console.log(`[TURNOVER-RECOVERY] Nuova pulizia ${cleaningRefR.id} creata al ${newCoStr} per ${property.name}`);
+                      }
+                    }
+
+                    // 3. Storicizza il confine osservato sul booking
+                    const prevCheckpoints: any[] = Array.isArray((existing as any).mergedCheckpoints) ? (existing as any).mergedCheckpoints : [];
+                    // @ts-expect-error TODO-FIX: TS2345 Argument of type 'unknown' is not assignable to parameter of type 'string'.
+                    await adminDb.collection('bookings').doc(existing.id).update({
+                      mergedCheckpoints: [...prevCheckpoints, { boundary: oldCoStr, extendedTo: newCoStr, detectedAt: Timestamp.now() }],
+                      updatedAt: Timestamp.now(),
+                    });
+
+                    // 4. Notifica admin (in-app + push), dedup su turnoverAlerts
+                    try {
+                      const alertKey = `turnover_${existing.id}_${oldCoStr}_${newCoStr}`;
+                      const alertDoc = await adminDb.collection('turnoverAlerts').doc(alertKey).get();
+                      if (!alertDoc.exists) {
+                        await adminDb.collection('turnoverAlerts').doc(alertKey).set({
+                          propertyId: property.id, propertyName: property.name, bookingId: existing.id,
+                          boundary: oldCoStr, extendedTo: newCoStr, createdAt: Timestamp.now(),
+                        });
+                        const fmtIt = (s: string) => { const [y, m, d] = s.split('-'); return `${d}/${m}/${y}`; };
+                        const notifMsg = `🏠 ${property.name}\n\nIl blocco Booking si è esteso: probabile NUOVA prenotazione contigua.\n\n✅ Pulizia turnover mantenuta il ${fmtIt(oldCoStr)}\n➕ Nuova pulizia creata il ${fmtIt(newCoStr)}\n\n⚠️ Verifica sull'app Booking: se invece l'ospite ha PROLUNGATO il soggiorno, cancella la pulizia del ${fmtIt(oldCoStr)}.`;
+                        const adminsSnapR = await adminDb.collection('users').where('role', '==', 'ADMIN').get();
+                        for (const adminDoc of adminsSnapR.docs) {
+                          await adminDb.collection('notifications').add({
+                            title: '🔁 Turnover recuperato da blocco Booking',
+                            message: notifMsg, type: 'WARNING',
+                            recipientRole: 'ADMIN', recipientId: adminDoc.id,
+                            senderId: 'system', senderName: 'Sync iCal - Turnover Recovery',
+                            status: 'UNREAD', createdAt: Timestamp.now(), updatedAt: Timestamp.now(),
+                          });
+                        }
+                        try {
+                          const { sendPushNotification } = await import('~/lib/notifications/sendPushNotification');
+                          await sendPushNotification(
+                            { title: '🔁 Turnover recuperato', body: `${property.name}: pulizia mantenuta il ${fmtIt(oldCoStr)}, nuova il ${fmtIt(newCoStr)}. Verifica su Booking.` },
+                            { role: 'ADMIN', priority: 'high' }
+                          );
+                        } catch {}
+                      }
+                    } catch (notifErr) {
+                      console.error('[TURNOVER-RECOVERY] Errore notifica:', notifErr);
+                    }
+                  } else if (co && !isSameDay(co, event.dtend)) {
                     // 🔧 FIX: Cerca pulizia per bookingId (più preciso) poi per data
                     const oldByBookingId = cleanings.find(c => 
                       // @ts-expect-error TODO-FIX: TS2339 Property 'bookingId' does not exist on type '{ id: string; }'.
@@ -788,6 +941,45 @@ export async function POST() {
                 });
                 stats.totalNew++;
                 processed.add(newRef.id);
+
+                // ⚠️ BLOCCO LUNGO GIÀ FUSO (solo Booking, solo notifica) — vedi cron/sync-ical
+                if (source === 'booking') {
+                  const nightsNew = Math.round((event.dtend.getTime() - event.dtstart.getTime()) / 86400000);
+                  if (nightsNew >= 7) {
+                    try {
+                      const ciStrN = event.dtstart.toISOString().split('T')[0];
+                      const coStrN = event.dtend.toISOString().split('T')[0];
+                      const alertKeyN = `longblock_${property.id}_${ciStrN}_${coStrN}`;
+                      const alertDocN = await adminDb.collection('turnoverAlerts').doc(alertKeyN).get();
+                      if (!alertDocN.exists) {
+                        await adminDb.collection('turnoverAlerts').doc(alertKeyN).set({
+                          propertyId: property.id, propertyName: property.name, bookingId: newRef.id,
+                          type: 'LONG_BLOCK', checkIn: ciStrN, checkOut: coStrN, nights: nightsNew, createdAt: Timestamp.now(),
+                        });
+                        const fmtItN = (s: string) => { const [y, m, d] = s.split('-'); return `${d}/${m}/${y}`; };
+                        const adminsSnapN = await adminDb.collection('users').where('role', '==', 'ADMIN').get();
+                        for (const adminDoc of adminsSnapN.docs) {
+                          await adminDb.collection('notifications').add({
+                            title: '⚠️ Blocco Booking lungo importato',
+                            message: `🏠 ${property.name}\n\nImportato blocco Booking di ${nightsNew} notti: ${fmtItN(ciStrN)} → ${fmtItN(coStrN)}.\n\nPuò contenere PIÙ prenotazioni fuse (il feed Booking accorpa le contigue). La pulizia è stata creata solo a fine blocco.\n\n⚠️ Confronta con l'app Booking e aggiungi a mano le pulizie dei turnover interni se esistono.`,
+                            type: 'WARNING', recipientRole: 'ADMIN', recipientId: adminDoc.id,
+                            senderId: 'system', senderName: 'Sync iCal - Turnover Recovery',
+                            status: 'UNREAD', createdAt: Timestamp.now(), updatedAt: Timestamp.now(),
+                          });
+                        }
+                        try {
+                          const { sendPushNotification } = await import('~/lib/notifications/sendPushNotification');
+                          await sendPushNotification(
+                            { title: '⚠️ Blocco Booking lungo', body: `${property.name}: ${nightsNew} notti (${fmtItN(ciStrN)}→${fmtItN(coStrN)}) — possibili turnover nascosti.` },
+                            { role: 'ADMIN', priority: 'normal' }
+                          );
+                        } catch {}
+                      }
+                    } catch (notifErrN) {
+                      console.error('[LONG-BLOCK] Errore notifica:', notifErrN);
+                    }
+                  }
+                }
                 
                 // 🔒 ANTI-DUPLICATO: aggiungi all'array locale per evitare duplicati cross-source nella stessa esecuzione
                 bookings.push({
