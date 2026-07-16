@@ -154,7 +154,14 @@ export function WelcomeSplash({ userName, userId, destination, onComplete }: Wel
                 where("scheduledDate", ">=", Timestamp.fromDate(todayStart)),
                 where("scheduledDate", "<=", Timestamp.fromDate(nextWeek))
               )),
-              getDocs(collection(db, "bookings")),
+              // 🚀 PERF: filtro server-side su checkOut. Prima scaricava l'INTERA
+              // collezione bookings solo per contare le prenotazioni attive
+              // (checkOut >= oggi). Il filtro in memoria più sotto già scartava
+              // quelle passate → comportamento identico, letture Firestore ridotte
+              // da migliaia a decine. Indice singolo automatico su checkOut.
+              getDocs(query(collection(db, "bookings"),
+                where("checkOut", ">=", Timestamp.fromDate(todayStart))
+              )),
             ]),
             QUERY_TIMEOUT_MS, "proprietario-dashboard"
           );
