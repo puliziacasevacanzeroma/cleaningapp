@@ -161,11 +161,154 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
 
   const handleNotifClick = (n: FirebaseNotification) => {
     if (n.status === "UNREAD") markAsRead(n.id);
-    setIsOpen(false);
     const notifData = n as any;
+    // 🔁 Notifiche turnover Booking: aprono il modal decisione invece di navigare
+    if (notifData.actionType === "TURNOVER_DECISION" && notifData.turnoverAction?.cleaningId) {
+      setIsOpen(false);
+      setDecisionNotif(notifData);
+      setDecisionError(null);
+      setDecisionDone(notifData.actionResolved || null);
+      return;
+    }
+    setIsOpen(false);
     const link = resolveNotificationLink({ link: n.link, type: n.type, relatedEntityId: n.relatedEntityId, relatedEntityType: n.relatedEntityType, relatedType: notifData.relatedType, relatedId: notifData.relatedId, recipientRole: n.recipientRole });
     console.log('🔔 [notifClick] tipo:', n.type, '| link salvato:', n.link, '| link risolto:', link, '| relatedEntityId:', n.relatedEntityId);
     if (link) router.push(link);
+  };
+
+  // ═══════════════════════════════════════════════════════════════
+  // MODAL DECISIONE TURNOVER (blocchi Booking fusi)
+  // ═══════════════════════════════════════════════════════════════
+  const [decisionNotif, setDecisionNotif] = useState<any | null>(null);
+  const [decisionBusy, setDecisionBusy] = useState<"KEEP" | "CANCEL" | null>(null);
+  const [decisionDone, setDecisionDone] = useState<string | null>(null);
+  const [decisionError, setDecisionError] = useState<string | null>(null);
+  const [confirmCancel, setConfirmCancel] = useState(false);
+
+  const submitDecision = async (decision: "KEEP" | "CANCEL") => {
+    if (!decisionNotif || decisionBusy) return;
+    setDecisionBusy(decision);
+    setDecisionError(null);
+    try {
+      const res = await fetch("/api/turnover-decision", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notificationId: decisionNotif.id, decision }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        if (res.status === 409 && data.alreadyResolved) setDecisionDone(data.alreadyResolved);
+        else setDecisionError(data.error || "Errore imprevisto, riprova.");
+      } else {
+        setDecisionDone(decision);
+      }
+    } catch {
+      setDecisionError("Errore di rete, riprova.");
+    } finally {
+      setDecisionBusy(null);
+      setConfirmCancel(false);
+    }
+  };
+
+  const closeDecisionModal = () => {
+    setDecisionNotif(null);
+    setDecisionBusy(null);
+    setDecisionDone(null);
+    setDecisionError(null);
+    setConfirmCancel(false);
+  };
+
+  const fmtItShort = (s?: string) => {
+    if (!s) return "-";
+    const p = String(s).split("-");
+    return p.length === 3 ? `${p[2]}/${p[1]}/${p[0]}` : s;
+  };
+
+  const DecisionModal = () => {
+    if (!decisionNotif || !portalReady) return null;
+    const ta = decisionNotif.turnoverAction || {};
+    const resolved = decisionDone || decisionNotif.actionResolved;
+    return createPortal(
+      <div className="fixed inset-0 z-[10001] flex items-end sm:items-center justify-center bg-black/50 p-0 sm:p-4" onClick={closeDecisionModal}>
+        <div className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()} style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
+          {/* Header */}
+          <div className="bg-gradient-to-r from-sky-500 via-blue-500 to-indigo-600 px-5 py-4 flex items-start justify-between">
+            <div>
+              <h3 className="font-bold text-white text-[15px]">🔁 Cambio ospiti o prolungamento?</h3>
+              <p className="text-white/80 text-[12px] mt-0.5">{ta.propertyName || decisionNotif.title}</p>
+            </div>
+            <button onClick={closeDecisionModal} className="w-8 h-8 rounded-lg bg-white/15 flex items-center justify-center active:scale-95 transition-transform flex-shrink-0">
+              <Ic d={ic.close} className="w-4 h-4 text-white" />
+            </button>
+          </div>
+
+          <div className="p-5">
+            {/* Spiegazione */}
+            <p className="text-[13px] text-slate-600 leading-relaxed">
+              Booking unisce le prenotazioni attaccate in un unico blocco, quindi non possiamo sapere se il{" "}
+              <span className="font-bold text-slate-800">{fmtItShort(ta.cleaningDate)}</span> c'è un vero cambio ospiti
+              o se lo stesso ospite ha prolungato il soggiorno.
+            </p>
+            <div className="mt-3 bg-slate-50 rounded-xl p-3 text-[12px] text-slate-600 space-y-1">
+              <p>🧹 Pulizia in dubbio: <span className="font-semibold text-slate-800">{fmtItShort(ta.cleaningDate)}</span></p>
+              {ta.newCleaningDate && <p>📅 Fine blocco (pulizia già programmata): <span className="font-semibold text-slate-800">{fmtItShort(ta.newCleaningDate)}</span></p>}
+              <p className="text-slate-400">Verifica le prenotazioni sull'app o sull'account Booking, poi scegli.</p>
+            </div>
+
+            {decisionError && (
+              <div className="mt-3 bg-red-50 border border-red-100 rounded-xl p-3 text-[12px] text-red-600 font-medium">{decisionError}</div>
+            )}
+
+            {resolved ? (
+              <div className={`mt-4 rounded-xl p-4 text-center ${resolved === "CANCEL" ? "bg-amber-50 border border-amber-100" : "bg-emerald-50 border border-emerald-100"}`}>
+                <p className="text-[13px] font-bold text-slate-800">
+                  {resolved === "CANCEL" ? "🗑️ Pulizia cancellata" : "✅ Pulizia confermata"}
+                </p>
+                <p className="text-[12px] text-slate-500 mt-1">
+                  {resolved === "CANCEL"
+                    ? `La pulizia del ${fmtItShort(ta.cleaningDate)} è stata rimossa e l'ordine biancheria annullato.`
+                    : `La pulizia del ${fmtItShort(ta.cleaningDate)} resta in programma.`}
+                </p>
+                <button onClick={closeDecisionModal} className="mt-3 px-5 py-2 rounded-xl bg-slate-800 text-white text-[13px] font-semibold active:scale-95 transition-transform">Chiudi</button>
+              </div>
+            ) : (
+              <div className="mt-4 space-y-2.5">
+                <button
+                  onClick={() => submitDecision("KEEP")}
+                  disabled={decisionBusy !== null}
+                  className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white text-[13px] font-bold shadow-sm active:scale-[0.98] transition-transform disabled:opacity-60 flex items-center justify-center gap-2"
+                >
+                  {decisionBusy === "KEEP" ? <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> : "✅"}
+                  Lascia pulizia — è un cambio ospiti
+                </button>
+                {!confirmCancel ? (
+                  <button
+                    onClick={() => setConfirmCancel(true)}
+                    disabled={decisionBusy !== null}
+                    className="w-full py-3 rounded-xl bg-white border-2 border-red-200 text-red-600 text-[13px] font-bold active:scale-[0.98] transition-transform disabled:opacity-60"
+                  >
+                    🗑️ Cancella pulizia — l'ospite ha prolungato
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => submitDecision("CANCEL")}
+                    disabled={decisionBusy !== null}
+                    className="w-full py-3 rounded-xl bg-gradient-to-r from-red-500 to-rose-500 text-white text-[13px] font-bold shadow-sm active:scale-[0.98] transition-transform disabled:opacity-60 flex items-center justify-center gap-2"
+                  >
+                    {decisionBusy === "CANCEL" ? <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> : "⚠️"}
+                    Confermi? La pulizia del {fmtItShort(ta.cleaningDate)} verrà eliminata
+                  </button>
+                )}
+                <button onClick={closeDecisionModal} disabled={decisionBusy !== null} className="w-full py-2 text-[12px] text-slate-400 hover:text-slate-600 font-medium">
+                  Decido più tardi
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>,
+      document.body
+    );
   };
 
   // ═══════════════════════════════════════════════════════════════
@@ -203,6 +346,11 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
                 <span className="text-[10px] text-slate-400 whitespace-nowrap mt-0.5">{timeAgo(ca)}</span>
               </div>
               <p className="text-[12px] text-slate-500 mt-0.5 line-clamp-2">{n.message}</p>
+              {(n as any).actionType === "TURNOVER_DECISION" && (
+                (n as any).actionResolved
+                  ? <span className={`inline-flex items-center gap-1 mt-1 text-[9px] font-bold px-1.5 py-[2px] rounded-full ${(n as any).actionResolved === "CANCEL" ? "bg-slate-100 text-slate-500" : "bg-emerald-100 text-emerald-700"}`}>{(n as any).actionResolved === "CANCEL" ? "Gestita: pulizia cancellata" : "Gestita: pulizia confermata"}</span>
+                  : <span className="inline-flex items-center gap-1 mt-1 text-[9px] font-bold px-1.5 py-[2px] rounded-full bg-amber-100 text-amber-700 animate-pulse">⚡ Da gestire — tocca per decidere</span>
+              )}
             </div>
             <div className="flex flex-col gap-1 flex-shrink-0">
               {ur && <button onClick={e => { e.stopPropagation(); markAsRead(n.id); }} className="p-1.5 rounded-lg text-slate-400 hover:text-sky-500 hover:bg-sky-50 transition-colors"><Ic d={ic.check} className="w-4 h-4" /></button>}
@@ -330,6 +478,11 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2"><p className={`text-[12px] text-slate-800 leading-tight ${ur ? "font-bold" : "font-medium"}`}>{n.title}</p><span className="text-[9px] text-slate-400 whitespace-nowrap mt-0.5">{timeAgo(ca)}</span></div>
                     <p className="text-[11px] text-slate-500 mt-0.5 line-clamp-1">{n.message}</p>
+                    {(n as any).actionType === "TURNOVER_DECISION" && (
+                (n as any).actionResolved
+                  ? <span className={`inline-flex items-center gap-1 mt-1 text-[9px] font-bold px-1.5 py-[2px] rounded-full ${(n as any).actionResolved === "CANCEL" ? "bg-slate-100 text-slate-500" : "bg-emerald-100 text-emerald-700"}`}>{(n as any).actionResolved === "CANCEL" ? "Gestita: pulizia cancellata" : "Gestita: pulizia confermata"}</span>
+                  : <span className="inline-flex items-center gap-1 mt-1 text-[9px] font-bold px-1.5 py-[2px] rounded-full bg-amber-100 text-amber-700 animate-pulse">⚡ Da gestire — tocca per decidere</span>
+              )}
                   </div>
                   <div className="flex flex-col gap-0.5 flex-shrink-0">
                     {ur && <button onClick={e => { e.stopPropagation(); markAsRead(n.id); }} className="p-1 rounded-md text-slate-400 hover:text-sky-500 hover:bg-sky-50 transition-colors"><Ic d={ic.check} className="w-3.5 h-3.5" /></button>}
@@ -388,6 +541,7 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
 
       <DesktopDropdown />
       <MobilePanel />
+      <DecisionModal />
     </div>
   );
 }

@@ -946,6 +946,26 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
                             { role: 'ADMIN', priority: 'high' }
                           );
                         } catch {}
+                        // 📣 Notifica anche al PROPRIETARIO (con spiegazione del perché)
+                        try {
+                          const ownerIdN = typeof prop.ownerId === 'string' ? prop.ownerId.trim() : '';
+                          if (ownerIdN && ownerIdN !== 'pending') {
+                            await adminDb.collection('notifications').add({
+                              title: '⚠️ Possibile cambio ospiti da verificare su Booking',
+                              message: `🏠 ${prop.name}\n\nBooking, nel calendario che ci invia, UNISCE le prenotazioni attaccate: non ci dice dove finisce una e inizia l'altra.\n\nIl blocco della tua proprietà ora inizia prima (${fmtItL(newCiStr)} invece di ${fmtItL(oldCiStr)}): probabilmente è arrivata una nuova prenotazione che FINISCE il ${fmtItL(oldCiStr)}. Se è così, il ${fmtItL(oldCiStr)} serve una pulizia di cambio ospiti che dal calendario non possiamo vedere.\n\n👉 Apri il tuo account Booking e verifica:\n• Se il ${fmtItL(oldCiStr)} una prenotazione finisce e un'altra inizia → avvisaci subito così programmiamo la pulizia.\n• Se è un solo ospite che ha anticipato l'arrivo → non serve fare nulla.`,
+                              type: 'WARNING', recipientRole: 'PROPRIETARIO', recipientId: ownerIdN,
+                              senderId: 'system', senderName: 'Sync iCal - Turnover Recovery',
+                              status: 'UNREAD', createdAt: Timestamp.now(), updatedAt: Timestamp.now(),
+                            });
+                            try {
+                              const { sendPushNotification } = await import('~/lib/notifications/sendPushNotification');
+                              await sendPushNotification(
+                                { title: '⚠️ Verifica su Booking', body: `${prop.name}: Booking unisce le prenotazioni attaccate — possibile cambio ospiti il ${fmtItL(oldCiStr)} da confermare. Controlla il tuo account Booking e avvisaci.` },
+                                { userId: ownerIdN, priority: 'high' }
+                              );
+                            } catch {}
+                          }
+                        } catch {}
                       }
                     } catch (notifErrL) {
                       console.error('[LEFT-MERGE] Errore notifica:', notifErrL);
@@ -975,6 +995,7 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
                     const newCoStr = e.dtend.toISOString().split('T')[0];
 
                     // 1. Blocca al vecchio checkout le pulizie collegate (mai più spostate dal sync)
+                    let keptCleaningId: string | null = null;
                     const recCleaningsSnap = await adminDb.collection('cleanings').where('bookingId', '==', existing.id).get();
                     for (const cDoc of recCleaningsSnap.docs) {
                       const cData = cDoc.data() as Record<string, any>;
@@ -987,7 +1008,68 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
                         originalScheduledDate: Timestamp.fromDate(co),
                         updatedAt: Timestamp.now(),
                       });
+                      if (!keptCleaningId) keptCleaningId = cDoc.id;
                       console.log(`[TURNOVER-RECOVERY] Pulizia ${cDoc.id} mantenuta al ${oldCoStr} (blocco esteso a ${newCoStr})`);
+                    }
+
+                    // 1b. Se al vecchio checkout non esiste NESSUNA pulizia (era stata
+                    // spostata o cancellata), il turnover resterebbe scoperto: cerca per
+                    // data e, se manca davvero, CREALA (lockedFromSync: non va rispostata).
+                    if (!keptCleaningId) {
+                      const atOldCo = cleanings.find((c: any) => {
+                        const d = c.scheduledDate?.toDate?.();
+                        return d && isSameDay(d, co) && c.status !== 'CANCELLED';
+                      });
+                      if (atOldCo) {
+                        keptCleaningId = (atOldCo as any).id;
+                      } else if (!excludedDates.has(oldCoStr)) {
+                        const dsO = new Date(co); dsO.setUTCHours(0, 0, 0, 0);
+                        const deO = new Date(co); deO.setUTCHours(23, 59, 59, 999);
+                        const qO = await adminDb.collection('cleanings')
+                          .where('propertyId', '==', prop.id)
+                          .where('scheduledDate', '>=', Timestamp.fromDate(dsO))
+                          .where('scheduledDate', '<=', Timestamp.fromDate(deO))
+                          .limit(1).get();
+                        if (!qO.empty) {
+                          keptCleaningId = qO.docs[0].id;
+                        } else {
+                          const guestsCountO = existing.guests || prop.maxGuests || 2;
+                          const cpO = prop.cleaningPrice || 0;
+                          const holO = getHolidayFee(co, cpO, holidays);
+                          const cleaningRefO = await adminDb.collection('cleanings').add({
+                            propertyId: prop.id, propertyName: prop.name, propertyAddress: prop.address || '',
+                            scheduledDate: Timestamp.fromDate(co), scheduledTime: prop.checkOutTime || '10:00',
+                            status: 'SCHEDULED', bookingSource: source, bookingId: existing.id,
+                            guestsCount: guestsCountO, guestName: existing.guestName || getGuestName(e, source),
+                            price: cpO, contractPrice: cpO, serviceType: 'STANDARD', serviceTypeName: 'Pulizia Standard',
+                            type: 'CHECKOUT', turnoverRecovered: true, lockedFromSync: true,
+                            originalScheduledDate: Timestamp.fromDate(co),
+                            createdAt: Timestamp.now(), updatedAt: Timestamp.now(),
+                            hasLinenOrder: !prop.usesOwnLinen,
+                            ...(holO.fee > 0 ? { holidayFee: holO.fee, holidayName: holO.name } : {}),
+                          });
+                          stats.cleanings++;
+                          cleanings.push({ id: cleaningRefO.id, scheduledDate: Timestamp.fromDate(co), status: 'SCHEDULED', bookingId: existing.id } as any);
+                          keptCleaningId = cleaningRefO.id;
+                          auditLog.cleaningCreated({ cleaningId: cleaningRefO.id, propertyId: prop.id, propertyName: prop.name, source: 'cron/sync-ical:TURNOVER-RECOVERY-OLDCO', scheduledDate: oldCoStr, bookingId: existing.id, guestsCount: guestsCountO, guestName: existing.guestName });
+                          if (!prop.usesOwnLinen) {
+                            const existingOrderO = ordersByDateStr.get(oldCoStr) || ordersByCleaningId.get(cleaningRefO.id);
+                            if (!existingOrderO) {
+                              const linenItemsO = calculateLinenItemsForProperty(prop, guestsCountO);
+                              if (linenItemsO.length > 0) {
+                                const orderIdO = await createLinenOrder(cleaningRefO.id, prop, co, linenItemsO);
+                                if (orderIdO) {
+                                  stats.linenOrders++;
+                                  ordersByCleaningId.set(cleaningRefO.id, { id: orderIdO });
+                                  ordersByDateStr.set(oldCoStr, { id: orderIdO });
+                                  await adminDb.collection('cleanings').doc(cleaningRefO.id).update({ laundryOrderId: orderIdO, requiresLaundry: true });
+                                }
+                              }
+                            }
+                          }
+                          console.log(`[TURNOVER-RECOVERY] Pulizia MANCANTE al vecchio checkout: creata ${cleaningRefO.id} al ${oldCoStr}`);
+                        }
+                      }
                     }
 
                     // 2. Nuova pulizia al nuovo checkout — anti-duplicato SOLO per data
@@ -1063,12 +1145,27 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
                           boundary: oldCoStr, extendedTo: newCoStr, createdAt: Timestamp.now(),
                         });
                         const fmtIt = (s: string) => { const [y, m, d] = s.split('-'); return `${d}/${m}/${y}`; };
+                        // Metadati azione: permettono al client di aprire il modal
+                        // "Lascia pulizia / Cancella pulizia" (API: /api/turnover-decision)
+                        const turnoverActionFields = keptCleaningId ? {
+                          actionRequired: true,
+                          actionType: 'TURNOVER_DECISION',
+                          actionKey: alertKey,
+                          turnoverAction: {
+                            cleaningId: keptCleaningId,
+                            cleaningDate: oldCoStr,
+                            newCleaningDate: newCoStr,
+                            propertyId: prop.id,
+                            propertyName: prop.name,
+                          },
+                        } : {};
                         const notifMsg = `🏠 ${prop.name}\n\n📌 COSA È SUCCESSO\nIl calendario iCal di Booking non invia le prenotazioni singole: quando due prenotazioni sono attaccate (checkout e check-in lo stesso giorno) le fonde in un unico blocco "CLOSED". Il blocco di questa proprietà si è appena allungato da ${fmtIt(oldCoStr)} a ${fmtIt(newCoStr)}: quasi sicuramente è arrivata una NUOVA prenotazione che inizia il ${fmtIt(oldCoStr)}.\n\n🤖 COSA HA FATTO IL GESTIONALE\n✅ Ha mantenuto la pulizia del ${fmtIt(oldCoStr)} (probabile cambio ospiti)\n➕ Ha creato una nuova pulizia + ordine biancheria il ${fmtIt(newCoStr)}\n\n👉 COSA DEVI FARE\nApri l'app Booking e guarda le prenotazioni di questa proprietà:\n• Se il ${fmtIt(oldCoStr)} c'è davvero un cambio ospiti → tutto ok, non fare nulla.\n• Se invece è lo STESSO ospite che ha prolungato → cancella la pulizia del ${fmtIt(oldCoStr)}, altrimenti l'operatore si presenta con l'ospite ancora in casa.`;
                         const adminsSnapR = await adminDb.collection('users').where('role', '==', 'ADMIN').get();
                         for (const adminDoc of adminsSnapR.docs) {
                           await adminDb.collection('notifications').add({
                             title: '🔁 Turnover recuperato da blocco Booking',
                             message: notifMsg, type: 'WARNING',
+                            ...turnoverActionFields,
                             recipientRole: 'ADMIN', recipientId: adminDoc.id,
                             senderId: 'system', senderName: 'Sync iCal - Turnover Recovery',
                             status: 'UNREAD', createdAt: Timestamp.now(), updatedAt: Timestamp.now(),
@@ -1080,6 +1177,27 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
                             { title: '🔁 Pulizia turnover recuperata', body: `${prop.name}: blocco Booking fuso (prenotazioni accorpate). Pulizia mantenuta il ${fmtIt(oldCoStr)}, nuova creata il ${fmtIt(newCoStr)}. Se era un prolungamento, cancella quella del ${fmtIt(oldCoStr)}.` },
                             { role: 'ADMIN', priority: 'high' }
                           );
+                        } catch {}
+                        // 📣 Notifica anche al PROPRIETARIO (con spiegazione del perché)
+                        try {
+                          const ownerIdN = typeof prop.ownerId === 'string' ? prop.ownerId.trim() : '';
+                          if (ownerIdN && ownerIdN !== 'pending') {
+                            await adminDb.collection('notifications').add({
+                              title: '🔁 Cambio ospiti rilevato — verifica su Booking',
+                              message: `🏠 ${prop.name}\n\nBooking, nel calendario che ci invia, UNISCE le prenotazioni attaccate in un unico blocco: quando due soggiorni sono uno dietro l'altro non ci dice dove finisce il primo e inizia il secondo.\n\nIl blocco della tua proprietà si è appena allungato: quasi sicuramente è arrivata una nuova prenotazione che inizia il ${fmtIt(oldCoStr)}. Per questo abbiamo programmato la pulizia del cambio ospiti il ${fmtIt(oldCoStr)}, oltre a quella di fine blocco il ${fmtIt(newCoStr)}.\n\n👉 Ti chiediamo 30 secondi: apri il tuo account Booking e verifica.\n• Se il ${fmtIt(oldCoStr)} c'è davvero un cambio ospiti → tutto ok, non serve fare nulla.\n• Se invece è lo STESSO ospite che ha prolungato il soggiorno → avvisaci subito, così togliamo la pulizia del ${fmtIt(oldCoStr)}.`,
+                              type: 'WARNING', recipientRole: 'PROPRIETARIO', recipientId: ownerIdN,
+                          ...turnoverActionFields,
+                              senderId: 'system', senderName: 'Sync iCal - Turnover Recovery',
+                              status: 'UNREAD', createdAt: Timestamp.now(), updatedAt: Timestamp.now(),
+                            });
+                            try {
+                              const { sendPushNotification } = await import('~/lib/notifications/sendPushNotification');
+                              await sendPushNotification(
+                                { title: '🔁 Verifica cambio ospiti', body: `${prop.name}: Booking unisce le prenotazioni attaccate — abbiamo programmato una pulizia il ${fmtIt(oldCoStr)}. Verifica sul tuo account Booking se è un cambio ospiti o un prolungamento.` },
+                                { userId: ownerIdN, priority: 'high' }
+                              );
+                            } catch {}
+                          }
                         } catch {}
                       }
                     } catch (notifErr) {
@@ -1200,6 +1318,26 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
                             { title: '⚠️ Possibili pulizie mancanti', body: `${prop.name}: blocco Booking di ${nightsNew} notti (${fmtItN(ciStrN)}→${fmtItN(coStrN)}) — può contenere più prenotazioni fuse. Verifica i cambi ospiti interni su Booking.` },
                             { role: 'ADMIN', priority: 'normal' }
                           );
+                        } catch {}
+                        // 📣 Notifica anche al PROPRIETARIO (con spiegazione del perché)
+                        try {
+                          const ownerIdN = typeof prop.ownerId === 'string' ? prop.ownerId.trim() : '';
+                          if (ownerIdN && ownerIdN !== 'pending') {
+                            await adminDb.collection('notifications').add({
+                              title: `⚠️ Blocco Booking di ${nightsNew} notti — verifica le prenotazioni`,
+                              message: `🏠 ${prop.name}\n\nBooking, nel calendario che ci invia, UNISCE le prenotazioni attaccate in un unico blocco. È appena arrivato un blocco di ${nightsNew} notti (${fmtItN(ciStrN)} → ${fmtItN(coStrN)}): potrebbe essere UNA prenotazione lunga oppure PIÙ prenotazioni una dietro l'altra — dal calendario non possiamo saperlo.\n\nAbbiamo programmato la pulizia solo a fine blocco (${fmtItN(coStrN)}).\n\n👉 Apri il tuo account Booking e guarda le prenotazioni tra il ${fmtItN(ciStrN)} e il ${fmtItN(coStrN)}: se ci sono più soggiorni, mandaci le date dei cambi ospiti così programmiamo le pulizie — altrimenti gli ospiti troverebbero la casa non preparata.`,
+                              type: 'WARNING', recipientRole: 'PROPRIETARIO', recipientId: ownerIdN,
+                              senderId: 'system', senderName: 'Sync iCal - Turnover Recovery',
+                              status: 'UNREAD', createdAt: Timestamp.now(), updatedAt: Timestamp.now(),
+                            });
+                            try {
+                              const { sendPushNotification } = await import('~/lib/notifications/sendPushNotification');
+                              await sendPushNotification(
+                                { title: '⚠️ Verifica prenotazioni su Booking', body: `${prop.name}: Booking unisce le prenotazioni attaccate — blocco di ${nightsNew} notti in arrivo, dicci se contiene più soggiorni.` },
+                                { userId: ownerIdN, priority: 'high' }
+                              );
+                            } catch {}
+                          }
                         } catch {}
                       }
                     } catch (notifErrN) {
