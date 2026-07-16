@@ -12,7 +12,7 @@
  * GET   (solo ADMIN): lista lead per la dashboard, filtro ?stato= opzionale.
  * PATCH (solo ADMIN): aggiorna stato/note di un lead.
  */
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { FieldValue } from 'firebase-admin/firestore';
 import { adminDb } from '~/lib/firebase/admin';
 import { randomBytes } from 'crypto';
@@ -280,29 +280,34 @@ export async function POST(request: NextRequest) {
 
   const ref = await adminDb.collection('leads').add(leadDoc);
 
-  // Email best-effort: un errore email non deve far fallire il lead.
+  // Email + PDF in BACKGROUND (next/server after): la risposta col prezzo parte SUBITO,
+  // il lavoro pesante (~2-2,5s di jsPDF + 2 chiamate Resend) continua dopo l'invio della
+  // risposta. Un errore qui non tocca il lead: era gia' best-effort, resta best-effort.
   if (isResendConfigured() && resend) {
-    try {
-      let attachments: { filename: string; content: Buffer }[] | undefined;
+    const r = resend; // narrow per il closure
+    after(async () => {
       try {
-        const pdf = await buildPreventivoPdf({
-          nome: leadDoc.contatti.nome,
-          tipo: body.tipo,
-          zona: leadDoc.zona,
-          copertura,
-          quote: leadDoc.quote as Parameters<typeof buildPreventivoPdf>[0]['quote'],
-          numeroPreventivo,
-          dataIt: new Date().toLocaleDateString('it-IT'),
-        });
-        attachments = [{ filename: 'Preventivo_N' + numeroPreventivo.replace('/', '-') + '_Puliziacasevacanze.pdf', content: pdf }];
+        let attachments: { filename: string; content: Buffer }[] | undefined;
+        try {
+          const pdf = await buildPreventivoPdf({
+            nome: leadDoc.contatti.nome,
+            tipo: body.tipo,
+            zona: leadDoc.zona,
+            copertura,
+            quote: leadDoc.quote as Parameters<typeof buildPreventivoPdf>[0]['quote'],
+            numeroPreventivo,
+            dataIt: new Date().toLocaleDateString('it-IT'),
+          });
+          attachments = [{ filename: 'Preventivo_N' + numeroPreventivo.replace('/', '-') + '_Puliziacasevacanze.pdf', content: pdf }];
+        } catch (err) {
+          console.error('[leads] PDF non generato, email inviata senza allegato:', err);
+        }
+        await r.emails.send({ from: FROM_EMAIL, to: leadDoc.contatti.email, subject: mailCliente.subject, html: mailCliente.html, attachments });
+        await r.emails.send({ from: FROM_EMAIL, to: LEADS_NOTIFY_EMAIL, subject: mailAdmin.subject, html: mailAdmin.html });
       } catch (err) {
-        console.error('[leads] PDF non generato, email inviata senza allegato:', err);
+        console.error('[leads] Invio email fallito (lead salvato comunque):', err);
       }
-      await resend.emails.send({ from: FROM_EMAIL, to: leadDoc.contatti.email, subject: mailCliente.subject, html: mailCliente.html, attachments });
-      await resend.emails.send({ from: FROM_EMAIL, to: LEADS_NOTIFY_EMAIL, subject: mailAdmin.subject, html: mailAdmin.html });
-    } catch (err) {
-      console.error('[leads] Invio email fallito (lead salvato comunque):', err);
-    }
+    });
   } else {
     logResendWarning('leads');
   }

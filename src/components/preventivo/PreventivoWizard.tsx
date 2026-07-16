@@ -588,24 +588,31 @@ export function PreventivoWizard() {
       const data = await res.json();
       if (!res.ok || !data.ok) throw new Error(data.errore || "Errore invio");
 
+      // PREZZO SUBITO: la schermata risultato appare appena il server risponde.
+      setRisposta({ quote: data.quote, copertura: data.copertura ?? "in_valutazione", leadId: data.leadId });
+      setConfirmToken(typeof data.confirmToken === "string" ? data.confirmToken : null);
+      setIdx(flusso.length - 1);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+
+      // FOTO IN BACKGROUND: compressione e upload proseguono mentre l'utente legge il
+      // prezzo (con 4-5 foto da telefono erano anche 8-10 secondi di attesa a vuoto).
+      // Il lead è già salvo: se l'upload fallisce o l'utente chiude subito la pagina,
+      // perdiamo solo le foto, mai il preventivo.
       const tutteFoto: { file: File; unita: number | null }[] =
         stato.tipo === "case"
           ? Object.entries(fotoUnita).flatMap(([i, fs]) => fs.map((file) => ({ file, unita: Number(i) })))
           : foto.map((file) => ({ file, unita: null }));
       if (tutteFoto.length > 0 && data.leadId) {
-        try {
-          const fd = new FormData();
-          fd.append("leadId", data.leadId);
-          fd.append("unita", JSON.stringify(tutteFoto.map((t) => t.unita)));
-          for (const t of tutteFoto) fd.append("foto", await comprimi(t.file), t.file.name.replace(/\.(heic|heif)$/i, ".heic"));
-          await fetch("/api/leads/photos", { method: "POST", body: fd });
-        } catch { /* il lead è salvo */ }
+        void (async () => {
+          try {
+            const fd = new FormData();
+            fd.append("leadId", data.leadId);
+            fd.append("unita", JSON.stringify(tutteFoto.map((t) => t.unita)));
+            for (const t of tutteFoto) fd.append("foto", await comprimi(t.file), t.file.name.replace(/\.(heic|heif)$/i, ".heic"));
+            await fetch("/api/leads/photos", { method: "POST", body: fd });
+          } catch { /* il lead è salvo */ }
+        })();
       }
-
-      setRisposta({ quote: data.quote, copertura: data.copertura ?? "in_valutazione", leadId: data.leadId });
-      setConfirmToken(typeof data.confirmToken === "string" ? data.confirmToken : null);
-      setIdx(flusso.length - 1);
-      window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (e) {
       setErroreInvio(e instanceof Error ? e.message : "Errore imprevisto: riprova tra poco.");
     } finally { setInvio(false); }
