@@ -175,11 +175,15 @@ export function SplashOverlayHost() {
           <div className="logo-stack">
             <div className="halo" />
             <img className="logo" src={LOGO_SRC} alt="CleaningApp" />
-            <div className="shineMask" style={{ WebkitMaskImage: `url(${LOGO_SRC})`, maskImage: `url(${LOGO_SRC})` }}>
-              <div className="shine" />
-            </div>
           </div>
           <img className="wordmark" src={WORD_SRC} alt="Puliziacasevacanze.it" />
+          {/* Un'unica barra di luce che attraversa logo E scritta (maschera doppia) */}
+          <div className="shineMask" style={{
+            WebkitMaskImage: `url(${LOGO_SRC}), url(${WORD_SRC})`,
+            maskImage: `url(${LOGO_SRC}), url(${WORD_SRC})`,
+          }}>
+            <div className="shine" />
+          </div>
         </div>
 
         <div className={`hello ${ov.phase === 'load' && firstName ? 'show' : ''}`}>
@@ -226,21 +230,27 @@ export function SplashOverlayHost() {
         @keyframes screenSweep { 0% { opacity: 0; transform: translateX(0) skewX(-16deg); } 15% { opacity: 1; } 100% { opacity: 0; transform: translateX(360%) skewX(-16deg); } }
 
         .scene { position: relative; z-index: 5; display: flex; flex-direction: column; align-items: center; text-align: center; }
-        .lockinner { display: flex; flex-direction: column; align-items: center; gap: ${GAP}px; animation: floaty 5s ease-in-out infinite 2.2s; }
+        /* 🎬 Logo + scritta = UN'UNICA COSA: entrano insieme (stesso pop) e
+           fluttuano insieme. Nessuna animazione separata sui singoli pezzi. */
+        .lockinner { position: relative; display: flex; flex-direction: column; align-items: center; gap: ${GAP}px;
+          animation: logoin .8s cubic-bezier(.22,1,.36,1) both, floaty 5s ease-in-out infinite 2.2s; }
         .logo-stack { position: relative; display: inline-flex; align-items: center; justify-content: center; }
         .logo { width: ${LOGO_W}px; height: auto; display: block; position: relative; z-index: 3;
-          filter: drop-shadow(0 14px 30px rgba(0,15,40,.4)); animation: logoin .8s cubic-bezier(.22,1,.36,1) both; }
+          filter: drop-shadow(0 14px 30px rgba(0,15,40,.4)); }
         @keyframes logoin { 0% { opacity: 0; transform: scale(.55); } 60% { transform: scale(1.06); } 100% { opacity: 1; transform: scale(1); } }
         .halo { position: absolute; inset: -42px; border-radius: 50%; z-index: 1; opacity: .32;
           background: radial-gradient(circle, rgba(200,235,255,.6) 0%, rgba(200,235,255,0) 62%); }
-        .shineMask { position: absolute; z-index: 4; width: ${LOGO_W}px; aspect-ratio: 180/159; pointer-events: none; overflow: hidden;
-          -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; -webkit-mask-position: center; mask-position: center;
-          -webkit-mask-size: contain; mask-size: contain; }
+        /* Maschera DOPPIA (sagoma logo in alto + sagoma scritta in basso):
+           la stessa barra di luce attraversa entrambi come un pezzo solo. */
+        .shineMask { position: absolute; inset: 0; z-index: 4; pointer-events: none; overflow: hidden;
+          -webkit-mask-repeat: no-repeat, no-repeat; mask-repeat: no-repeat, no-repeat;
+          -webkit-mask-position: center top, center bottom; mask-position: center top, center bottom;
+          -webkit-mask-size: ${LOGO_W}px auto, ${WORD_W}px auto; mask-size: ${LOGO_W}px auto, ${WORD_W}px auto; }
         .shine { position: absolute; top: -25%; left: -70%; width: 45%; height: 150%; transform: skewX(-18deg);
           background: linear-gradient(100deg, transparent, rgba(255,255,255,.9), transparent);
           animation: shine 3.4s ease-in-out infinite 1.4s; }
         @keyframes shine { 0% { transform: translateX(0) skewX(-18deg); } 22%,100% { transform: translateX(430%) skewX(-18deg); } }
-        .wordmark { width: ${WORD_W}px; height: auto; display: block; filter: drop-shadow(0 4px 14px rgba(0,15,40,.35)); animation: fadeUp .7s ease-out .3s both; }
+        .wordmark { width: ${WORD_W}px; height: auto; display: block; filter: drop-shadow(0 4px 14px rgba(0,15,40,.35)); }
 
         .hello { max-height: 0; opacity: 0; overflow: hidden; transform: translateY(14px);
           transition: max-height .6s ease, opacity .6s ease, transform .6s ease; }
