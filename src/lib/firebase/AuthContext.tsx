@@ -10,6 +10,13 @@
  *        (/api/auth/session). Il cookie "auth-token" è HttpOnly:
  *        JavaScript non può leggerlo né modificarlo.
  *        Il ruolo e l'ID sono firmati con JWT HMAC-SHA256.
+ *
+ * v2 — SPLASH UNICO: login() e loginWithGoogle() accettano un'opzione
+ *      { noRedirect: true } e restituiscono { user, destination }.
+ *      Con noRedirect la pagina login gestisce lei il flusso (splash unico
+ *      auth+prefetch, poi router.push). SENZA opzione il comportamento è
+ *      IDENTICO a prima (redirect a /welcome) — retrocompatibile con
+ *      qualunque altro chiamante.
  */
 
 import { createContext, useContext, useEffect, useState} from "react";
@@ -18,12 +25,22 @@ import { doc, getDoc } from "firebase/firestore";
 import { db } from "./config";
 import type { ReactNode } from "react";
 
+interface LoginOptions {
+  /** true → nessun redirect automatico: il chiamante gestisce la navigazione */
+  noRedirect?: boolean;
+}
+
+interface LoginResult {
+  user: AuthUser;
+  destination: string;
+}
+
 interface AuthContextType {
   user: AuthUser | null;
   loading: boolean;
   loginPending: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  loginWithGoogle: () => Promise<void>;
+  login: (email: string, password: string, opts?: LoginOptions) => Promise<LoginResult>;
+  loginWithGoogle: (opts?: LoginOptions) => Promise<LoginResult>;
   logout: () => Promise<void>;
   isAdmin: boolean;
   isProprietario: boolean;
@@ -76,7 +93,7 @@ type VerifyResult =
 async function verifyUserInDatabase(userId: string): Promise<VerifyResult> {
   try {
     const userDoc = await getDoc(doc(db, "users", userId));
-    
+
     if (userDoc.exists()) {
       const userData = userDoc.data() as Record<string, any>;
       const userStatus = userData.status || "ACTIVE";
@@ -95,7 +112,7 @@ async function verifyUserInDatabase(userId: string): Promise<VerifyResult> {
         },
       };
     }
-    
+
     // 🔥 FIX: documento non trovato con userId — potrebbe essere ID vecchio formato
     // Prova a trovarlo leggendo l'email dal localStorage e cercando per email
     const storedUser = getUserFromStorage();
@@ -123,7 +140,7 @@ async function verifyUserInDatabase(userId: string): Promise<VerifyResult> {
         };
       }
     }
-    
+
     return { status: "not_found" };
   } catch (error) {
     console.error("Errore verifica utente (rete/Firestore):", error);
@@ -172,7 +189,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const verifySessionInBackground = async () => {
       const storedUser = getUserFromStorage();
-      
+
       // Carica subito lo user da localStorage (client-side only)
       // Questo evita il flash di contenuto non autenticato
       if (storedUser) {
@@ -234,7 +251,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // ============================================
-  // REDIRECT POST-LOGIN
+  // REDIRECT POST-LOGIN (comportamento storico, usato senza noRedirect)
   // ============================================
   const redirectAfterLogin = (authUser: AuthUser) => {
     const destination = getDestination(authUser);
@@ -256,7 +273,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // ============================================
   // LOGIN
   // ============================================
-  const login = async (email: string, password: string) => {
+  const login = async (email: string, password: string, opts?: LoginOptions): Promise<LoginResult> => {
     setLoading(true);
     try {
       const authUser = await signIn(email, password);
@@ -271,14 +288,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       clearLegacyCookie();
 
       setUser(authUser);
-      redirectAfterLogin(authUser);
+      setLoading(false);
+
+      const destination = getDestination(authUser);
+      if (!opts?.noRedirect) {
+        redirectAfterLogin(authUser);
+      }
+      return { user: authUser, destination };
     } catch (error) {
       setLoading(false);
       throw error;
     }
   };
 
-  const loginWithGoogle = async () => {
+  const loginWithGoogle = async (opts?: LoginOptions): Promise<LoginResult> => {
     setLoading(true);
     try {
       const authUser = await signInWithGoogle();
@@ -288,7 +311,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       clearLegacyCookie();
 
       setUser(authUser);
-      redirectAfterLogin(authUser);
+      setLoading(false);
+
+      const destination = getDestination(authUser);
+      if (!opts?.noRedirect) {
+        redirectAfterLogin(authUser);
+      }
+      return { user: authUser, destination };
     } catch (error) {
       setLoading(false);
       throw error;
