@@ -855,7 +855,7 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
     if (dayChanged) {
       setCleanings([]);
       setLoadingCleanings(true);
-      rawCleaningsRef.current = null; // il fallback anti-stallo deve poter scattare anche al cambio giorno
+      rawCleaningsRef.current = null; // il fallback deve poter scattare al cambio giorno
     }
     const startOfDay = new Date(selectedDate);
     startOfDay.setHours(0, 0, 0, 0);
@@ -970,21 +970,22 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
       setLoadingCleanings(false);
     });
 
-    // ⛑️ FALLBACK ANTI-STALLO: visto in produzione dopo navigazioni interne il
-    // primo snapshot del listener può tardare/incastrarsi (watch stream occupato
-    // dai listener di background). Se entro 2.5s non è arrivato nulla, facciamo
-    // una lettura one-shot e dipingiamo quella: il listener resta attivo e
-    // sovrascrive appena risponde. Stessa query, stessi dati → zero divergenze.
+    // ⛑️ FALLBACK ANTI-STALLO (2s): quando torni sulla dashboard dopo aver
+    // navigato via, il primo snapshot del listener a volte tarda (watch stream
+    // occupato dai listener di background) → resti su "Caricamento". Se in 2s
+    // non è arrivato nulla, facciamo una lettura one-shot della STESSA query e
+    // dipingiamo quella; il listener resta attivo e sovrascrive appena
+    // risponde. Zero divergenze possibili sui numeri.
     const cleaningsFallbackTimer = setTimeout(async () => {
       if (rawCleaningsRef.current !== null) return; // snapshot già arrivato
-      console.warn("⛑️ [dash] fallback pulizie: primo snapshot in ritardo, lettura one-shot");
+      console.warn("⛑️ [dash] fallback pulizie: primo snapshot >2s, lettura one-shot");
       try {
         const snap = await getDocs(cleaningsQuery);
         if (rawCleaningsRef.current !== null) return; // arrivato nel frattempo
         rawCleaningsRef.current = snap.docs.map(d => ({ id: d.id, data: d.data() as Record<string, any> }));
         rebuildFromRaw();
-      } catch { /* il listener resta l'unica fonte, nessun cambio di comportamento */ }
-    }, 2500);
+      } catch { /* il listener resta l'unica fonte */ }
+    }, 2000);
 
     return () => {
       clearTimeout(cleaningsFallbackTimer);
@@ -1074,8 +1075,8 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
     };
     rebuildOrdersRef.current = rebuildOrdersFromRaw;
 
-    // ⛑️ Reset raw PRIMA dell'attach: il fallback deve poter distinguere
-    // "snapshot mai arrivato" a ogni (ri)partenza dell'effect.
+    // Reset raw PRIMA dell'attach: il fallback deve distinguere "mai arrivato"
+    // a ogni (ri)partenza dell'effect (es. cambio giorno).
     rawOrdersRef.current = null;
 
     const unsubscribeOrders = onSnapshot(ordersQuery, (snapshot) => {
@@ -1086,17 +1087,17 @@ export function DashboardContent({ userName, stats, cleanings: initialCleanings,
       setLoadingOrders(false);
     });
 
-    // ⛑️ FALLBACK ANTI-STALLO (stessa logica delle pulizie, vedi sopra)
+    // ⛑️ FALLBACK ANTI-STALLO (2s) — stessa logica delle pulizie (vedi sopra)
     const ordersFallbackTimer = setTimeout(async () => {
       if (rawOrdersRef.current !== null) return;
-      console.warn("⛑️ [dash] fallback ordini: primo snapshot in ritardo, lettura one-shot");
+      console.warn("⛑️ [dash] fallback ordini: primo snapshot >2s, lettura one-shot");
       try {
         const snap = await getDocs(ordersQuery);
         if (rawOrdersRef.current !== null) return;
         rawOrdersRef.current = snap.docs.map(d => ({ id: d.id, data: d.data() as Record<string, any> }));
         rebuildOrdersFromRaw();
       } catch { /* no-op */ }
-    }, 2500);
+    }, 2000);
 
     return () => {
       clearTimeout(ordersFallbackTimer);
