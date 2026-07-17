@@ -49,13 +49,39 @@ const listeners = new Set<() => void>();
 const emit = () => { listeners.forEach(l => l()); };
 const setState = (patch: Partial<OverlayState>) => { state = { ...state, ...patch }; emit(); };
 
+// ── 📶 SEGNALE "PAGINA PRONTA" ─────────────────────────────────
+// La pagina di destinazione chiama splashOverlay.signalPageReady() quando ha
+// DIPINTO i suoi dati principali. Il flusso home/login aspetta questo segnale
+// (con un tetto massimo) prima di chiudere lo splash → alla rivelazione la
+// pagina è già popolata, niente spinner visibile.
+let pageReady = false;
+let pageReadyResolvers: Array<() => void> = [];
+
 export const splashOverlay = {
-  show() { setState({ visible: true, phase: 'auth', userName: '', text: 'Accesso in corso...', finishing: false }); },
+  show() {
+    pageReady = false;
+    pageReadyResolvers = [];
+    setState({ visible: true, phase: 'auth', userName: '', text: 'Accesso in corso...', finishing: false });
+  },
   load(userName: string) { setState({ phase: 'load', userName, text: 'Caricamento...' }); },
   setText(text: string) { setState({ text }); },
   finish() { if (state.visible) setState({ finishing: true }); },
   hide() { setState({ visible: false, finishing: false }); },
   isVisible() { return state.visible; },
+  /** Chiamato dalla pagina di destinazione quando i dati principali sono a schermo. */
+  signalPageReady() {
+    pageReady = true;
+    pageReadyResolvers.forEach(r => { try { r(); } catch { /* no-op */ } });
+    pageReadyResolvers = [];
+  },
+  /** Risolve al segnale della pagina, o comunque entro maxMs (mai bloccati). */
+  waitForPageReady(maxMs: number): Promise<void> {
+    if (pageReady) return Promise.resolve();
+    return new Promise<void>((resolve) => {
+      const t = setTimeout(resolve, maxMs);
+      pageReadyResolvers.push(() => { clearTimeout(t); resolve(); });
+    });
+  },
 };
 
 function useOverlayState(): OverlayState {

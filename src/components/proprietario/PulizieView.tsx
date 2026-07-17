@@ -6,6 +6,7 @@ import { useAuth } from "~/lib/firebase/AuthContext";
 import { usePulizieData } from "~/hooks/usePulizieData";
 import { PulizieContent } from "~/components/proprietario/PulizieContent";
 import { prefetchModalCaches } from "~/lib/prefetchModalCaches";
+import { splashOverlay } from "~/components/SplashOverlay";
 
 interface PulizieViewProps {
   properties?: any[];
@@ -70,6 +71,12 @@ export function PulizieView({
   }, [storeOrders, properties]);
 
   const inventory = storeInventory;
+
+  // 📶 Segnala allo splash che i dati pulizie sono a schermo (cache del store o
+  // primo caricamento completato): lo splash chiude a pagina già popolata.
+  useEffect(() => {
+    if (storeHasData || !storeInitialLoading) splashOverlay.signalPageReady();
+  }, [storeHasData, storeInitialLoading]);
 
   // Auth redirect (solo se auth è completo e non c'è utente)
   if (!authLoading && !user) {

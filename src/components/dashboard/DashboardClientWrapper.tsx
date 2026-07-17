@@ -3,7 +3,8 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useDashboardRealtime } from "~/lib/useFirestoreRealtime";
 import { DashboardContent } from "./DashboardContent";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { splashOverlay } from "~/components/SplashOverlay";
 
 // 🔄 Helper per leggere cache localStorage
 function getCachedDashboard(): any {
@@ -69,6 +70,12 @@ export function DashboardClientWrapper({ userName }: DashboardClientWrapperProps
   // 🎯 USA CACHE PRIMA, POI REALTIME
   // Priorità: realtimeData > reactQueryCache > localStorage cache
   const data = realtimeData || reactQueryCache || cachedData;
+
+  // 📶 Segnala allo splash che i dati principali sono a schermo: lo splash
+  // chiude solo ORA (pagina già popolata, niente spinner visibile).
+  useEffect(() => {
+    if (data) splashOverlay.signalPageReady();
+  }, [data]);
 
   // Se c'è errore
   if (error) {

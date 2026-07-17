@@ -47,6 +47,12 @@ function getDestinationByUser(user: any): string {
 // 🚀 PERF v2: rimosso splashPrefetch (doppio download delle stesse collezioni).
 const GRACE_MS = 750;
 
+// 📶 Destinazioni che SEGNALANO quando i dati sono a schermo: per queste lo
+// splash chiude al segnale (pagina già popolata), con tetto max di sicurezza.
+const READY_DESTINATIONS = new Set(["/dashboard", "/proprietario/calendario/pulizie"]);
+const MIN_SPLASH_MS = 600;
+const READY_CAP_MS = 4000;
+
 const wait = (ms: number) => new Promise<void>(res => setTimeout(res, ms));
 
 export default function LoginPage() {
@@ -79,8 +85,13 @@ export default function LoginPage() {
     // 🚀 Naviga SUBITO: lo splash (globale) resta sopra, la pagina carica dietro
     router.push(destination);
 
-    // Grazia breve, poi chiudi: la pagina mostra subito la cache locale
-    await wait(GRACE_MS);
+    if (READY_DESTINATIONS.has(destination)) {
+      // Chiudi quando la pagina segnala i dati A SCHERMO (o al tetto max)
+      await Promise.all([wait(MIN_SPLASH_MS), splashOverlay.waitForPageReady(READY_CAP_MS)]);
+    } else {
+      // Altri ruoli: grazia fissa come prima
+      await wait(GRACE_MS);
+    }
     splashOverlay.finish();
   };
 
