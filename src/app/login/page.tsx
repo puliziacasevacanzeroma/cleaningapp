@@ -45,7 +45,7 @@ function getDestinationByUser(user: any): string {
 // 🎬 SPLASH UNICO GLOBALE: la pagina naviga SUBITO con lo splash ancora sopra;
 // la destinazione si monta e carica dietro coi suoi listener.
 // 🚀 PERF v2: rimosso splashPrefetch (doppio download delle stesse collezioni).
-const GRACE_MS = 250;
+const GRACE_MS = 750;
 
 const wait = (ms: number) => new Promise<void>(res => setTimeout(res, ms));
 

@@ -25,7 +25,7 @@ import { splashOverlay } from "~/components/SplashOverlay";
 // La pagina si carica da sola: cache localStorage subito, realtime a seguire.
 //
 // Margine minimo per la pagina di destinazione per renderizzare dietro lo splash.
-const GRACE_MS = 250;
+const GRACE_MS = 750;
 
 const wait = (ms: number) => new Promise<void>((res) => setTimeout(res, ms));
 
