@@ -199,6 +199,72 @@ function populateStaticCache(propsSnap: any, inventorySnap: any) {
   });
 }
 
+// ==================== ⚡ VIEW CACHE (paint istantaneo pagina pagamenti) ====================
+// Ultimo risultato GIÀ CALCOLATO (clients + summary) per mese, in localStorage.
+// All'apertura dipingiamo SUBITO questo (stale-while-revalidate, stesso pattern
+// della dashboard con "dashboard_cache"): i listener e il calcolo veri girano
+// dietro e, appena pronti, sostituiscono silenziosamente i numeri. Se nulla è
+// cambiato i numeri sono identici per costruzione; se qualcosa è cambiato, la
+// vista si aggiorna da sola in 1-3s. NESSUNA logica di calcolo è alterata.
+const VIEW_CACHE_PREFIX = "payments_view_cache_v1:";
+const VIEW_CACHE_MAX_KEYS = 4; // tieni al massimo 4 mesi in cache
+
+function viewCacheKey(month: number, year: number): string {
+  return `${VIEW_CACHE_PREFIX}${year}-${String(month).padStart(2, "0")}`;
+}
+
+interface CachedPaymentsView {
+  clients: ClientStats[];
+  summary: Summary;
+  propertiesWithoutPrice: PropertyWithoutPrice[];
+  savedAt?: number;
+}
+
+function loadViewCache(month: number, year: number): CachedPaymentsView | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(viewCacheKey(month, year));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed?.clients) || !parsed?.summary) return null;
+    return parsed as CachedPaymentsView;
+  } catch {
+    return null;
+  }
+}
+
+function saveViewCache(
+  month: number,
+  year: number,
+  data: { clients: ClientStats[]; summary: Summary; propertiesWithoutPrice: PropertyWithoutPrice[] }
+) {
+  if (typeof window === "undefined") return;
+  try {
+    const key = viewCacheKey(month, year);
+    localStorage.setItem(key, JSON.stringify({ ...data, savedAt: Date.now() }));
+    // Pulizia: mai più di VIEW_CACHE_MAX_KEYS mesi in localStorage
+    const keys: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith(VIEW_CACHE_PREFIX)) keys.push(k);
+    }
+    if (keys.length > VIEW_CACHE_MAX_KEYS) {
+      keys
+        .filter(k => k !== key)
+        .map(k => {
+          let savedAt = 0;
+          try { savedAt = JSON.parse(localStorage.getItem(k) || "{}").savedAt || 0; } catch { /* no-op */ }
+          return { k, savedAt };
+        })
+        .sort((a, b) => a.savedAt - b.savedAt)
+        .slice(0, keys.length - VIEW_CACHE_MAX_KEYS)
+        .forEach(({ k }) => { try { localStorage.removeItem(k); } catch { /* no-op */ } });
+    }
+  } catch {
+    // quota piena o modalità privata: si dipinge come prima, senza cache
+  }
+}
+
 // ⚡ PERF — strategia CACHE-FIRST (sicura al 100% sui numeri).
 // I dati statici (proprietà + inventario) cambiano raramente. Invece di
 // aspettare SEMPRE il server (~secondi anche alla riapertura), proviamo prima
@@ -1132,7 +1198,32 @@ export function useRealtimePayments(month: number, year: number) {
     return { clients: stats, summary: summaryData, propertiesWithoutPrice: propsWithoutPrice };
   }, [month, year, loading, allCleanings, allOrders, allPayments, allOverrides, staticVersion]);
 
-  return { loading, error, clients, summary, propertiesWithoutPrice, refresh };
+  // ⚡ VIEW CACHE — paint istantaneo: mentre i dati veri caricano/calcolano,
+  // serviamo l'ultima vista calcolata per questo mese (se esiste).
+  const cachedView = useMemo(
+    () => (loading ? loadViewCache(month, year) : null),
+    [month, year, loading]
+  );
+
+  // Persisti il risultato appena il calcolo vero è completo
+  useEffect(() => {
+    if (!loading && summary) {
+      saveViewCache(month, year, { clients, summary, propertiesWithoutPrice });
+    }
+  }, [loading, clients, summary, propertiesWithoutPrice, month, year]);
+
+  const usingCachedView = loading && cachedView !== null;
+
+  return {
+    loading: usingCachedView ? false : loading,
+    /** true mentre mostriamo la cache in attesa dei dati freschi (1-3s) */
+    isStale: usingCachedView,
+    error,
+    clients: usingCachedView ? cachedView!.clients : clients,
+    summary: usingCachedView ? cachedView!.summary : summary,
+    propertiesWithoutPrice: usingCachedView ? cachedView!.propertiesWithoutPrice : propertiesWithoutPrice,
+    refresh,
+  };
 }
 
 // ════════════════════════════════════════════════════════════════

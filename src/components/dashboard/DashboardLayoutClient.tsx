@@ -109,6 +109,7 @@ export function DashboardLayoutClient({
       "/dashboard/calendario/prenotazioni",
       "/dashboard/utenti",
       "/dashboard/assegnazioni",
+      "/dashboard/pagamenti", // ⚡ chunk pesante (~260KB src): precaricato a idle
     ];
     const doPrefetch = () => {
       routes.forEach(route => router.prefetch(route));
