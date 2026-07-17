@@ -240,8 +240,18 @@ class PulizieDataStore {
           // (conferma server) anche se i documenti non cambiano.
           { includeMetadataChanges: true },
           (snapshot) => {
+            const serverConfirm = !snapshot.metadata.fromCache;
+            // ⚡ FIX REGRESSIONE: gli eventi SOLO-metadata (fromCache→false senza
+            // documenti cambiati) NON devono rimappare 12 mesi di pulizie
+            // (migliaia di doc sul main thread → jank e dashboard in stallo).
+            // docChanges() di default ESCLUDE i cambi solo-metadata: length 0
+            // = nessun documento cambiato → aggiorna solo il flag e stop.
+            if (snapshot.docChanges().length === 0 && this._state.hasData) {
+              if (serverConfirm && !this._state.serverSynced) this._patch({ serverSynced: true });
+              return;
+            }
             const patch: Partial<PulizieStoreState> = { cleanings: snapshot.docs.map(doc => this._mapCleaning(doc)) };
-            if (!snapshot.metadata.fromCache) patch.serverSynced = true;
+            if (serverConfirm) patch.serverSynced = true;
             this._patch(patch);
           }
         )
@@ -401,13 +411,19 @@ class PulizieDataStore {
           // 📶 includeMetadataChanges: serve l'evento fromCache→false (conferma server)
           { includeMetadataChanges: true },
           (snap) => {
+            const serverConfirm = !snap.metadata.fromCache;
+            // ⚡ FIX REGRESSIONE: eventi solo-metadata → niente rimappatura (vedi admin)
+            if (snap.docChanges().length === 0 && this._state.hasData) {
+              if (serverConfirm && !this._state.serverSynced) this._patch({ serverSynced: true });
+              return;
+            }
             const list = snap.docs.map(doc => this._mapCleaning(doc)).filter(c => c.date >= cutoff);
             this._ownerCleaningsByChunk.set(idx, list);
             const merged: PulizieCleaning[] = [];
             this._ownerCleaningsByChunk.forEach(arr => merged.push(...arr));
             merged.sort((a, b) => a.date.getTime() - b.date.getTime());
             const patch: Partial<PulizieStoreState> = { cleanings: merged };
-            if (!snap.metadata.fromCache) patch.serverSynced = true;
+            if (serverConfirm) patch.serverSynced = true;
             this._patch(patch);
           }
         )

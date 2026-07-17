@@ -343,6 +343,9 @@ export function useDashboardRealtime() {
       { includeMetadataChanges: true },
       (snapshot) => {
         if (!snapshot.metadata.fromCache) setServerSynced(true);
+        // ⚡ Eventi solo-metadata (nessun documento cambiato): aggiorna solo il
+        // flag, niente rimappatura/ricalcolo dashboard.
+        if (snapshot.docChanges().length === 0 && loadedFlags.cleanings) return;
         cleaningsData = snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as Record<string, any>) }));
         loadedFlags.cleanings = true;
         logFirst("cleanings", snapshot.size);
