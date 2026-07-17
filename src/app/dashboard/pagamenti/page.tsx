@@ -655,9 +655,31 @@ export default function PagamentiPage() {
   } | null>(null);
 
   // ═══ BLOCCO PAGAMENTI: mappa proprietarioId → paymentBlock per mostrare badge/pulsante ═══
-  const [blockedOwners, setBlockedOwners] = useState<Map<string, { active: boolean; overriddenByAdmin: boolean; since?: any }>>(new Map());
+  // 🟢 VIEW CACHE: senza cache la mappa parte vuota al mount → per ~2s (finché
+  // il primo snapshot su `users` non arriva) tutti sembrano "verdi" e i badge
+  // rossi/esenti compaiono dopo. Ora salviamo l'ultima mappa in localStorage
+  // e ripartiamo da lì: il listener sovrascrive appena consegna (stessi dati,
+  // zero divergenze). Map/Set → array per JSON-safe round-trip.
+  const OWNERS_CACHE_KEY = "payments_owners_status_v1";
+  const [blockedOwners, setBlockedOwners] = useState<Map<string, { active: boolean; overriddenByAdmin: boolean; since?: any }>>(() => {
+    if (typeof window === "undefined") return new Map();
+    try {
+      const raw = localStorage.getItem(OWNERS_CACHE_KEY);
+      if (!raw) return new Map();
+      const parsed = JSON.parse(raw);
+      return new Map(Array.isArray(parsed?.blocked) ? parsed.blocked : []);
+    } catch { return new Map(); }
+  });
   // 🟢 ESENZIONE: clienti con termini di pagamento speciali (mai bloccati)
-  const [exemptOwners, setExemptOwners] = useState<Set<string>>(new Set());
+  const [exemptOwners, setExemptOwners] = useState<Set<string>>(() => {
+    if (typeof window === "undefined") return new Set();
+    try {
+      const raw = localStorage.getItem(OWNERS_CACHE_KEY);
+      if (!raw) return new Set();
+      const parsed = JSON.parse(raw);
+      return new Set(Array.isArray(parsed?.exempt) ? parsed.exempt : []);
+    } catch { return new Set(); }
+  });
 
   useEffect(() => {
     // Listener realtime su tutti gli utenti proprietari con paymentBlock attivo
@@ -681,6 +703,14 @@ export default function PagamentiPage() {
       });
       setBlockedOwners(map);
       setExemptOwners(exempt);
+      // 🟢 Salva view cache per il prossimo mount della pagina
+      try {
+        localStorage.setItem(OWNERS_CACHE_KEY, JSON.stringify({
+          blocked: Array.from(map.entries()),
+          exempt: Array.from(exempt),
+          savedAt: Date.now(),
+        }));
+      } catch { /* quota piena o modalità privata: no-op */ }
     });
     return () => unsub();
   }, []);
