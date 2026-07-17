@@ -126,6 +126,10 @@ export interface PulizieStoreState {
   hasData: boolean;
   /** true solo la primissima volta, prima che arrivi qualsiasi dato */
   initialLoading: boolean;
+  /** 📶 true quando le PULIZIE sono confermate dal SERVER (non solo l'emissione
+   *  from-cache di Firestore, che può essere vuota/parziale). Usato per chiudere
+   *  lo splash a dati veri già a schermo. */
+  serverSynced: boolean;
 }
 
 type Listener = () => void;
@@ -141,6 +145,7 @@ class PulizieDataStore {
     inventory: [],
     hasData: false,
     initialLoading: true,
+    serverSynced: false,
   };
 
   private _listeners = new Set<Listener>();
@@ -231,8 +236,13 @@ class PulizieDataStore {
             where("scheduledDate", ">=", Timestamp.fromDate(cleaningsRangeStart)),
             orderBy("scheduledDate", "asc")
           ),
+          // 📶 includeMetadataChanges: serve l'evento in cui fromCache→false
+          // (conferma server) anche se i documenti non cambiano.
+          { includeMetadataChanges: true },
           (snapshot) => {
-            this._patch({ cleanings: snapshot.docs.map(doc => this._mapCleaning(doc)) });
+            const patch: Partial<PulizieStoreState> = { cleanings: snapshot.docs.map(doc => this._mapCleaning(doc)) };
+            if (!snapshot.metadata.fromCache) patch.serverSynced = true;
+            this._patch(patch);
           }
         )
       );
@@ -373,7 +383,9 @@ class PulizieDataStore {
     this._ownerOrdersByChunk.clear();
 
     if (propertyIds.length === 0) {
-      this._patch({ cleanings: [], orders: [] });
+      // Nessuna proprietà → nessuna pulizia possibile: non c'è nulla da
+      // attendere dal server, sblocca subito lo splash.
+      this._patch({ cleanings: [], orders: [], serverSynced: true });
       return;
     }
 
@@ -386,13 +398,17 @@ class PulizieDataStore {
       this._ownerCleaningsUnsubs.push(
         onSnapshot(
           query(collection(db, "cleanings"), where("propertyId", "in", chunk)),
+          // 📶 includeMetadataChanges: serve l'evento fromCache→false (conferma server)
+          { includeMetadataChanges: true },
           (snap) => {
             const list = snap.docs.map(doc => this._mapCleaning(doc)).filter(c => c.date >= cutoff);
             this._ownerCleaningsByChunk.set(idx, list);
             const merged: PulizieCleaning[] = [];
             this._ownerCleaningsByChunk.forEach(arr => merged.push(...arr));
             merged.sort((a, b) => a.date.getTime() - b.date.getTime());
-            this._patch({ cleanings: merged });
+            const patch: Partial<PulizieStoreState> = { cleanings: merged };
+            if (!snap.metadata.fromCache) patch.serverSynced = true;
+            this._patch(patch);
           }
         )
       );

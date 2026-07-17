@@ -57,6 +57,7 @@ export function PulizieView({
     inventory: storeInventory,
     hasData: storeHasData,
     initialLoading: storeInitialLoading,
+    serverSynced: storeServerSynced,
   } = usePulizieData();
 
   const properties = externalProperties || storeProperties;
@@ -72,11 +73,12 @@ export function PulizieView({
 
   const inventory = storeInventory;
 
-  // 📶 Segnala allo splash che i dati pulizie sono a schermo (cache del store o
-  // primo caricamento completato): lo splash chiude a pagina già popolata.
+  // 📶 Segnala allo splash SOLO quando le pulizie sono confermate dal server
+  // (la prima emissione from-cache di Firestore può essere vuota → mostrava il
+  // "Caricamento..." dietro lo splash). Lo splash chiude a pagina già popolata.
   useEffect(() => {
-    if (storeHasData || !storeInitialLoading) splashOverlay.signalPageReady();
-  }, [storeHasData, storeInitialLoading]);
+    if (storeServerSynced) splashOverlay.signalPageReady();
+  }, [storeServerSynced]);
 
   // Auth redirect (solo se auth è completo e non c'è utente)
   if (!authLoading && !user) {

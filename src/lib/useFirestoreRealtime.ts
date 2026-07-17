@@ -61,6 +61,10 @@ export function useDashboardRealtime() {
     return legacy === null;
   });
   const [error, setError] = useState<Error | null>(null);
+  // 📶 true quando le pulizie di oggi sono CONFERMATE DAL SERVER (non solo
+  // dall'emissione from-cache di Firestore, che può essere vuota/parziale).
+  // Usato per chiudere lo splash a dati veri già a schermo.
+  const [serverSynced, setServerSynced] = useState(false);
 
   useEffect(() => {
 
@@ -334,7 +338,11 @@ export function useDashboardRealtime() {
         where("scheduledDate", ">=", Timestamp.fromDate(todayStart)),
         where("scheduledDate", "<=", Timestamp.fromDate(todayEnd))
       ),
+      // 📶 includeMetadataChanges: ci serve l'evento in cui fromCache passa a
+      // false (dati confermati dal server) ANCHE se i documenti non cambiano.
+      { includeMetadataChanges: true },
       (snapshot) => {
+        if (!snapshot.metadata.fromCache) setServerSynced(true);
         cleaningsData = snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as Record<string, any>) }));
         loadedFlags.cleanings = true;
         logFirst("cleanings", snapshot.size);
@@ -416,7 +424,7 @@ export function useDashboardRealtime() {
     // normalmente il logout smonta l'intero albero, ma è corretto gestirlo.
   }, [userId]);
 
-  return { data, isLoading, error };
+  return { data, isLoading, error, serverSynced };
 }
 
 // ============================================================

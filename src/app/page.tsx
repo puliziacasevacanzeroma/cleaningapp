@@ -31,7 +31,7 @@ const GRACE_MS = 750;
 // splash chiude al segnale (pagina già popolata), con tetto max di sicurezza.
 const READY_DESTINATIONS = new Set(["/dashboard", "/proprietario/calendario/pulizie"]);
 const MIN_SPLASH_MS = 600;   // minimo estetico (l'animazione non deve "lampeggiare")
-const READY_CAP_MS = 4000;   // tetto: mai bloccati oltre, anche se il segnale non arriva
+const READY_CAP_MS = 5000;   // tetto: mai bloccati oltre, anche se il segnale non arriva
 
 const wait = (ms: number) => new Promise<void>((res) => setTimeout(res, ms));
 

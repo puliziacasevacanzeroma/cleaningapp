@@ -65,17 +65,19 @@ export function DashboardClientWrapper({ userName }: DashboardClientWrapperProps
   const reactQueryCache = queryClient.getQueryData<any>(["dashboard"]);
 
   // 🔥 REALTIME: usa onSnapshot per aggiornamenti automatici
-  const { data: realtimeData, isLoading, error } = useDashboardRealtime();
+  const { data: realtimeData, isLoading, error, serverSynced } = useDashboardRealtime();
 
   // 🎯 USA CACHE PRIMA, POI REALTIME
   // Priorità: realtimeData > reactQueryCache > localStorage cache
   const data = realtimeData || reactQueryCache || cachedData;
 
-  // 📶 Segnala allo splash che i dati principali sono a schermo: lo splash
-  // chiude solo ORA (pagina già popolata, niente spinner visibile).
+  // 📶 Segnala allo splash SOLO quando le pulizie sono confermate dal server e
+  // già renderizzate: la prima emissione from-cache di Firestore può essere
+  // vuota (query di oggi mai vista ieri) e mostrava contatori a 0 dietro lo
+  // splash. Ora lo splash chiude a dashboard davvero popolata.
   useEffect(() => {
-    if (data) splashOverlay.signalPageReady();
-  }, [data]);
+    if (realtimeData && serverSynced) splashOverlay.signalPageReady();
+  }, [realtimeData, serverSynced]);
 
   // Se c'è errore
   if (error) {
