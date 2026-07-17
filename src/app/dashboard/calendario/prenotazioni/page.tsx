@@ -3,10 +3,14 @@
 import { useAuth } from "~/lib/firebase/AuthContext";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
-import { useCleanings } from "~/lib/contexts/CleaningsContext";
+import { CleaningsProvider, useCleanings } from "~/lib/contexts/CleaningsContext";
 import { PrenotazioniView } from "~/components/dashboard/PrenotazioniView";
 
-export default function CalendarioPrenotazioniPage() {
+// 🚀 PERF v2: CleaningsProvider è montato QUI (unica pagina che lo usa) invece
+// che nel root layout, dove apriva 4 listener Firestore — incluso l'intero
+// `bookings` — su ogni pagina per ogni ruolo.
+
+function CalendarioPrenotazioniInner() {
   const { user, loading } = useAuth();
   const router = useRouter();
   const { properties, bookings, isLoading, hasCachedData } = useCleanings();
@@ -42,5 +46,13 @@ export default function CalendarioPrenotazioniPage() {
       bookings={serializedBookings}
       isAdmin={true}
     />
+  );
+}
+
+export default function CalendarioPrenotazioniPage() {
+  return (
+    <CleaningsProvider>
+      <CalendarioPrenotazioniInner />
+    </CleaningsProvider>
   );
 }

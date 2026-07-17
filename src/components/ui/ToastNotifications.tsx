@@ -129,14 +129,26 @@ if (typeof window !== "undefined") {
   window.addEventListener("pageshow", markForeground);
 }
 
-// Una notifica va mostrata come toast SOLO se e' stata creata DOPO l'ultimo
-// ritorno in primo piano (con tolleranza per lo sfasamento d'orologio). Tutto
-// cio' che e' piu' vecchio = backlog accumulato in background -> niente toast.
+// 🔒 TAPPO DI FRESCHEZZA (fix definitivo raffica): una notifica può fare toast
+// SOLO se creata negli ultimi 15 secondi. Le notifiche "vive" arrivano al
+// listener entro 1-3s dalla creazione; il backlog accumulato mentre l'app era
+// minimizzata/chiusa è per definizione più vecchio → mai toast, SEMPRE e solo
+// campanella + push. Questo regge anche quando visibilitychange/freeze/pageshow
+// non scattano (iOS PWA) e la finestra di soppressione non si apre.
+const LIVE_MAX_AGE_MS = 15_000;
+
+// Una notifica va mostrata come toast SOLO se:
+// 1) e' stata creata DOPO l'ultimo ritorno in primo piano (con tolleranza skew), E
+// 2) e' FRESCA (creata negli ultimi LIVE_MAX_AGE_MS).
+// Tutto cio' che e' piu' vecchio = backlog -> niente toast, resta in campanella.
 // Se manca il createdAt siamo permissivi (mostriamo): non vogliamo perdere nulla.
 function isLiveNotification(createdAt: any): boolean {
   try {
     if (!createdAt || typeof createdAt.toMillis !== "function") return true;
-    return createdAt.toMillis() >= lastBecameVisibleAt - CLOCK_SKEW_TOLERANCE_MS;
+    const ms = createdAt.toMillis();
+    if (ms < lastBecameVisibleAt - CLOCK_SKEW_TOLERANCE_MS) return false;
+    if (Date.now() - ms > LIVE_MAX_AGE_MS) return false; // backlog vecchio: mai toast
+    return true;
   } catch {
     return true;
   }
@@ -144,8 +156,17 @@ function isLiveNotification(createdAt: any): boolean {
 
 // ==================== SUONO DOLCE A DUE NOTE ====================
 
+// 🔇 THROTTLE SUONO: mai piu' di un suono ogni 2.5s. Anche se piu' toast
+// arrivassero ravvicinati (raffica residua), l'utente sente UN suono solo.
+let lastSoundPlayedAt = 0;
+const SOUND_MIN_GAP_MS = 2_500;
+
 function playNotificationSound() {
   try {
+    const now = Date.now();
+    if (now - lastSoundPlayedAt < SOUND_MIN_GAP_MS) return;
+    lastSoundPlayedAt = now;
+
     const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
     
     // Prima nota - Do (C5)

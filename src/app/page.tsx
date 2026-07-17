@@ -15,21 +15,23 @@
 
 import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "~/lib/firebase/AuthContext";
 import { splashOverlay } from "~/components/SplashOverlay";
-import { splashPrefetch } from "~/lib/splashPrefetch";
 
-// Margine dato alla pagina di destinazione per renderizzare dietro lo splash.
-// Se si intravede ancora caricamento, alzalo (es. 1500).
-const GRACE_MS = 1100;
+// 🚀 PERF v2: RIMOSSO splashPrefetch. Scaricava TUTTE le properties + cleanings
+// + operators via getDocs, mentre la pagina di destinazione (già montata dietro
+// lo splash) scaricava le STESSE collezioni coi suoi listener onSnapshot →
+// doppio traffico nel momento più congestionato, notifiche/pulizie in ritardo.
+// La pagina si carica da sola: cache localStorage subito, realtime a seguire.
+//
+// Margine minimo per la pagina di destinazione per renderizzare dietro lo splash.
+const GRACE_MS = 250;
 
 const wait = (ms: number) => new Promise<void>((res) => setTimeout(res, ms));
 
 export default function HomePage() {
   const { user, loading } = useAuth();
   const router = useRouter();
-  const queryClient = useQueryClient();
   const startedRef = useRef(false);
 
   // Splash subito, appena la home si monta: copre anche l'attesa dell'AuthContext.
@@ -69,19 +71,18 @@ export default function HomePage() {
       splashOverlay.load(user.name || "Utente");
       sessionStorage.setItem("splash-shown", "true");
 
-      // Prefetch dati (cache react-query) + chunk JS della destinazione
-      const dataPromise = splashPrefetch(queryClient, user.id, destination, (t) => splashOverlay.setText(t));
+      // Prefetch del solo chunk JS della destinazione (leggero, no dati)
       try { router.prefetch(destination); } catch { /* no-op */ }
 
-      // 🚀 Naviga SUBITO: la pagina si carica DIETRO lo splash
+      // 🚀 Naviga SUBITO: la pagina si carica DIETRO lo splash coi SUOI listener
       router.push(destination);
 
-      // Chiudi solo quando: prefetch finito E passata la finestra di grazia
-      await Promise.allSettled([dataPromise, wait(GRACE_MS)]);
+      // Grazia breve, poi chiudi: la pagina mostra subito la cache locale
+      await wait(GRACE_MS);
       splashOverlay.finish();
     };
     run();
-  }, [user, loading, router, queryClient]);
+  }, [user, loading, router]);
 
   // Sfondo identico allo splash: nessun flash prima che l'overlay compaia
   return (

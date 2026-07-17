@@ -4,9 +4,7 @@ import { useState } from "react";
 import { useAuth } from "~/lib/firebase/AuthContext";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useQueryClient } from "@tanstack/react-query";
 import { splashOverlay } from "~/components/SplashOverlay";
-import { splashPrefetch } from "~/lib/splashPrefetch";
 
 const demoAccounts = [
   { label: "Admin", email: "admin@demo.com", password: "demo123", icon: "🛡️", color: "from-violet-500 to-purple-600" },
@@ -45,10 +43,9 @@ function getDestinationByUser(user: any): string {
 }
 
 // 🎬 SPLASH UNICO GLOBALE: la pagina naviga SUBITO con lo splash ancora sopra;
-// la destinazione si monta e carica dietro. Lo splash chiude solo dopo
-// prefetch completato E finestra di grazia post-navigazione (per dare tempo
-// alla pagina di renderizzare i suoi dati). Regola qui se serve più margine.
-const GRACE_MS = 1100;
+// la destinazione si monta e carica dietro coi suoi listener.
+// 🚀 PERF v2: rimosso splashPrefetch (doppio download delle stesse collezioni).
+const GRACE_MS = 250;
 
 const wait = (ms: number) => new Promise<void>(res => setTimeout(res, ms));
 
@@ -56,13 +53,12 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  const queryClient = useQueryClient();
   const [showPassword, setShowPassword] = useState(false); // 👁️ Visibilità password
   const { user, login, loginWithGoogle } = useAuth();
   const router = useRouter();
 
-  // Flusso condiviso post-autenticazione: overlay → prefetch → push subito
-  // (pagina si carica DIETRO lo splash) → chiusura quando tutto è pronto.
+  // Flusso condiviso post-autenticazione: overlay → push subito
+  // (pagina si carica DIETRO lo splash coi suoi listener) → chiusura rapida.
   const runPostLogin = async (authUser: { id: string; name?: string }, destination: string) => {
     // Pagine di onboarding: fuori dal flusso splash → redirect classico
     if (
@@ -77,15 +73,14 @@ export default function LoginPage() {
     splashOverlay.load(authUser.name || "Utente");
     sessionStorage.setItem("splash-shown", "true");
 
-    // Prefetch dati (cache react-query) + prefetch del chunk JS della pagina
-    const dataPromise = splashPrefetch(queryClient, authUser.id, destination, (t) => splashOverlay.setText(t));
+    // Prefetch del solo chunk JS della pagina (leggero, no dati)
     try { router.prefetch(destination); } catch { /* no-op */ }
 
     // 🚀 Naviga SUBITO: lo splash (globale) resta sopra, la pagina carica dietro
     router.push(destination);
 
-    // Chiudi solo quando: prefetch finito E passata la finestra di grazia
-    await Promise.allSettled([dataPromise, wait(GRACE_MS)]);
+    // Grazia breve, poi chiudi: la pagina mostra subito la cache locale
+    await wait(GRACE_MS);
     splashOverlay.finish();
   };
 

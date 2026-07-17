@@ -295,9 +295,19 @@ export function CleaningsProvider({ children }: { children: ReactNode }) {
       }
     );
 
-    // 3. Prenotazioni (verranno filtrate in updateData)
+    // 3. Prenotazioni — 🚀 PERF v2: filtro SERVER-SIDE su checkOut.
+    // Prima scaricava l'INTERA collezione (anni di storico iCal) e filtrava
+    // client-side. Il filtro client tiene solo prenotazioni che toccano la
+    // finestra [-1 mese, +24 mesi]: qualunque booking con checkOut < -1 mese
+    // veniva comunque scartato → chiedere al server solo checkOut >= -1 mese
+    // è equivalente e taglia lo storico. (Range su campo singolo: indice
+    // automatico, nessun indice composito richiesto.)
+    const bookingsRangeStart = new Date();
+    bookingsRangeStart.setMonth(bookingsRangeStart.getMonth() - 1);
+    bookingsRangeStart.setDate(1);
+    bookingsRangeStart.setHours(0, 0, 0, 0);
     const unsubBookings = onSnapshot(
-      collection(db, "bookings"),
+      query(collection(db, "bookings"), where("checkOut", ">=", Timestamp.fromDate(bookingsRangeStart))),
       (snap) => {
         rawBookings = snap.docs.map(d => ({ id: d.id, ...(d.data() as Record<string, any>) }));
         
