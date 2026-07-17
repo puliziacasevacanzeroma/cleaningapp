@@ -127,11 +127,15 @@ const countLinenFromSelectedItems = (items: SelectedItem[]): { matrimoniali: num
       federe += item.quantity;
     }
     // Identifica lenzuola matrimoniali (ESCLUDI copripiumini)
+    // 🛏️ FIX KING: le lenzuola king/queen/maxi valgono come matrimoniali per il
+    // minimo richiesto (vedi EditCleaningModal, stessa regola).
     else if (
       !isCopripiumino && (
         nameLower.includes('matrimonial') ||
         idLower.includes('double') ||
-        idLower.includes('matr')
+        idLower.includes('matr') ||
+        (nameLower.includes('lenzuol') && (nameLower.includes('king') || nameLower.includes('queen') || nameLower.includes('maxi'))) ||
+        ((idLower.includes('king') || idLower.includes('queen')) && (nameLower.includes('lenzuol') || idLower.includes('sheet') || idLower.includes('lenz')))
       )
     ) {
       // Conferma che sia effettivamente lenzuolo (non altri item con "matr" nel nome)
@@ -364,11 +368,20 @@ const mapLinenToItems = (
   };
   
   // Lenzuola matrimoniali — ESCLUDI copripiumini
+  // 🛏️ FIX KING: preferisci SEMPRE il formato standard; king/queen/maxi solo
+  // come fallback se lo standard non esiste in inventario.
   if (req.m > 0) {
     const item = findItem(
       ['lenzuola matrimonial', 'lenzuolo matrimonial', 'doublesheets'],
-      ['copripium', 'duvet', 'piumino']
-    ) || findItem(['matrimonial'], ['copripium', 'duvet', 'piumino', 'feder', 'asciugaman']);
+      ['copripium', 'duvet', 'piumino', 'king', 'queen', 'maxi']
+    ) || findItem(
+      ['matrimonial'],
+      ['copripium', 'duvet', 'piumino', 'feder', 'asciugaman', 'king', 'queen', 'maxi']
+    ) || findItem(
+      // Fallback finale: accetta anche i formati maggiorati (meglio king che niente)
+      ['lenzuola matrimonial', 'lenzuolo matrimonial', 'doublesheets', 'matrimonial'],
+      ['copripium', 'duvet', 'piumino', 'feder', 'asciugaman']
+    );
     if (item && !item.name.toLowerCase().includes('copripium')) {
       result.push({
         id: item.id || item.key,

@@ -167,17 +167,25 @@ function calcLinenForBeds(beds: Bed[]): { m: number; s: number; f: number } {
 
 function mapLinenToInv(req: { m: number; s: number; f: number }, inv: LinenItem[]): Record<string, number> {
   const r: Record<string, number> = {};
+  // 🛏️ FIX KING: per il lenzuolo matrimoniale va SEMPRE preferito lo STANDARD,
+  // mai il formato maggiorato (king/queen/maxi). Le keyword includono anche
+  // 'king'/'queen' e inv.find() prende il PRIMO che matcha: se in inventario il
+  // king viene prima, veniva inserito lui di default. Ora: 1ª passata SENZA
+  // formati maggiorati, che restano solo come fallback se lo standard non esiste.
+  const OVERSIZED_TERMS = ['king', 'queen', 'maxi', 'super king', 'superking'];
   // Cerca per keyword MA esclude copripiumini
-  const findExcludingCopripiumini = (kwType: keyof typeof ITEM_KEYWORDS) => {
+  const findExcludingCopripiumini = (kwType: keyof typeof ITEM_KEYWORDS, excludeOversized: boolean = false) => {
     const kws = ITEM_KEYWORDS[kwType];
     return inv.find(i => {
       const nameLower = i.n.toLowerCase();
       if (nameLower.includes('copripium')) return false;
+      if (excludeOversized && OVERSIZED_TERMS.some(t => nameLower.includes(t))) return false;
       return kws.some(k => nameLower.includes(k.toLowerCase()));
     });
   };
   
-  const lm = findExcludingCopripiumini('lenzuolaMatrimoniali'); 
+  const lm = findExcludingCopripiumini('lenzuolaMatrimoniali', true)   // 1ª: solo standard
+          || findExcludingCopripiumini('lenzuolaMatrimoniali');        // fallback: anche king/queen
   if (req.m > 0) {
     if (lm) {
       r[lm.id] = req.m;
@@ -365,11 +373,17 @@ const countCurrentLinenFromBl = (
       federe += qty;
     }
     // Identifica lenzuola matrimoniali (ESCLUDI copripiumini)
+    // 🛏️ FIX KING: le lenzuola king/queen/maxi SONO lenzuola matrimoniali ai
+    // fini del minimo richiesto (coprono un letto matrimoniale). Prima non
+    // venivano riconosciute (es. "Lenzuola King Size" senza "matrimonial" nel
+    // nome) → la validazione segnalava minimo non raggiunto anche a letto coperto.
     else if (
       !isCopripiumino && (
         nameLower.includes('matrimonial') ||
         idLower.includes('double') ||
-        idLower.includes('matr')
+        idLower.includes('matr') ||
+        (nameLower.includes('lenzuol') && (nameLower.includes('king') || nameLower.includes('queen') || nameLower.includes('maxi'))) ||
+        ((idLower.includes('king') || idLower.includes('queen')) && (nameLower.includes('lenzuol') || idLower.includes('sheet') || idLower.includes('lenz')))
       )
     ) {
       matrimoniali += qty;

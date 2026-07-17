@@ -278,12 +278,20 @@ function mapLinenToInventoryItems(
   };
   
   // Cerca lenzuolo matrimoniale — DEVE contenere "lenzuol" O essere l'ID canonico, MAI copripiumino
+  // 🛏️ FIX KING: preferisci SEMPRE il formato standard; king/queen/maxi solo
+  // come fallback se lo standard non esiste in inventario (l'inventario può
+  // contenere "Lenzuola Matrimoniali King" che matcha le stesse keyword e,
+  // se viene prima nell'array, veniva scelto lui di default).
   const lenzMatr = findItem(
     ['lenzuola matrimonial', 'lenzuolo matrimonial', 'doublesheets', 'lenzuol_matr', 'lenz_matr'],
-    ['copripium', 'duvet']
+    ['copripium', 'duvet', 'king', 'queen', 'maxi']
   ) || findItem(
     // Fallback: cerca per "matrimonial" ma solo se contiene anche "lenzuol"
     ['matrimonial'],
+    ['copripium', 'duvet', 'asciugaman', 'telo', 'feder', 'king', 'queen', 'maxi']
+  ) || findItem(
+    // Fallback finale: accetta anche i formati maggiorati (meglio king che niente)
+    ['lenzuola matrimonial', 'lenzuolo matrimonial', 'doublesheets', 'lenzuol_matr', 'lenz_matr', 'matrimonial'],
     ['copripium', 'duvet', 'asciugaman', 'telo', 'feder']
   );
   if (linenReq.lenzuoloMatrimoniale > 0) {
