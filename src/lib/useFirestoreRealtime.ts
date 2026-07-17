@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { collection, query, orderBy, where, Timestamp, onSnapshot } from "firebase/firestore";
+import { collection, query, orderBy, where, Timestamp, onSnapshot, getDocs } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 import { useAuth } from "~/lib/firebase/AuthContext";
+import { kickFirestoreNetwork } from "~/lib/firebase/networkWatchdog";
 
 // ============================================================
 // STORAGE HELPERS
@@ -312,8 +313,9 @@ export function useDashboardRealtime() {
     };
 
     // Listener 1: Proprietà ATTIVE (solo queste!)
+    const dashPropsQuery = query(collection(db, "properties"), where("status", "==", "ACTIVE"));
     const unsubProperties = onSnapshot(
-      query(collection(db, "properties"), where("status", "==", "ACTIVE")),
+      dashPropsQuery,
       (snapshot) => {
         propertiesData = snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as Record<string, any>) }));
         loadedFlags.properties = true;
@@ -332,12 +334,13 @@ export function useDashboardRealtime() {
     const todayEnd = new Date(today);
     todayEnd.setHours(23, 59, 59, 999);
     
+    const dashCleaningsQuery = query(
+      collection(db, "cleanings"),
+      where("scheduledDate", ">=", Timestamp.fromDate(todayStart)),
+      where("scheduledDate", "<=", Timestamp.fromDate(todayEnd))
+    );
     const unsubCleanings = onSnapshot(
-      query(
-        collection(db, "cleanings"),
-        where("scheduledDate", ">=", Timestamp.fromDate(todayStart)),
-        where("scheduledDate", "<=", Timestamp.fromDate(todayEnd))
-      ),
+      dashCleaningsQuery,
       // 📶 includeMetadataChanges: ci serve l'evento in cui fromCache passa a
       // false (dati confermati dal server) ANCHE se i documenti non cambiano.
       { includeMetadataChanges: true },
@@ -356,6 +359,40 @@ export function useDashboardRealtime() {
         setError(err);
       }
     );
+
+    // ⛑️ FALLBACK ANTI-STALLO A LIVELLO HOOK: se dopo 3s mancano ancora i primi
+    // snapshot di properties/cleanings (canale realtime zombie dopo resume o
+    // navigazione — visto in produzione), lettura one-shot delle STESSE query.
+    // Se pure quella va in timeout, il canale è morto: kickFirestoreNetwork()
+    // lo riavvia e si ritenta una volta. I listener restano attivi e
+    // sovrascrivono appena il canale torna vivo. Stessi dati → zero divergenze.
+    const dashFallbackOneShot = async () => {
+      const [pSnap, cSnap] = await Promise.all([
+        loadedFlags.properties ? Promise.resolve(null) : getDocs(dashPropsQuery),
+        loadedFlags.cleanings ? Promise.resolve(null) : getDocs(dashCleaningsQuery),
+      ]);
+      if (pSnap && !loadedFlags.properties) {
+        propertiesData = pSnap.docs.map(doc => ({ id: doc.id, ...(doc.data() as Record<string, any>) }));
+        loadedFlags.properties = true;
+      }
+      if (cSnap && !loadedFlags.cleanings) {
+        cleaningsData = cSnap.docs.map(doc => ({ id: doc.id, ...(doc.data() as Record<string, any>) }));
+        loadedFlags.cleanings = true;
+        setServerSynced(true); // getDocs risponde dal server
+      }
+      maybeUpdate();
+    };
+    const dashFallbackTimer = setTimeout(async () => {
+      if (loadedFlags.properties && loadedFlags.cleanings) return;
+      console.warn("⛑️ [dash] listener lenti: lettura one-shot properties/cleanings");
+      const timeout = new Promise<never>((_, rej) => setTimeout(() => rej(new Error("timeout")), 4000));
+      try {
+        await Promise.race([dashFallbackOneShot(), timeout]);
+      } catch {
+        await kickFirestoreNetwork("dashboard: one-shot in timeout");
+        try { await dashFallbackOneShot(); } catch { /* i listener restano l'unica fonte */ }
+      }
+    }, 3000);
 
     // Listener 3: Operatori
     const unsubOperators = onSnapshot(
@@ -415,6 +452,7 @@ export function useDashboardRealtime() {
 
     // Cleanup
     return () => {
+      clearTimeout(dashFallbackTimer);
       if (saveCacheTimer) clearTimeout(saveCacheTimer);
       unsubProperties();
       unsubCleanings();

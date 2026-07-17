@@ -8,8 +8,9 @@
  * - Spinner SOLO la primissima volta (cache completamente vuota)
  */
 
-import { collection, query, where, orderBy, onSnapshot, Timestamp } from "firebase/firestore";
+import { collection, query, where, orderBy, onSnapshot, getDocs, Timestamp } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
+import { kickFirestoreNetwork } from "~/lib/firebase/networkWatchdog";
 
 // ─── Types ───────────────────────────────────────────────────
 interface BedConfig {
@@ -159,6 +160,27 @@ class PulizieDataStore {
   private _ownerOrdersByChunk = new Map<number, PulizieOrder[]>();
   private _ownerPropIdsKey = "";
 
+  // ⛑️ ANTI-STALLO: se il primo snapshot delle pulizie non arriva (canale di
+  // rete zombie dopo resume/navigazione), lettura one-shot della stessa query
+  // e, se pure quella non risponde, riavvio del canale + un retry.
+  private _gotCleaningsSnapshot = false;
+  private _cleaningsFallbackTimer: ReturnType<typeof setTimeout> | null = null;
+
+  private _armCleaningsFallback(oneShot: () => Promise<void>): void {
+    if (this._cleaningsFallbackTimer) clearTimeout(this._cleaningsFallbackTimer);
+    this._cleaningsFallbackTimer = setTimeout(async () => {
+      if (this._gotCleaningsSnapshot) return;
+      console.warn("⛑️ [pulizieStore] primo snapshot pulizie in ritardo: lettura one-shot");
+      const timeout = new Promise<never>((_, rej) => setTimeout(() => rej(new Error("timeout")), 4000));
+      try {
+        await Promise.race([oneShot(), timeout]);
+      } catch {
+        await kickFirestoreNetwork("pulizieStore: one-shot pulizie in timeout");
+        try { await oneShot(); } catch { /* i listener restano l'unica fonte */ }
+      }
+    }, 3000);
+  }
+
   /** Subscribe for React (useSyncExternalStore) */
   subscribe = (callback: Listener): (() => void) => {
     this._listeners.add(callback);
@@ -229,17 +251,21 @@ class PulizieDataStore {
       cleaningsRangeStart.setMonth(cleaningsRangeStart.getMonth() - 12);
       cleaningsRangeStart.setHours(0, 0, 0, 0);
 
+      const adminCleaningsQuery = query(
+        collection(db, "cleanings"),
+        where("scheduledDate", ">=", Timestamp.fromDate(cleaningsRangeStart)),
+        orderBy("scheduledDate", "asc")
+      );
+
+      this._gotCleaningsSnapshot = false;
       this._unsubscribers.push(
         onSnapshot(
-          query(
-            collection(db, "cleanings"),
-            where("scheduledDate", ">=", Timestamp.fromDate(cleaningsRangeStart)),
-            orderBy("scheduledDate", "asc")
-          ),
+          adminCleaningsQuery,
           // 📶 includeMetadataChanges: serve l'evento in cui fromCache→false
           // (conferma server) anche se i documenti non cambiano.
           { includeMetadataChanges: true },
           (snapshot) => {
+            this._gotCleaningsSnapshot = true;
             const serverConfirm = !snapshot.metadata.fromCache;
             // ⚡ FIX REGRESSIONE: gli eventi SOLO-metadata (fromCache→false senza
             // documenti cambiati) NON devono rimappare 12 mesi di pulizie
@@ -256,6 +282,16 @@ class PulizieDataStore {
           }
         )
       );
+
+      // ⛑️ Fallback: se in 3s il listener non ha consegnato nulla → getDocs
+      this._armCleaningsFallback(async () => {
+        const snap = await getDocs(adminCleaningsQuery);
+        if (this._gotCleaningsSnapshot) return; // arrivato nel frattempo
+        this._patch({
+          cleanings: snap.docs.map(doc => this._mapCleaning(doc)),
+          serverSynced: true, // getDocs risponde dal server
+        });
+      });
 
       const ordersRangeStart = new Date();
       ordersRangeStart.setMonth(ordersRangeStart.getMonth() - 12);
@@ -395,6 +431,7 @@ class PulizieDataStore {
     if (propertyIds.length === 0) {
       // Nessuna proprietà → nessuna pulizia possibile: non c'è nulla da
       // attendere dal server, sblocca subito lo splash.
+      this._gotCleaningsSnapshot = true; // niente fallback da attendere
       this._patch({ cleanings: [], orders: [], serverSynced: true });
       return;
     }
@@ -404,13 +441,18 @@ class PulizieDataStore {
     cutoff.setHours(0, 0, 0, 0);
 
     const chunks = this._chunk(propertyIds, 30); // Firestore "in" max 30 valori
+    this._gotCleaningsSnapshot = false;
+    const ownerChunkQueries: ReturnType<typeof query>[] = [];
     chunks.forEach((chunk, idx) => {
+      const ownerCleaningsQuery = query(collection(db, "cleanings"), where("propertyId", "in", chunk));
+      ownerChunkQueries.push(ownerCleaningsQuery);
       this._ownerCleaningsUnsubs.push(
         onSnapshot(
-          query(collection(db, "cleanings"), where("propertyId", "in", chunk)),
+          ownerCleaningsQuery,
           // 📶 includeMetadataChanges: serve l'evento fromCache→false (conferma server)
           { includeMetadataChanges: true },
           (snap) => {
+            this._gotCleaningsSnapshot = true;
             const serverConfirm = !snap.metadata.fromCache;
             // ⚡ FIX REGRESSIONE: eventi solo-metadata → niente rimappatura (vedi admin)
             if (snap.docChanges().length === 0 && this._state.hasData) {
@@ -441,10 +483,25 @@ class PulizieDataStore {
         )
       );
     });
+
+    // ⛑️ Fallback owner: se in 3s nessun chunk ha consegnato → getDocs di tutti
+    this._armCleaningsFallback(async () => {
+      const snaps = await Promise.all(ownerChunkQueries.map(q2 => getDocs(q2)));
+      if (this._gotCleaningsSnapshot) return; // arrivato nel frattempo
+      snaps.forEach((snap, idx) => {
+        const list = snap.docs.map(doc => this._mapCleaning(doc)).filter(c => c.date >= cutoff);
+        this._ownerCleaningsByChunk.set(idx, list);
+      });
+      const merged: PulizieCleaning[] = [];
+      this._ownerCleaningsByChunk.forEach(arr => merged.push(...arr));
+      merged.sort((a, b) => a.date.getTime() - b.date.getTime());
+      this._patch({ cleanings: merged, serverSynced: true }); // getDocs risponde dal server
+    });
   }
 
   /** Ferma tutti i listener */
   stop(): void {
+    if (this._cleaningsFallbackTimer) { clearTimeout(this._cleaningsFallbackTimer); this._cleaningsFallbackTimer = null; }
     this._unsubscribers.forEach(fn => fn());
     this._unsubscribers = [];
     this._ownerCleaningsUnsubs.forEach(fn => fn());

@@ -1,9 +1,17 @@
 "use client";
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { AuthProvider } from "~/lib/firebase/AuthContext";
 import { SplashOverlayHost } from "~/components/SplashOverlay";
+import { installFirestoreNetworkWatchdog } from "~/lib/firebase/networkWatchdog";
 
 export function AppProviders({ children }: { children: ReactNode }) {
+  // 🔌 Watchdog canale Firestore: al resume dell'app verifica con una lettura
+  // di prova che il canale realtime sia vivo; se è zombie lo riavvia.
+  // Cura per: dashboard admin / calendario proprietario bloccati su caricamento.
+  useEffect(() => {
+    installFirestoreNetworkWatchdog();
+  }, []);
+
   return (
     <AuthProvider>
       {children}
