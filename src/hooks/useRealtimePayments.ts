@@ -1253,6 +1253,7 @@ export function useRealtimePaymentsTimeline(timelineMonths: { month: number; yea
 
   useEffect(() => {
     let cancelled = false;
+    let unsubPayments: (() => void) | null = null;
 
     async function loadTimelineData() {
       // ⚡ LAZY: non caricare finché la timeline non è effettivamente visibile.
@@ -1286,8 +1287,12 @@ export function useRealtimePaymentsTimeline(timelineMonths: { month: number; yea
         //    per calcolare correttamente i surplus pagati nei mesi precedenti.
         const minDateExtended = new Date(minDate.getFullYear(), minDate.getMonth() - 24, 1);
 
-        // ⚡ Query filtrate per range esteso (cleanings/orders) + tutti i pagamenti e overrides
-        const [cleaningsSnap, ordersSnap, paymentsSnap, overridesSnap] = await Promise.all([
+        // ⚡ Query filtrate per range esteso (cleanings/orders) + overrides.
+        // 🔄 FIX TABELLA STANTIA: i payments NON sono più un getDocs one-shot ma
+        // un LISTENER (sotto): registrare/modificare un pagamento dalla Lista
+        // ricalcola la tabella all'istante. Prima la tabella restava congelata
+        // al momento del primo caricamento → "chi ha pagato non risulta saldato".
+        const [cleaningsSnap, ordersSnap, overridesSnap] = await Promise.all([
           getDocs(query(
             collection(db, "cleanings"),
             where("scheduledDate", ">=", Timestamp.fromDate(minDateExtended)),
@@ -1298,7 +1303,6 @@ export function useRealtimePaymentsTimeline(timelineMonths: { month: number; yea
             where("scheduledDate", ">=", Timestamp.fromDate(minDateExtended)),
             where("scheduledDate", "<=", Timestamp.fromDate(maxDate))
           )),
-          getDocs(collection(db, "payments")),
           getDocs(collection(db, "paymentOverrides")),
         ]);
 
@@ -1308,7 +1312,6 @@ export function useRealtimePaymentsTimeline(timelineMonths: { month: number; yea
         const cleanings = cleaningsSnap.docs.map(d => ({ id: d.id, ...(d.data() as Record<string, any>) })).filter(c => c.status === "COMPLETED");
         // @ts-expect-error TODO-FIX: TS2339 Property 'status' does not exist on type '{ id: string; }'.
         const orders = ordersSnap.docs.map(d => ({ id: d.id, ...(d.data() as Record<string, any>) })).filter(o => o.status !== "CANCELLED");
-        const allPayments = paymentsSnap.docs.map(d => ({ id: d.id, ...(d.data() as Record<string, any>) }));
         const allOverrides = overridesSnap.docs.map(d => ({ id: d.id, ...(d.data() as Record<string, any>) }));
 
         // Raggruppa proprietà per owner
@@ -1325,6 +1328,9 @@ export function useRealtimePaymentsTimeline(timelineMonths: { month: number; yea
           propertiesByOwner.get(ownerId)!.push(prop);
         });
 
+        // 🔄 Ricalcolo completo della tabella dato l'elenco pagamenti corrente.
+        // Richiamato dal listener payments a ogni cambiamento.
+        const recompute = (allPayments: any[]) => {
         const clientsMap = new Map<string, TimelineClientData>();
 
         for (const { month, year } of timelineMonths) {
@@ -1395,15 +1401,27 @@ export function useRealtimePaymentsTimeline(timelineMonths: { month: number; yea
           .sort((a, b) => a.proprietarioName.localeCompare(b.proprietarioName));
 
         setTableData(result);
+        };
+
+        // 🔄 LISTENER payments: prima emissione = primo popolamento tabella;
+        // ogni pagamento registrato/modificato dopo → ricalcolo immediato.
+        unsubPayments = onSnapshot(collection(db, "payments"), (snap) => {
+          if (cancelled) return;
+          const allPayments = snap.docs.map(d => ({ id: d.id, ...(d.data() as Record<string, any>) }));
+          recompute(allPayments);
+          setLoading(false);
+        }, (error) => {
+          console.error("❌ Errore listener payments timeline:", error);
+          if (!cancelled) setLoading(false);
+        });
       } catch (error) {
         console.error("❌ Errore timeline:", error);
-      } finally {
         if (!cancelled) setLoading(false);
       }
     }
 
     loadTimelineData();
-    return () => { cancelled = true; };
+    return () => { cancelled = true; if (unsubPayments) unsubPayments(); };
   }, [timelineMonths, enabled]);
 
   return { loading, tableData };
