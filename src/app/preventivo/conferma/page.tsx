@@ -147,6 +147,10 @@ function ConfermaInner() {
               <p className="text-sm text-slate-500 mt-4">
                 Vuoi anticiparci? <a className="font-semibold text-[#B0764A]" href="https://wa.me/393927830017?text=Ciao!%20Ho%20appena%20confermato%20il%20preventivo.">Scrivici su WhatsApp</a>
               </p>
+              {/* 🔗 Uscita esplicita verso il sito principale */}
+              <a href="https://puliziacasevacanze.it" className="inline-flex items-center gap-2 mt-6 px-5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold transition-colors">
+                ← Torna al sito
+              </a>
             </div>
           )}
         </div>
