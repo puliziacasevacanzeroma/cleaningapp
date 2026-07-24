@@ -95,15 +95,29 @@ export function DashboardLayoutClient({
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  // 🔧 v2: zoom 0.8 su <html> SOLO su desktop — tutta l'area admin (menu incluso)
-  // si vede all'80%. Zoom sulla radice = scala uniforme come lo zoom browser
-  // (anche pannelli position:fixed, modal, toast), stesso approccio già validato
-  // sull'area proprietario. Cleanup al passaggio a mobile/unmount.
+  // 🔧 v3: zoom 0.8 su <html> SOLO su desktop + COMPENSAZIONE ALTEZZE VIEWPORT.
+  // Lo zoom CSS sulla radice NON scala le unità vh: un h-screen (100vh) veniva
+  // renderizzato all'80% dello schermo → pagina e menu "tagliati" con vuoto sotto.
+  // Fix: finché lo zoom è attivo, h-screen/min-h-screen/max-h-screen vengono
+  // portati a calc(100vh / 0.8) via CSS iniettato → resa finale = schermo pieno.
+  // Cleanup completo al passaggio a mobile/unmount.
   useEffect(() => {
-    if (isDesktop) {
-      (document.documentElement.style as any).zoom = "0.8";
-      return () => { (document.documentElement.style as any).zoom = ""; };
-    }
+    if (!isDesktop) return;
+    const Z = 0.8;
+    const el = document.documentElement;
+    (el.style as any).zoom = String(Z);
+    const style = document.createElement("style");
+    style.id = "admin-zoom-vh-fix";
+    style.textContent = [
+      `.h-screen { height: calc(100vh / ${Z}) !important; }`,
+      `.min-h-screen { min-height: calc(100vh / ${Z}) !important; }`,
+      `.max-h-screen { max-height: calc(100vh / ${Z}) !important; }`,
+    ].join("\n");
+    document.head.appendChild(style);
+    return () => {
+      (el.style as any).zoom = "";
+      style.remove();
+    };
   }, [isDesktop]);
 
   // 🚀 Prefetch route principali per navigazione istantanea.
