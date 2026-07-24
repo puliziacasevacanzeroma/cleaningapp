@@ -3,6 +3,7 @@ import { adminDb } from "~/lib/firebase/admin";
 import { Timestamp } from "firebase-admin/firestore";
 import { createLinenOrderForCleaning } from "~/lib/services/linenOrderService";
 import { getApiUser } from "~/lib/api-auth";
+import { resolveEffectiveCheckIn } from "~/lib/icalSync/checkInClipGuard";
 
 
 export const dynamic = 'force-dynamic';
@@ -680,9 +681,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             const changed = !eCheckIn || !eCheckOut || !isSameDay(eCheckIn, event.dtstart) || !isSameDay(eCheckOut, event.dtend);
             
             if (changed || !existing.icalUid) {
+              // 🔒 clip-guard condiviso (src/lib/icalSync/checkInClipGuard.ts):
+              // impedisce che il taglio quotidiano del feed Booking cancelli la storia.
+              const guardPP = resolveEffectiveCheckIn({ source, existingCheckIn: eCheckIn ?? null, feedStart: event.dtstart });
               await adminDb.collection("bookings").doc(existing.id).update( {
-                checkIn: Timestamp.fromDate(event.dtstart),
+                checkIn: Timestamp.fromDate(guardPP.effectiveStart),
                 checkOut: Timestamp.fromDate(event.dtend),
+                ...(guardPP.kept ? {
+                  originalCheckIn: Timestamp.fromDate(eCheckIn as Date),
+                  feedStart: Timestamp.fromDate(event.dtstart),
+                  clipGuardAt: Timestamp.now(),
+                } : {}),
                 guestName, icalUid: event.uid,
                 ...(reservationCode && { airbnbReservationCode: reservationCode }),
                 updatedAt: Timestamp.now(),

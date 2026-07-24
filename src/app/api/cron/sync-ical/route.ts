@@ -8,6 +8,7 @@ import { Timestamp } from "firebase-admin/firestore";
 import { getItemName } from "~/lib/itemNames";
 import { auditLog } from "~/lib/services/auditService";
 import { buildExpectedItems } from "~/lib/linen/linenCore";
+import { resolveEffectiveCheckIn } from "~/lib/icalSync/checkInClipGuard";
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
@@ -897,12 +898,12 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
                 // taglio è dovuto solo al passare del tempo → manteniamo il check-in
                 // ORIGINALE. Se invece il taglio riguarda date future (cancellazione
                 // reale di una prenotazione), si aggiorna normalmente.
-                const todayStartUTC = new Date();
-                todayStartUTC.setUTCHours(0, 0, 0, 0);
-                const keepOriginalCheckIn = source === 'booking' && !!ci
-                  && ci.getTime() < e.dtstart.getTime()
-                  && ci.getTime() < todayStartUTC.getTime();
-                const effStart: Date = keepOriginalCheckIn ? ci : e.dtstart;
+                // v2: logica centralizzata in src/lib/icalSync/checkInClipGuard.ts
+                // (mezzanotte Europe/Rome DST-correct, firma stretta del taglio
+                // quotidiano, rilevamento giorni liberati). Vedi test nel modulo.
+                const guard = resolveEffectiveCheckIn({ source, existingCheckIn: ci ?? null, feedStart: e.dtstart });
+                const keepOriginalCheckIn = guard.kept;
+                const effStart: Date = guard.effectiveStart;
 
                 if (!ci || !co || !isSameDay(ci, effStart) || !isSameDay(co, e.dtend) || !existing.icalUid || existing.icalUid !== e.uid) {
                   const nowUpdate = new Date();
@@ -910,7 +911,51 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
                     checkIn: Timestamp.fromDate(effStart), checkOut: Timestamp.fromDate(e.dtend),
                     icalUid: e.uid, guestName: existing.guestName || getGuestName(e, source), updatedAt: Timestamp.now(),
                     historicBooking: effStart < nowUpdate || e.dtend < nowUpdate,
+                    // 🔒 tracciamento clip-guard: entrambe le verità restano nel dato
+                    ...(keepOriginalCheckIn ? {
+                      originalCheckIn: Timestamp.fromDate(ci as Date),
+                      feedStart: Timestamp.fromDate(e.dtstart),
+                      clipGuardAt: Timestamp.now(),
+                    } : {}),
                   });
+
+                  // 🚨 GIORNI LIBERATI (partenza anticipata / cancellazione a metà
+                  // soggiorno): il feed parte DOPO oggi con check-in nel passato.
+                  // Notifica admin idempotente (una per booking+nuova data).
+                  if (guard.freedDays) {
+                    try {
+                      const newStartStr = e.dtstart.toISOString().split('T')[0];
+                      const oldCiStr = (ci as Date).toISOString().split('T')[0];
+                      const alertKeyF = `freed_${existing.id}_${newStartStr}`;
+                      const alertDocF = await adminDb.collection('turnoverAlerts').doc(alertKeyF).get();
+                      if (!alertDocF.exists) {
+                        await adminDb.collection('turnoverAlerts').doc(alertKeyF).set({
+                          propertyId: prop.id, propertyName: prop.name, bookingId: existing.id,
+                          type: 'EARLY_DEPARTURE', oldCheckIn: oldCiStr, newFeedStart: newStartStr, createdAt: Timestamp.now(),
+                        });
+                        const fmtItF = (s: string) => { const [y, m, d] = s.split('-'); return `${d}/${m}/${y}`; };
+                        const adminsSnapF = await adminDb.collection('users').where('role', '==', 'ADMIN').get();
+                        for (const adminDoc of adminsSnapF.docs) {
+                          await adminDb.collection('notifications').add({
+                            title: '🚪 Booking: giorni liberati a metà soggiorno',
+                            message: `🏠 ${prop.name}\n\nIl blocco Booking iniziato il ${fmtItF(oldCiStr)} ora risulta libero fino al ${fmtItF(newStartStr)}: probabile partenza anticipata o cancellazione.\n\n👉 Verifica su Booking: se l'ospite è uscito, valuta se ANTICIPARE la pulizia già programmata al checkout originale.`,
+                            type: 'WARNING', recipientRole: 'ADMIN', recipientId: adminDoc.id,
+                            senderId: 'system', senderName: 'Sync iCal - Clip Guard',
+                            status: 'UNREAD', createdAt: Timestamp.now(), updatedAt: Timestamp.now(),
+                          });
+                        }
+                        try {
+                          const { sendPushNotification } = await import('~/lib/notifications/sendPushNotification');
+                          await sendPushNotification(
+                            { title: '🚪 Giorni liberati su Booking', body: `${prop.name}: il blocco ora parte il ${fmtItF(newStartStr)} (era ${fmtItF(oldCiStr)}). Possibile partenza anticipata — verifica.` },
+                            { role: 'ADMIN', priority: 'high' }
+                          );
+                        } catch {}
+                      }
+                    } catch (freedErr) {
+                      console.error('[SYNC] Errore notifica giorni liberati:', freedErr);
+                    }
+                  }
 
                   // ⚠️ FUSIONE A SINISTRA (solo Booking, solo notifica): il blocco ora
                   // inizia PRIMA del check-in noto su date future. Può essere una nuova

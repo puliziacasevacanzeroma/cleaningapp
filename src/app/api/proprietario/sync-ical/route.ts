@@ -3,6 +3,7 @@ import { adminDb } from "~/lib/firebase/admin";
 import { Timestamp, FieldValue } from "firebase-admin/firestore";
 import { createLinenOrderForCleaning } from "~/lib/services/linenOrderService";
 import { getApiUser } from "~/lib/api-auth";
+import { resolveEffectiveCheckIn } from "~/lib/icalSync/checkInClipGuard";
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -223,10 +224,17 @@ export async function POST() {
               const existingCheckIn = existing.checkIn?.toDate?.()?.getTime();
               const existingCheckOut = existing.checkOut?.toDate?.()?.getTime();
               
-              if (existingCheckIn !== event.dtstart.getTime() || existingCheckOut !== event.dtend.getTime()) {
+              // 🔒 clip-guard condiviso (src/lib/icalSync/checkInClipGuard.ts)
+              const guardPR = resolveEffectiveCheckIn({ source, existingCheckIn: existing.checkIn?.toDate?.() ?? null, feedStart: event.dtstart });
+              if (existingCheckIn !== guardPR.effectiveStart.getTime() || existingCheckOut !== event.dtend.getTime()) {
                 await adminDb.collection("bookings").doc(existing.id).update({
-                  checkIn: Timestamp.fromDate(event.dtstart),
+                  checkIn: Timestamp.fromDate(guardPR.effectiveStart),
                   checkOut: Timestamp.fromDate(event.dtend),
+                  ...(guardPR.kept ? {
+                    originalCheckIn: Timestamp.fromDate(existing.checkIn.toDate() as Date),
+                    feedStart: Timestamp.fromDate(event.dtstart),
+                    clipGuardAt: Timestamp.now(),
+                  } : {}),
                   guestName,
                   updatedAt: Timestamp.now(),
                 });
