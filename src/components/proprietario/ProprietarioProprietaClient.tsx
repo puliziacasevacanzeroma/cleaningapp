@@ -389,17 +389,17 @@ export function ProprietarioProprietaClient({ activeProperties, pendingPropertie
                 <table className="w-full">
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-200">
-                      <th className="text-left py-4 px-6 font-semibold text-slate-600 text-sm">Proprietà</th>
-                      <th className="text-left py-4 px-6 font-semibold text-slate-600 text-sm">Indirizzo</th>
-                      <th className="text-center py-4 px-4 font-semibold text-slate-600 text-sm">Ospiti</th>
-                      <th className="text-center py-4 px-4 font-semibold text-slate-600 text-sm">Camere</th>
-                      <th className="text-center py-4 px-4 font-semibold text-slate-600 text-sm">Bagni</th>
-                      <th className="text-center py-4 px-4 font-semibold text-slate-600 text-sm">Check-in</th>
-                      <th className="text-center py-4 px-4 font-semibold text-slate-600 text-sm">Check-out</th>
-                      <th className="text-center py-4 px-4 font-semibold text-slate-600 text-sm">Prenotazioni</th>
-                      <th className="text-center py-4 px-4 font-semibold text-slate-600 text-sm">Pulizie</th>
-                      <th className="text-center py-4 px-4 font-semibold text-slate-600 text-sm">Stato</th>
-                      <th className="text-right py-4 px-6 font-semibold text-slate-600 text-sm">Azioni</th>
+                      <th className="text-left py-3 px-3 font-semibold text-slate-600 text-xs whitespace-nowrap">Proprietà</th>
+                      <th className="text-left py-3 px-3 font-semibold text-slate-600 text-xs whitespace-nowrap">Indirizzo</th>
+                      <th className="text-center py-3 px-2 font-semibold text-slate-600 text-xs whitespace-nowrap">Ospiti</th>
+                      <th className="text-center py-3 px-2 font-semibold text-slate-600 text-xs whitespace-nowrap">Camere</th>
+                      <th className="text-center py-3 px-2 font-semibold text-slate-600 text-xs whitespace-nowrap">Bagni</th>
+                      <th className="text-center py-3 px-2 font-semibold text-slate-600 text-xs whitespace-nowrap">Check-in</th>
+                      <th className="text-center py-3 px-2 font-semibold text-slate-600 text-xs whitespace-nowrap">Check-out</th>
+                      <th className="text-center py-3 px-2 font-semibold text-slate-600 text-xs whitespace-nowrap">Prenotazioni</th>
+                      <th className="text-center py-3 px-2 font-semibold text-slate-600 text-xs whitespace-nowrap">Pulizie</th>
+                      <th className="text-center py-3 px-2 font-semibold text-slate-600 text-xs whitespace-nowrap">Stato</th>
+                      <th className="text-right py-3 px-3 font-semibold text-slate-600 text-xs whitespace-nowrap">Azioni</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -409,9 +409,9 @@ export function ProprietarioProprietaClient({ activeProperties, pendingPropertie
                         className="hover:bg-sky-50/50 transition-all cursor-pointer group"
                         onClick={() => router.push(`/proprietario/proprieta/${property.id}`)}
                       >
-                        <td className="py-4 px-6">
-                          <div className="flex items-center gap-4">
-                            <div className="w-14 h-14 rounded-xl overflow-hidden bg-slate-200 flex-shrink-0 shadow-sm">
+                        <td className="py-3 px-3">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-lg overflow-hidden bg-slate-200 flex-shrink-0 shadow-sm">
                               <img
                                 src={property.imageUrl || getPlaceholderImage(index)}
                                 alt={property.name}
@@ -419,66 +419,66 @@ export function ProprietarioProprietaClient({ activeProperties, pendingPropertie
                               />
                             </div>
                             <div>
-                              <p className="font-bold text-slate-800 group-hover:text-sky-600 transition-colors">{property.name}</p>
+                              <p className="text-sm font-bold text-slate-800 group-hover:text-sky-600 transition-colors">{property.name}</p>
                               {property.zone && <p className="text-xs text-slate-400 mt-0.5">{property.zone}</p>}
                             </div>
                           </div>
                         </td>
-                        <td className="py-4 px-6">
+                        <td className="py-3 px-3">
                           <p className="text-slate-600 text-sm">{property.address}</p>
                           {property.city && <p className="text-xs text-slate-400 mt-0.5">{property.city}</p>}
                         </td>
-                        <td className="py-4 px-4 text-center">
-                          <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 rounded-lg">
+                        <td className="py-3 px-2 text-center">
+                          <div className="inline-flex items-center gap-1.5 px-2 py-1 bg-blue-50 rounded-lg">
                             <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
                             </svg>
                             <span className="font-semibold text-blue-700">{property.maxGuests || "-"}</span>
                           </div>
                         </td>
-                        <td className="py-4 px-4 text-center">
+                        <td className="py-3 px-2 text-center">
                           <span className="font-medium text-slate-700">{property.bedrooms || "-"}</span>
                         </td>
-                        <td className="py-4 px-4 text-center">
+                        <td className="py-3 px-2 text-center">
                           <span className="font-medium text-slate-700">{property.bathrooms || "-"}</span>
                         </td>
-                        <td className="py-4 px-4 text-center">
+                        <td className="py-3 px-2 text-center">
                           <span className="text-sm text-slate-600">{property.checkInTime || "15:00"}</span>
                         </td>
-                        <td className="py-4 px-4 text-center">
+                        <td className="py-3 px-2 text-center">
                           <span className="text-sm text-slate-600">{property.checkOutTime || "10:00"}</span>
                         </td>
-                        <td className="py-4 px-4 text-center">
-                          <span className="inline-flex items-center gap-1 px-3 py-1.5 bg-purple-50 text-purple-700 rounded-lg text-sm font-semibold">
+                        <td className="py-3 px-2 text-center">
+                          <span className="inline-flex items-center gap-1 px-2 py-1 bg-purple-50 text-purple-700 rounded-lg text-sm font-semibold">
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                             </svg>
                             {property._count?.bookings || 0}
                           </span>
                         </td>
-                        <td className="py-4 px-4 text-center">
-                          <span className="inline-flex items-center gap-1 px-3 py-1.5 bg-teal-50 text-teal-700 rounded-lg text-sm font-semibold">
+                        <td className="py-3 px-2 text-center">
+                          <span className="inline-flex items-center gap-1 px-2 py-1 bg-teal-50 text-teal-700 rounded-lg text-sm font-semibold">
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
                             </svg>
                             {property._count?.cleanings || 0}
                           </span>
                         </td>
-                        <td className="py-4 px-4 text-center">
-                          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-100 text-emerald-700 rounded-full text-xs font-bold">
+                        <td className="py-3 px-2 text-center">
+                          <span className="inline-flex items-center gap-1.5 px-2 py-1 bg-emerald-100 text-emerald-700 rounded-full text-xs font-bold">
                             <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
                             Attiva
                           </span>
                         </td>
-                        <td className="py-4 px-6 text-right">
+                        <td className="py-3 px-3 text-right">
                           <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-all">
                             <Link
                               href={`/proprietario/proprieta/${property.id}`}
                               onClick={(e) => e.stopPropagation()}
-                              className="p-2.5 hover:bg-sky-100 rounded-xl transition-colors text-sky-600"
+                              className="p-2 hover:bg-sky-100 rounded-xl transition-colors text-sky-600"
                               title="Visualizza dettagli"
                             >
-                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                               </svg>
@@ -486,10 +486,10 @@ export function ProprietarioProprietaClient({ activeProperties, pendingPropertie
                             <Link
                               href={`/proprietario/proprieta/${property.id}`}
                               onClick={(e) => e.stopPropagation()}
-                              className="p-2.5 hover:bg-slate-100 rounded-xl transition-colors text-slate-600"
+                              className="p-2 hover:bg-slate-100 rounded-xl transition-colors text-slate-600"
                               title="Modifica"
                             >
-                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                               </svg>
                             </Link>
