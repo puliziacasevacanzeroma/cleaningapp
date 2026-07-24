@@ -222,6 +222,21 @@ export default function AssegnazioniPage() {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
 
+  // 🔶 Modal di conferma in stile app — sostituisce window.confirm()
+  const [askModal, setAskModal] = useState<null | { title: string; message: string; note?: string; confirmLabel: string; danger?: boolean }>(null);
+  const askResolveRef = useRef<((ok: boolean) => void) | null>(null);
+  const askConfirm = useCallback((opts: { title: string; message: string; note?: string; confirmLabel?: string; danger?: boolean }) => {
+    return new Promise<boolean>((resolve) => {
+      askResolveRef.current = resolve;
+      setAskModal({ confirmLabel: "Conferma", ...opts });
+    });
+  }, []);
+  const closeAskModal = useCallback((ok: boolean) => {
+    setAskModal(null);
+    askResolveRef.current?.(ok);
+    askResolveRef.current = null;
+  }, []);
+
   const [sheetCleaningId, setSheetCleaningId] = useState<string | null>(null);
   const [sheetAddMode, setSheetAddMode] = useState(false); // true = aggiungi operatore (non sostituire)
   const [showTimePickerFor, setShowTimePickerFor] = useState<string | null>(null);
@@ -639,7 +654,7 @@ export default function AssegnazioniPage() {
 
   // handleAssign usa functional setState per evitare stale closures
   // addToExisting=true → aggiunge un secondo operatore senza rimuovere il primo
-  const handleAssign = useCallback((cleaningId: string, operatorId: string, operatorName: string, addToExisting: boolean = false) => {
+  const handleAssign = useCallback(async (cleaningId: string, operatorId: string, operatorName: string, addToExisting: boolean = false) => {
     // Check duplicato server
     const serverCl = serverCleaningsRef.current.find(c => c.id === cleaningId);
     if (serverCl?.operatorId === operatorId || serverCl?.operators?.some(o => o.id === operatorId)) {
@@ -651,12 +666,12 @@ export default function AssegnazioniPage() {
     const avail = opAvailabilityRef.current.get(operatorId);
     let forced = false;
     if (avail && !avail.available) {
-      const ok = window.confirm(
-        `⚠️ ${operatorName} NON è in turno questo giorno` +
-        `${avail.source === "exception_off" ? " (assenza registrata)" : ""}.\n\n` +
-        `Assegnare comunque come CHIAMATA D'URGENZA?\n` +
-        `(Verrà aggiunto un turno extra nella pagina Turni e l'operatore riceverà una notifica)`
-      );
+      const ok = await askConfirm({
+        title: "Operatore fuori turno",
+        message: `${operatorName} NON è in turno questo giorno${avail.source === "exception_off" ? " (assenza registrata)" : ""}. Assegnare comunque come chiamata d'urgenza?`,
+        note: "Verrà aggiunto un turno extra nella pagina Turni e l'operatore riceverà una notifica.",
+        confirmLabel: "Sì, chiamata d'urgenza",
+      });
       if (!ok) return;
       forced = true;
     }
@@ -1115,8 +1130,14 @@ export default function AssegnazioniPage() {
     setIsAutoAssigning(false);
   }, [activeOps, selectedDate]);
 
-  const handleDiscardDrafts = useCallback(() => {
-    if (!window.confirm("Scartare tutte le bozze non confermate?")) return;
+  const handleDiscardDrafts = useCallback(async () => {
+    const ok = await askConfirm({
+      title: "Scartare le bozze?",
+      message: "Tutte le bozze non confermate andranno perse.",
+      confirmLabel: "Scarta bozze",
+      danger: true,
+    });
+    if (!ok) return;
     setDrafts([]);
     setDraftTimeChanges(new Map());
     showToast("Bozze scartate");
@@ -1173,9 +1194,12 @@ export default function AssegnazioniPage() {
         // conferma e ritenta con force.
         if (res.status === 409 && data.code === "SHIFT_UNAVAILABLE" && Array.isArray(data.conflicts)) {
           const names = [...new Set(data.conflicts.map((c: any) => c.userName))].join(", ");
-          const ok = window.confirm(
-            `⚠️ Operatori fuori turno: ${names}.\n\nAssegnare comunque come CHIAMATA D'URGENZA?`
-          );
+          const ok = await askConfirm({
+            title: "Operatori fuori turno",
+            message: `Operatori fuori turno: ${names}. Assegnare comunque come chiamata d'urgenza?`,
+            note: "Verrà aggiunto un turno extra nella pagina Turni e gli operatori riceveranno una notifica.",
+            confirmLabel: "Sì, chiamata d'urgenza",
+          });
           if (ok) {
             res = await fetch("/api/cleanings/batch-assign", {
               method: "POST",
@@ -2640,6 +2664,30 @@ export default function AssegnazioniPage() {
       <BottomSheet />
       <TimePicker />
       <ConfirmModal />
+      {askModal && (
+        <Portal>
+          <div className="fixed inset-0 bg-black/50 z-[9999] flex items-center justify-center p-4" onClick={() => closeAskModal(false)}>
+            <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+              <div className="px-5 pt-5 pb-4 text-center">
+                <div className={`w-14 h-14 mx-auto mb-3 rounded-full flex items-center justify-center ${askModal.danger ? "bg-red-100" : "bg-amber-100"}`}>
+                  <svg className={`w-7 h-7 ${askModal.danger ? "text-red-500" : "text-amber-500"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                </div>
+                <h3 className="text-lg font-bold text-slate-800">{askModal.title}</h3>
+                <p className="text-sm text-slate-600 mt-2 leading-relaxed">{askModal.message}</p>
+                {askModal.note && (
+                  <p className="text-xs text-slate-500 bg-slate-50 rounded-xl px-3 py-2 mt-3">{askModal.note}</p>
+                )}
+              </div>
+              <div className="flex gap-2 px-5 pb-5">
+                <button onClick={() => closeAskModal(false)} className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm hover:bg-slate-50 transition-colors">Annulla</button>
+                <button onClick={() => closeAskModal(true)} className={`flex-1 py-2.5 rounded-xl text-white font-semibold text-sm shadow-lg transition-colors ${askModal.danger ? "bg-red-500 hover:bg-red-600" : "bg-amber-500 hover:bg-amber-600"}`}>{askModal.confirmLabel}</button>
+              </div>
+            </div>
+          </div>
+        </Portal>
+      )}
       {showCalendar && <CalendarDropdown />}
       <DraftBanner />
       {toast && (
