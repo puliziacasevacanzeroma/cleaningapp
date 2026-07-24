@@ -129,6 +129,17 @@ export function ProprietarioLayoutClient({ children, userName, userEmail, userId
     }
   }, [pathname]);
 
+  // 🔧 v3: zoom 0.9 su <html> SOLO su desktop — equivale allo zoom browser al 90%.
+  // Sulla radice scala tutto uniformemente (anche pannelli position:fixed, modal,
+  // toast), a differenza dello zoom sul <main> che disallineava i fixed interni
+  // (es. pannello destro di PulizieContent). Cleanup al passaggio a mobile/unmount.
+  useEffect(() => {
+    if (isMobile === false) {
+      (document.documentElement.style as any).zoom = "0.9";
+      return () => { (document.documentElement.style as any).zoom = ""; };
+    }
+  }, [isMobile]);
+
   // 🔄 Loading mentre determiniamo mobile/desktop
   if (isMobile === null) {
     return (
@@ -335,8 +346,7 @@ export function ProprietarioLayoutClient({ children, userName, userEmail, userId
           </button>
         </div>
       </aside>
-      {/* 🔧 v2: zoom 0.9 sul contenuto — la pagina si vede come al 90% browser (com'era in sviluppo) */}
-      <main className="flex-1 ml-64" style={{ zoom: 0.9 } as React.CSSProperties}>
+      <main className="flex-1 ml-64">
         {/* Header con campanella */}
         <div className="sticky top-0 z-30 bg-white border-b border-slate-200 px-6 py-3 flex items-center justify-end gap-3">
           <AssistantHeaderButton
