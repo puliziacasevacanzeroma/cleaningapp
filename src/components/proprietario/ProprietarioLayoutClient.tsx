@@ -291,16 +291,20 @@ export function ProprietarioLayoutClient({ children, userName, userEmail, userId
       {userId && <ProprietarioRealtimeListener userId={userId} />}
       {userId && <PaymentWarningModal userId={userId} userName={userName} />}
       <div className="min-h-screen bg-slate-50 flex">
-      <aside className="w-64 bg-white border-r border-slate-200 p-4 fixed h-full">
-        <div className="mb-8">
-          <h1 className="text-xl font-bold text-slate-800">CleaningApp</h1>
-          <p className="text-sm text-slate-500">Area Proprietario</p>
+      {/* 🔧 v2: sidebar a flex-col — header fisso, nav scrollabile, footer NEL FLUSSO.
+          Prima il blocco utente+Esci era `absolute bottom-4` e con viewport basse
+          (100% zoom) le ultime voci del menu ci finivano sotto (overlay).
+          Misure compattate (~80% visivo) senza hack di zoom. */}
+      <aside className="w-64 bg-white border-r border-slate-200 fixed h-full flex flex-col p-3">
+        <div className="mb-5 px-1 shrink-0">
+          <h1 className="text-lg font-bold text-slate-800">CleaningApp</h1>
+          <p className="text-xs text-slate-500">Area Proprietario</p>
         </div>
-        <nav className="space-y-2">
+        <nav className="flex-1 min-h-0 overflow-y-auto space-y-1">
           {/* Sidebar desktop con tutte le voci */}
           {allMenuItems.map((item) => (
-            <a key={item.href} href={item.href} data-nav-item onClick={(e) => handleNavClick(e, item.href)} className={`relative flex items-center gap-3 px-4 py-3 rounded-xl ${isItemActive(item.href) ? "bg-sky-50 text-sky-600" : "text-slate-600 hover:bg-slate-50"}`}>
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <a key={item.href} href={item.href} data-nav-item onClick={(e) => handleNavClick(e, item.href)} className={`relative flex items-center gap-3 px-3 py-2 rounded-lg text-sm ${isItemActive(item.href) ? "bg-sky-50 text-sky-600" : "text-slate-600 hover:bg-slate-50"}`}>
+              <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={item.icon} />
               </svg>
               {item.label}
@@ -310,28 +314,29 @@ export function ProprietarioLayoutClient({ children, userName, userEmail, userId
             </a>
           ))}
         </nav>
-        <div className="absolute bottom-4 left-4 right-4">
-          <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl mb-2">
-            <div className="w-10 h-10 bg-sky-500 rounded-full flex items-center justify-center text-white font-bold">
+        <div className="shrink-0 pt-3 border-t border-slate-100 mt-2">
+          <div className="flex items-center gap-2.5 p-2 bg-slate-50 rounded-lg mb-1.5">
+            <div className="w-8 h-8 bg-sky-500 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0">
               {userName.charAt(0)}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="font-medium text-slate-800 truncate">{userName}</p>
+              <p className="text-sm font-medium text-slate-800 truncate">{userName}</p>
               <p className="text-xs text-slate-500 truncate">{userEmail}</p>
             </div>
           </div>
           <button
             onClick={handleLogout}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2 text-red-600 hover:bg-red-50 rounded-xl transition-colors"
+            className="w-full flex items-center justify-center gap-2 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
             </svg>
             <span className="font-medium">Esci</span>
           </button>
         </div>
       </aside>
-      <main className="flex-1 ml-64">
+      {/* 🔧 v2: zoom 0.9 sul contenuto — la pagina si vede come al 90% browser (com'era in sviluppo) */}
+      <main className="flex-1 ml-64" style={{ zoom: 0.9 } as React.CSSProperties}>
         {/* Header con campanella */}
         <div className="sticky top-0 z-30 bg-white border-b border-slate-200 px-6 py-3 flex items-center justify-end gap-3">
           <AssistantHeaderButton
