@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { collection, query, where, onSnapshot, Timestamp, doc, updateDoc, getDocs } from "firebase/firestore";
+import { collection, query, where, onSnapshot, Timestamp, doc, updateDoc, getDocs, setDoc, deleteDoc } from "firebase/firestore";
+import { useAuth } from "~/lib/firebase/AuthContext";
 import { db } from "~/lib/firebase/config";
 import { calculateDistance } from "~/lib/geo";
 import { resolveAvailability, type AvailabilityResult, type ShiftExceptionType } from "~/lib/shifts/availability";
@@ -183,6 +184,7 @@ function Portal({ children }: { children: React.ReactNode }) {
 // ═══════════════════════════════════════════════════════════════
 
 export default function AssegnazioniPage() {
+  const { user } = useAuth();
   const [selectedDate, setSelectedDate] = useState(() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -467,6 +469,72 @@ export default function AssegnazioniPage() {
     setDrafts([]);
     setDraftTimeChanges(new Map());
   }, [selectedDate]);
+
+  // ═══ BOZZE CONDIVISE MULTI-ADMIN (Firestore: assignmentDrafts/{data}) ═══
+  // Tutte le bozze vengono autosalvate e sincronizzate in realtime tra gli
+  // admin. NESSUNA notifica agli operatori: quelle partono solo con
+  // "Conferma tutto" (flusso invariato). Alla conferma o allo scarto il
+  // documento bozze viene eliminato.
+  const draftsSyncReadyRef = useRef(false);   // primo snapshot ricevuto per la data corrente
+  const applyingRemoteRef = useRef(false);    // stiamo applicando dati remoti → non ri-scrivere
+  const lastSyncedJsonRef = useRef<string>("");
+  const [draftsMeta, setDraftsMeta] = useState<{ updatedByName?: string; updatedAtLabel?: string } | null>(null);
+
+  // Listener realtime sul documento della data selezionata
+  useEffect(() => {
+    draftsSyncReadyRef.current = false;
+    lastSyncedJsonRef.current = "";
+    setDraftsMeta(null);
+    const ref = doc(db, "assignmentDrafts", selectedDate);
+    const unsub = onSnapshot(ref, (snap) => {
+      const data = snap.exists() ? snap.data() : null;
+      const remoteDrafts = (data?.drafts || []) as DraftAssignment[];
+      const remoteTimes = (data?.timeChanges || {}) as Record<string, string>;
+      const json = JSON.stringify({ d: remoteDrafts, t: remoteTimes });
+      draftsSyncReadyRef.current = true;
+      if (json === lastSyncedJsonRef.current) return; // eco di una nostra scrittura
+      lastSyncedJsonRef.current = json;
+      applyingRemoteRef.current = true;
+      setDrafts(remoteDrafts);
+      setDraftTimeChanges(new Map(Object.entries(remoteTimes)));
+      if (data?.updatedByName) {
+        let label = "";
+        try {
+          const dt = data.updatedAt?.toDate?.();
+          if (dt) label = `${String(dt.getHours()).padStart(2, "0")}:${String(dt.getMinutes()).padStart(2, "0")}`;
+        } catch {}
+        setDraftsMeta({ updatedByName: data.updatedByName, updatedAtLabel: label });
+      } else {
+        setDraftsMeta(null);
+      }
+    });
+    return () => unsub();
+  }, [selectedDate]);
+
+  // Autosave debounced ad ogni modifica locale (bozze vuote → doc eliminato)
+  useEffect(() => {
+    if (!draftsSyncReadyRef.current) return;               // non scrivere prima di aver letto
+    if (applyingRemoteRef.current) { applyingRemoteRef.current = false; return; }
+    const timesObj: Record<string, string> = Object.fromEntries(draftTimeChanges);
+    const json = JSON.stringify({ d: drafts, t: timesObj });
+    if (json === lastSyncedJsonRef.current) return;
+    const timer = setTimeout(() => {
+      lastSyncedJsonRef.current = json;
+      const ref = doc(db, "assignmentDrafts", selectedDate);
+      if (drafts.length === 0 && Object.keys(timesObj).length === 0) {
+        deleteDoc(ref).catch(() => {});
+      } else {
+        setDoc(ref, {
+          date: selectedDate,
+          drafts: JSON.parse(JSON.stringify(drafts)),   // strip undefined (Firestore li rifiuta)
+          timeChanges: timesObj,
+          updatedAt: Timestamp.now(),
+          updatedByName: user?.name || user?.email || "Admin",
+        }).catch(() => {});
+      }
+    }, 700);
+    return () => clearTimeout(timer);
+  }, [drafts, draftTimeChanges, selectedDate, user]);
 
   // ── Firebase: Operators ──
   useEffect(() => {
@@ -1133,7 +1201,7 @@ export default function AssegnazioniPage() {
   const handleDiscardDrafts = useCallback(async () => {
     const ok = await askConfirm({
       title: "Scartare le bozze?",
-      message: "Tutte le bozze non confermate andranno perse.",
+      message: "Tutte le bozze non confermate andranno perse, anche per gli altri admin.",
       confirmLabel: "Scarta bozze",
       danger: true,
     });
@@ -2194,7 +2262,9 @@ export default function AssegnazioniPage() {
               <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-lg animate-bounce">✏️</div>
               <div>
                 <div className="font-bold text-sm">{drafts.length} assegnazion{drafts.length === 1 ? "e" : "i"} in bozza{draftTimeChanges.size > 0 && ` + ${draftTimeChanges.size} orari`}</div>
-                <div className="text-[11px] opacity-90">Nessuna notifica inviata. Conferma per salvare.</div>
+                <div className="text-[11px] opacity-90">
+                  ☁️ Salvate e visibili a tutti gli admin{draftsMeta?.updatedByName ? ` · ultimo: ${draftsMeta.updatedByName}${draftsMeta.updatedAtLabel ? ` ${draftsMeta.updatedAtLabel}` : ""}` : ""} · nessuna notifica fino alla conferma
+                </div>
               </div>
             </div>
             <div className="flex items-center gap-2">
