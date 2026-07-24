@@ -109,6 +109,7 @@ export function DashboardLayoutClient({
     const style = document.createElement("style");
     style.id = "admin-zoom-vh-fix";
     style.textContent = [
+      `:root { --vhz: calc(100vh / ${Z}); }`,
       `.h-screen { height: calc(100vh / ${Z}) !important; }`,
       `.min-h-screen { min-height: calc(100vh / ${Z}) !important; }`,
       `.max-h-screen { max-height: calc(100vh / ${Z}) !important; }`,

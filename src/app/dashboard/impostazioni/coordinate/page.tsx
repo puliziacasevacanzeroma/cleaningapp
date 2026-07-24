@@ -375,7 +375,7 @@ export default function CoordinatePage() {
       </div>
 
       {/* Split: lista + mappa */}
-      <div style={{ display: "flex", height: "calc(100vh - 130px)", overflow: "hidden" }}>
+      <div style={{ display: "flex", height: "calc(var(--vhz, 100vh) - 130px)", overflow: "hidden" }}>
         {/* Lista */}
         <div style={{ width: 340, minWidth: 340, borderRight: "1px solid #e2e8f0", overflowY: "auto", background: "white", flexShrink: 0 }}>
           {sel && (

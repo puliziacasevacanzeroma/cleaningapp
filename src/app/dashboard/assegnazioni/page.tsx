@@ -1598,7 +1598,7 @@ export default function AssegnazioniPage() {
   // KANBAN VIEW
   // ═══════════════════════════════════════════════════════════════
   const KanbanDesktop = () => (
-    <div className="flex" style={{ height: "calc(100vh - 120px)" }}>
+    <div className="flex" style={{ height: "calc(var(--vhz, 100vh) - 120px)" }}>
       <Sidebar mode="drag" />
       <div className="flex-1 overflow-y-auto p-3">
         <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))" }}>
@@ -1712,7 +1712,7 @@ export default function AssegnazioniPage() {
   // TIMELINE VIEW
   // ═══════════════════════════════════════════════════════════════
   const TimelineDesktop = () => (
-    <div className="flex" style={{ height: "calc(100vh - 120px)" }}>
+    <div className="flex" style={{ height: "calc(var(--vhz, 100vh) - 120px)" }}>
       <Sidebar mode="drag" />
       <div className="flex-1 overflow-x-auto overflow-y-auto p-4" style={{ minWidth: 0 }}>
         <div style={{ minWidth: `${176 + HOURS.length * 96 + 32}px` }}>
@@ -2550,7 +2550,7 @@ export default function AssegnazioniPage() {
 
 
     return (
-      <div className={`relative ${isMobile ? "flex-1 min-h-0" : ""}`} style={{ height: isMobile ? undefined : "calc(100vh - 140px)", overflow: "hidden" }}>
+      <div className={`relative ${isMobile ? "flex-1 min-h-0" : ""}`} style={{ height: isMobile ? undefined : "calc(var(--vhz, 100vh) - 140px)", overflow: "hidden" }}>
         <style>{`
           .leaflet-popup-content-wrapper { border-radius:14px!important; box-shadow:0 12px 40px rgba(0,0,0,0.15)!important; border:1.5px solid #e2e8f0!important; padding:0!important; }
           .leaflet-popup-content { margin:14px 16px!important; }
