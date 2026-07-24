@@ -95,6 +95,17 @@ export function DashboardLayoutClient({
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
+  // 🔧 v2: zoom 0.8 su <html> SOLO su desktop — tutta l'area admin (menu incluso)
+  // si vede all'80%. Zoom sulla radice = scala uniforme come lo zoom browser
+  // (anche pannelli position:fixed, modal, toast), stesso approccio già validato
+  // sull'area proprietario. Cleanup al passaggio a mobile/unmount.
+  useEffect(() => {
+    if (isDesktop) {
+      (document.documentElement.style as any).zoom = "0.8";
+      return () => { (document.documentElement.style as any).zoom = ""; };
+    }
+  }, [isDesktop]);
+
   // 🚀 Prefetch route principali per navigazione istantanea.
   // PERF: prima partiva immediatamente e ad OGNI cambio pathname, scaricando i
   // bundle di 6 pagine pesanti (incl. DashboardContent ~188 KB, PropertyServiceConfig
