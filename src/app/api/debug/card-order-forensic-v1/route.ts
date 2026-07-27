@@ -1,6 +1,6 @@
 /**
  * DEBUG FORENSE: perché la CARD mostra dotazioni diverse dal MODAL?
- * GET /api/debug/card-order-forensic-v1?cronSecret=XXX&property=Trastevere&date=2026-07-27
+ * GET /api/debug/card-order-forensic-v1?cronSecret=XXX&property=Trastevere&date=2026-07-27\n * v2: match nome ESATTO prioritario; se ambiguo elenca i candidati invece di sceglierne uno a caso.
  *
  * READ-ONLY (nessuna scrittura). Per ogni pulizia della proprietà nel giorno:
  *  1. PULIZIA: guestsCount, hasLinenOrder, linenConfigModified, customLinenConfig RAW, customLinenItems
@@ -36,8 +36,24 @@ export async function GET(request: NextRequest) {
 
   try {
     // ── proprietà ──────────────────────────────────────────────────────────
+    // v2: match ESATTO prioritario; se più match parziali → elenco candidati
+    // (v1 prendeva il primo nome CONTENENTE la query: "Trastevere" beccava
+    // "La casa di Nonna Peppina a Trastevere")
     const propsSnap = await adminDb.collection("properties").get();
-    const prop = propsSnap.docs.find(d => (d.data().name || "").toLowerCase().includes(propertyQ.toLowerCase()));
+    const qLower = propertyQ.toLowerCase().trim();
+    const exact = propsSnap.docs.filter(d => (d.data().name || "").toLowerCase().trim() === qLower);
+    const partial = propsSnap.docs.filter(d => (d.data().name || "").toLowerCase().includes(qLower));
+    let prop = exact[0] || null;
+    if (!prop) {
+      if (partial.length === 1) prop = partial[0];
+      else if (partial.length > 1) {
+        return NextResponse.json({
+          error: "PIU_PROPRIETA_CORRISPONDONO",
+          messaggio: "Nessun match esatto e piu' match parziali: raffina &property= con uno di questi nomi",
+          candidati: partial.map(d => ({ id: d.id, name: (d.data() as any).name, address: (d.data() as any).address ?? null })),
+        }, { status: 300 });
+      }
+    }
     if (!prop) return NextResponse.json({ error: "Proprietà non trovata" }, { status: 404 });
     const p = prop.data() as any;
 
