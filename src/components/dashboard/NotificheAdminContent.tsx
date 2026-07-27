@@ -348,6 +348,10 @@ function ModificationModal({ request, action, onClose, onConfirm }: Modification
 export function NotificheAdminContent({ embedded = false, initialTab }: { embedded?: boolean; initialTab?: string }) {
   const [activeTab, setActiveTab] = useState<TabType>((initialTab as TabType) || "all");
   const [selectedNotification, setSelectedNotification] = useState<FirebaseNotification | null>(null);
+  // 🔎 FIX (27/07/2026): modal dettaglio notifica. Prima il click sulla card non
+  // faceva NULLA: le notifiche senza link/azione (es. "Blocco Booking di N notti")
+  // restavano tagliate a 2 righe e la spiegazione era illeggibile.
+  const [detailNotification, setDetailNotification] = useState<FirebaseNotification | null>(null);
   const [actionType, setActionType] = useState<"approve" | "reject" | null>(null);
   
   // State per richieste modifica
@@ -775,7 +779,11 @@ export function NotificheAdminContent({ embedded = false, initialTab }: { embedd
               return (
                 <div
                   key={notification.id}
-                  className={`bg-white rounded-[16px] overflow-hidden transition-all active:scale-[.985] ${
+                  onClick={() => {
+                    setDetailNotification(notification);
+                    if (isUnread) markAsRead(notification.id);
+                  }}
+                  className={`bg-white rounded-[16px] overflow-hidden transition-all active:scale-[.985] cursor-pointer ${
                     isUnread ? "border-2 border-sky-200 shadow-[0_2px_8px_rgba(14,165,233,.08)]" : "border border-slate-100"
                   }`}
                 >
@@ -822,13 +830,13 @@ export function NotificheAdminContent({ embedded = false, initialTab }: { embedd
                         {isPending && (
                           <>
                             <button
-                              onClick={() => handleOpenAction(notification, "approve")}
+                              onClick={(e) => { e.stopPropagation(); handleOpenAction(notification, "approve"); }}
                               className="flex-1 flex items-center justify-center gap-1.5 py-[8px] text-[12px] font-semibold rounded-[10px] bg-emerald-50 text-emerald-700 active:scale-95 transition-all"
                             >
                               <CheckIcon /> Approva
                             </button>
                             <button
-                              onClick={() => handleOpenAction(notification, "reject")}
+                              onClick={(e) => { e.stopPropagation(); handleOpenAction(notification, "reject"); }}
                               className="flex-1 flex items-center justify-center gap-1.5 py-[8px] text-[12px] font-semibold rounded-[10px] bg-red-50 text-red-700 active:scale-95 transition-all"
                             >
                               <XIcon /> Rifiuta
@@ -836,13 +844,13 @@ export function NotificheAdminContent({ embedded = false, initialTab }: { embedd
                           </>
                         )}
                         {notification.link && !isPending && (
-                          <a href={notification.link} className="flex-1 flex items-center justify-center gap-1 py-[8px] text-[11px] font-semibold text-sky-600 rounded-[10px] bg-sky-50 active:scale-95 transition-all">
+                          <a href={notification.link} onClick={(e) => e.stopPropagation()} className="flex-1 flex items-center justify-center gap-1 py-[8px] text-[11px] font-semibold text-sky-600 rounded-[10px] bg-sky-50 active:scale-95 transition-all">
                             Visualizza ›
                           </a>
                         )}
                         {isUnread && (
                           <button
-                            onClick={() => markAsRead(notification.id)}
+                            onClick={(e) => { e.stopPropagation(); markAsRead(notification.id); }}
                             className="w-9 h-9 flex items-center justify-center rounded-[10px] bg-slate-50 text-slate-400 active:scale-[.85] active:bg-sky-50 active:text-sky-500 transition-all"
                             title="Segna letta"
                           >
@@ -851,7 +859,7 @@ export function NotificheAdminContent({ embedded = false, initialTab }: { embedd
                         )}
                         {notification.status !== "ARCHIVED" && (
                           <button
-                            onClick={() => deleteNotification(notification.id)}
+                            onClick={(e) => { e.stopPropagation(); deleteNotification(notification.id); }}
                             className="w-9 h-9 flex items-center justify-center rounded-[10px] bg-slate-50 text-slate-400 active:scale-[.85] active:bg-red-50 active:text-red-500 transition-all"
                             title="Elimina"
                           >
@@ -865,6 +873,61 @@ export function NotificheAdminContent({ embedded = false, initialTab }: { embedd
               );
             })
           )}
+        </div>
+      )}
+
+      {/* 🔎 Modal dettaglio notifica — apre al click sulla card e mostra il
+          messaggio COMPLETO (i messaggi del sync-ical usano \n: whitespace-pre-line) */}
+      {detailNotification && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setDetailNotification(null)}>
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-xl max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="p-5 border-b border-slate-100 flex items-start gap-3">
+              <div className={`w-9 h-9 rounded-[10px] flex items-center justify-center flex-shrink-0 ${getNotificationColor(detailNotification.type, detailNotification.actionStatus)}`}>
+                {getNotificationIcon(detailNotification.type)}
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-[15px] font-bold text-slate-800 leading-snug">{detailNotification.title}</h3>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  {detailNotification.senderName || "Sistema"} • {(detailNotification.createdAt?.toDate?.() || new Date()).toLocaleString("it-IT", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                </p>
+              </div>
+            </div>
+            <div className="p-5 overflow-y-auto">
+              <p className="text-[13px] text-slate-600 leading-relaxed whitespace-pre-line">{detailNotification.message}</p>
+              {detailNotification.actionNote && (
+                <p className="text-[12px] text-slate-400 mt-3 italic">&quot;{detailNotification.actionNote}&quot;</p>
+              )}
+            </div>
+            <div className="p-4 border-t border-slate-100 flex gap-2">
+              {detailNotification.actionRequired && detailNotification.actionStatus === "PENDING" && (
+                <>
+                  <button
+                    onClick={() => { const n = detailNotification; setDetailNotification(null); handleOpenAction(n, "approve"); }}
+                    className="flex-1 py-[10px] text-[13px] font-semibold rounded-[10px] bg-emerald-50 text-emerald-700 active:scale-95 transition-all"
+                  >
+                    Approva
+                  </button>
+                  <button
+                    onClick={() => { const n = detailNotification; setDetailNotification(null); handleOpenAction(n, "reject"); }}
+                    className="flex-1 py-[10px] text-[13px] font-semibold rounded-[10px] bg-red-50 text-red-700 active:scale-95 transition-all"
+                  >
+                    Rifiuta
+                  </button>
+                </>
+              )}
+              {detailNotification.link && (
+                <a href={detailNotification.link} className="flex-1 flex items-center justify-center py-[10px] text-[13px] font-semibold text-sky-600 rounded-[10px] bg-sky-50 active:scale-95 transition-all">
+                  Visualizza ›
+                </a>
+              )}
+              <button
+                onClick={() => setDetailNotification(null)}
+                className="flex-1 py-[10px] text-[13px] font-semibold rounded-[10px] bg-slate-100 text-slate-600 active:scale-95 transition-all"
+              >
+                Chiudi
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
