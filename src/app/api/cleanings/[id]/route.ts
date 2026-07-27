@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { healCustomConfig, isDegenerateCustomConfig } from "~/lib/linen/linenCore";
 import { adminDb } from "~/lib/firebase/admin";
 import { Timestamp, FieldValue } from "firebase-admin/firestore";
 import { createNotification } from "~/lib/firebase/notifications-admin";
@@ -486,7 +487,39 @@ export async function PATCH(
         updateData.linenConfigModified = linenConfigModified;
       }
       if (customLinenConfig !== undefined) {
-        updateData.customLinenConfig = customLinenConfig;
+        // 🛡️ FIX v2 (caso Trastevere 27/07/2026): questa route accettava
+        // QUALSIASI customLinenConfig dal client, verbatim — anche degenere
+        // (bl+ba vuoti, solo kit), che poi generava ordini senza lenzuola.
+        // Ora: se il custom è degenere e la biancheria è attiva
+        // (hasLinenOrder !== false, proprietà non a biancheria propria),
+        // viene GUARITO con bl/ba dallo standard, conservando ki/ex.
+        // healCustomConfig è identità per i custom sani.
+        let cfgToSave = customLinenConfig;
+        try {
+          const _hlo = (updateData.hasLinenOrder !== undefined ? updateData.hasLinenOrder : (cleaning as any)?.hasLinenOrder);
+          if (
+            cfgToSave && typeof cfgToSave === "object" &&
+            isDegenerateCustomConfig(cfgToSave) &&
+            _hlo !== false &&
+            (cleaning as any)?.propertyId
+          ) {
+            const propSnapForHeal = await adminDb.collection("properties").doc((cleaning as any).propertyId).get();
+            const propForHeal = propSnapForHeal.exists ? (propSnapForHeal.data() as Record<string, any>) : null;
+            if (propForHeal && propForHeal.usesOwnLinen !== true) {
+              const gForHeal = (updateData.guestsCount as number | undefined) ?? (cleaning as any)?.guestsCount ?? 2;
+              const svc = propForHeal.serviceConfigs as Record<string | number, any> | undefined;
+              const stdForHeal = svc ? (svc[gForHeal] ?? svc[String(gForHeal)]) : undefined;
+              if (stdForHeal) {
+                cfgToSave = healCustomConfig(cfgToSave, stdForHeal);
+                console.warn(`🛡️ [GUARDIA-BIANCHERIA] Cleaning ${id}: customLinenConfig degenere dal client → guarita dallo standard`);
+              }
+            }
+          }
+        } catch (healErr) {
+          console.error("Errore guardia customLinenConfig (salvo comunque l'originale):", healErr);
+          cfgToSave = customLinenConfig;
+        }
+        updateData.customLinenConfig = cfgToSave;
       }
       // Se richiesto esplicitamente, rimuovi customLinenConfig
       if (removeCustomLinenConfig === true) {

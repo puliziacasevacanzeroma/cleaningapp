@@ -243,3 +243,118 @@ export function reconcileOrderItems(
     priceWarnings,
   };
 }
+
+// ──────────────────────────────────────────────────────────────────────────
+// 5) REGOLA UNICA "QUALE CONFIG VALE" + GUARIGIONE CUSTOM DEGENERI
+//    (v2 — fix split-brain card≠modal, caso Trastevere 27/07/2026)
+//
+//    PROBLEMA RADICE: la regola "usa customLinenConfig se linenConfigModified
+//    === true" esisteva in DUE varianti: i percorsi server la applicavano
+//    sempre, il modal aggiungeva "e bl non vuoto". Con un custom DEGENERE
+//    (bl/ba vuoti, solo kit) l'ordine veniva costruito dal custom (solo kit)
+//    mentre il modal mostrava lo standard (biancheria piena) → card ≠ modal,
+//    e il rider consegnava senza lenzuola.
+//
+//    SOLUZIONE: la regola vive QUI, in un posto solo.
+//    - un custom è DEGENERE se non ha né biancheria letto né bagno con qty>0
+//      (copre bl:{}, bl:{all:{}}, gruppi vuoti);
+//    - se la biancheria è ATTIVA (hasLinenOrder!==false e proprietà non a
+//      biancheria propria) un custom degenere viene GUARITO: bl+ba dallo
+//      standard, ki+ex dal custom (l'intento dell'utente — es. kit aggiunto —
+//      si conserva; le lenzuola non spariscono mai);
+//    - per custom SANI la guarigione è IDENTITÀ (nessun cambiamento);
+//    - se la biancheria è disattivata o manca lo standard, il custom resta
+//      com'è (niente da guarire / niente con cui guarire).
+// ──────────────────────────────────────────────────────────────────────────
+
+/** True se la config ha almeno un articolo letto con quantità > 0. */
+export function hasBedContent(config: any): boolean {
+  return Object.keys(extractBed(config)).length > 0;
+}
+
+/** True se la config ha almeno un articolo bagno con quantità > 0. */
+export function hasBathContent(config: any): boolean {
+  return Object.keys(extractFlat(config?.ba)).length > 0;
+}
+
+/** True se la config ha almeno un articolo kit con quantità > 0. */
+export function hasKitContent(config: any): boolean {
+  return Object.keys(extractFlat(config?.ki)).length > 0;
+}
+
+/**
+ * Custom DEGENERE = niente biancheria letto E niente bagno (qty>0).
+ * (Il kit può esserci o meno: "solo kit" è il caso Trastevere.)
+ */
+export function isDegenerateCustomConfig(custom: any): boolean {
+  if (!custom || typeof custom !== "object") return true;
+  return !hasBedContent(custom) && !hasBathContent(custom);
+}
+
+/**
+ * Guarigione: bl+ba dallo standard, ki+ex dal custom.
+ * IDENTITÀ per custom sani o senza standard utilizzabile.
+ * Non muta gli input (ritorna un oggetto nuovo in caso di heal).
+ */
+export function healCustomConfig(custom: any, standardConfig: any): any {
+  if (!custom || typeof custom !== "object") return standardConfig ?? custom;
+  if (!isDegenerateCustomConfig(custom)) return custom; // sano → identità
+  if (!standardConfig || typeof standardConfig !== "object") return custom; // niente cura possibile
+  if (!hasBedContent(standardConfig) && !hasBathContent(standardConfig)) return custom; // standard vuoto → inutile
+  return {
+    ...custom,
+    bl: standardConfig.bl ?? {},
+    ba: standardConfig.ba ?? {},
+    ki: custom.ki ?? {},
+    ex: custom.ex ?? {},
+    beds:
+      Array.isArray(custom.beds) && custom.beds.length > 0
+        ? custom.beds
+        : (standardConfig.beds ?? []),
+  };
+}
+
+export interface EffectiveConfigInput {
+  linenConfigModified?: boolean | null;
+  customLinenConfig?: any;
+  hasLinenOrder?: boolean | null;
+}
+
+export interface EffectiveConfigResult {
+  config: any;
+  source: "standard" | "custom" | "custom_healed" | "none";
+}
+
+/**
+ * LA regola, unica per modal / card / server:
+ *  - linenConfigModified !== true → standard;
+ *  - custom sano → custom;
+ *  - custom degenere + biancheria attiva → custom GUARITO;
+ *  - custom degenere + biancheria non attiva → custom com'è (kit-only legittimo:
+ *    l'ordine biancheria non esiste comunque).
+ */
+export function resolveEffectiveConfig(
+  cleaning: EffectiveConfigInput,
+  standardConfig: any,
+  usesOwnLinen?: boolean | null,
+): EffectiveConfigResult {
+  const custom = cleaning?.customLinenConfig;
+  const flag = cleaning?.linenConfigModified === true;
+
+  if (!flag || !custom || typeof custom !== "object") {
+    return standardConfig
+      ? { config: standardConfig, source: "standard" }
+      : { config: custom ?? null, source: custom ? "custom" : "none" };
+  }
+
+  if (!isDegenerateCustomConfig(custom)) return { config: custom, source: "custom" };
+
+  const linenActive =
+    cleaning?.hasLinenOrder !== false && usesOwnLinen !== true;
+  if (!linenActive) return { config: custom, source: "custom" };
+
+  const healed = healCustomConfig(custom, standardConfig);
+  return healed === custom
+    ? { config: custom, source: "custom" }
+    : { config: healed, source: "custom_healed" };
+}

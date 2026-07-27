@@ -10,7 +10,7 @@ import { PhotoLightbox } from "~/components/ui/PhotoLightbox";
 import SmartImage from "~/components/ui/SmartImage";
 import CleaningRatingBadge from "~/components/cleaning/CleaningRatingBadge";
 import { getItemName } from "~/lib/itemNames";
-import { buildExpectedItems } from "~/lib/linen/linenCore";
+import { buildExpectedItems, resolveEffectiveConfig, healCustomConfig } from "~/lib/linen/linenCore";
 import { browserCacheGet, browserCacheSet } from "~/lib/browserCache";
 
 // @ts-expect-error TODO-FIX: TS2305 Module '"~/types/cleaning"' has no exported member 'SgrossoReasonCode'.
@@ -795,13 +795,26 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
   const currentBeds = useMemo(() => {
     if (property?.bedsConfig && property.bedsConfig.length > 0) {
       // 🔥 FIX: Normalizza i campi dei letti (cap/capacita, type/tipo, etc.)
-      return property.bedsConfig.map((b: any) => ({
-        id: b.id,
-        type: b.type || b.tipo || 'sing',
-        name: b.name || b.nome || 'Letto',
-        loc: b.loc || b.stanza || 'Camera',
-        cap: b.cap || b.capacita || (b.type === 'matr' || b.tipo === 'matr' ? 2 : 1)
-      }));
+      // 🔥 FIX v2 (bug "Divano Letto 1p" / "Capacità letti 3 < 4 ospiti"):
+      // Il configuratore (PropertyServiceConfig) salva bedsConfig con i campi
+      // INGLESI `capacity` e `location` — qui però si leggevano solo
+      // `cap`/`capacita` e `loc`/`stanza`, quindi per quelle proprietà la
+      // capacità cadeva SEMPRE nel fallback, che dava 2 solo ai 'matr' e 1 a
+      // tutto il resto (divano/castello compresi → 1p) e la stanza diventava
+      // 'Camera' per tutti. NewCleaningModal (r.808) leggeva già `capacity`:
+      // qui era rimasto il mapping vecchio. Ora: si legge anche
+      // capacity/location e il fallback dà 2 anche a divano e castello.
+      return property.bedsConfig.map((b: any) => {
+        const t = String(b.type || b.tipo || 'sing').toLowerCase();
+        const fallbackCap = (t.includes('matr') || t.includes('divano') || t.includes('castl') || t.includes('castel')) ? 2 : 1;
+        return {
+          id: b.id,
+          type: b.type || b.tipo || 'sing',
+          name: b.name || b.nome || 'Letto',
+          loc: b.loc || b.location || b.stanza || 'Camera',
+          cap: b.cap || b.capacity || b.capacita || fallbackCap
+        };
+      });
     }
     
     // 🔧 FIX: Se bedsConfig non esiste ma serviceConfigs ha IDs letti, ricostruiscili
@@ -990,18 +1003,29 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
         // 🔧 FIX COERENZA: Usa STESSA logica di calculateDotazioni
         // customLinenConfig viene usata SOLO se linenConfigModified è ESPLICITAMENTE true
         // Questo garantisce coerenza tra card e modal
-        const hasCustomConfig = cleaning?.customLinenConfig && 
-          cleaning.customLinenConfig.bl && 
-          Object.keys(cleaning.customLinenConfig.bl).length > 0;
-        // 🔥 IMPORTANTE: Usa AND, non OR - deve essere ESPLICITAMENTE modificata
-        const hasModifiedConfig = cleaning?.linenConfigModified === true && hasCustomConfig;
+        // 🎯 v3 — REGOLA UNICA (linenCore.resolveEffectiveConfig), stessa dei
+        // percorsi server. Prima qui c'era una VARIANTE della regola ("custom
+        // valido solo se bl non vuoto"): con un custom DEGENERE (bl+ba vuoti,
+        // solo kit — caso Trastevere 27/07/2026) il modal mostrava lo standard
+        // mentre l'ordine era stato costruito dal custom → card ≠ modal e
+        // rider senza lenzuola. Ora: custom sano → custom; custom degenere con
+        // biancheria attiva → GUARITO (bl/ba dallo standard, ki/ex conservati).
         const hasServiceConfigs = property?.serviceConfigs && Object.keys(property.serviceConfigs).length > 0;
-        
-        
-        if (hasModifiedConfig && cleaning?.customLinenConfig) {
-          // La pulizia ha una config modificata manualmente - usa quella
-          const gCount = cleaning?.guestsCount || 2;
-          setCfgs(prev => ({ ...prev, [gCount]: cleaning.customLinenConfig }));
+        const gCount = cleaning?.guestsCount || 2;
+        const stdForG = property?.serviceConfigs
+          ? ((property.serviceConfigs as any)[gCount] ?? (property.serviceConfigs as any)[String(gCount)] ?? null)
+          : null;
+        const eff = resolveEffectiveConfig(
+          {
+            linenConfigModified: cleaning?.linenConfigModified,
+            customLinenConfig: cleaning?.customLinenConfig,
+            hasLinenOrder: (cleaning as any)?.hasLinenOrder,
+          },
+          stdForG,
+          (property as any)?.usesOwnLinen === true,
+        );
+        if (eff.source === "custom" || eff.source === "custom_healed") {
+          setCfgs(prev => ({ ...prev, [gCount]: eff.config }));
           setLinenConfigModified(true);
           return;
         }
@@ -1539,8 +1563,19 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
 
       // 🔥 Salva customLinenConfig SOLO se è davvero diversa dallo standard
       if (isReallyModified) {
+        // 🛡️ v3 — GUARDIA ALLA SCRITTURA: mai salvare un custom DEGENERE
+        // (bl+ba vuoti) quando la biancheria è attiva. healCustomConfig è
+        // IDENTITÀ per i custom sani; per quelli degeneri completa bl/ba dallo
+        // standard conservando ki/ex. Chiude alla radice la nascita di config
+        // tipo Trastevere (ordine solo-kit, rider senza lenzuola).
         // @ts-expect-error TODO-FIX: TS7015 Element implicitly has an 'any' type because index expression is not of type 'nu...
-        updateData.customLinenConfig = cfgs[g] || cfgs[String(g)];
+        const rawCustom = cfgs[g] || cfgs[String(g)];
+        const stdCfgForSave = property?.serviceConfigs
+          ? ((property.serviceConfigs as any)[g] ?? (property.serviceConfigs as any)[String(g)] ?? null)
+          : null;
+        updateData.customLinenConfig = (linenEnabled && stdCfgForSave)
+          ? healCustomConfig(rawCustom, stdCfgForSave)
+          : rawCustom;
         updateData.linenConfigModified = true;
       } else {
         // Config uguale allo standard o non modificata → usa serviceConfigs della proprietà

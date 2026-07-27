@@ -4,7 +4,7 @@ import { Timestamp } from "firebase-admin/firestore";
 import { getItemName } from "~/lib/itemNames";
 import { getApiUser } from "~/lib/api-auth";
 import { auditLog } from "~/lib/services/auditService";
-import { buildOrderItems, reconcileOrderItems } from "~/lib/linen/linenCore";
+import { buildOrderItems, reconcileOrderItems, healCustomConfig } from "~/lib/linen/linenCore";
 
 
 export const dynamic = 'force-dynamic';
@@ -97,8 +97,17 @@ export async function POST(
     
     if (hasCustomConfig) {
       // Usa la configurazione personalizzata della pulizia
-      config = cleaningData.customLinenConfig;
-      configSource = "customLinenConfig";
+      // 🛡️ FIX v2 (caso Trastevere 27/07/2026): se il custom è DEGENERE
+      // (bl+ba vuoti, es. solo kit) l'ordine veniva ricalcolato SENZA
+      // lenzuola. healCustomConfig completa bl/ba dallo standard conservando
+      // ki/ex; identità per i custom sani. La guardia biancheria sopra ha già
+      // escluso hasLinenOrder=false e biancheria propria.
+      const _svcForHeal = propertyDataForAudit?.serviceConfigs as Record<string | number, any> | undefined;
+      const _stdForHeal = _svcForHeal ? (_svcForHeal[guestsCount] ?? _svcForHeal[String(guestsCount)]) : undefined;
+      config = _stdForHeal
+        ? healCustomConfig(cleaningData.customLinenConfig, _stdForHeal)
+        : cleaningData.customLinenConfig;
+      configSource = config === cleaningData.customLinenConfig ? "customLinenConfig" : "customLinenConfig(guarita)";
       if (process.env.NODE_ENV !== "production") console.log(`   📦 Usando customLinenConfig della pulizia`);
     } else {
       // Usa serviceConfigs della proprietà (già caricata sopra per audit)

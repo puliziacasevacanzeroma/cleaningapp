@@ -6,7 +6,7 @@ import { createNotification } from "~/lib/firebase/notifications-admin";
 import { requireProprietario } from "~/lib/api-auth";
 import { validateBody, GenericBodySchema } from "~/lib/validation/schemas";
 import { resolveItemDisplayName } from "~/lib/itemNames";
-import { buildExpectedItems } from "~/lib/linen/linenCore";
+import { buildExpectedItems, healCustomConfig, isDegenerateCustomConfig } from "~/lib/linen/linenCore";
 
 // ── Tipi locali ──────────────────────────────────────────────────────────────
 type LinenItem = {
@@ -421,6 +421,45 @@ export async function POST(request: Request) {
           categoryId: invData?.categoryId || item.categoryId || "",
         };
       });
+
+      // 🛡️ FIX v2 (caso Trastevere 27/07/2026): se il frontend manda
+      // customLinenItems SENZA biancheria letto/bagno (es. solo kit cortesia)
+      // per una proprietà a biancheria GESTITA, l'ordine nasceva senza
+      // lenzuola e il rider consegnava solo saponette. Il safety-net esistente
+      // stava SOLO nel ramo serviceConfigs, non qui. Ora: completo le
+      // categorie mancanti (letto e/o bagno) dallo standard della proprietà.
+      if (!usesOwnLinen) {
+        const catsPresent = new Set(linenItems.map((i) => i.categoryId));
+        // doppio check anche per keyword (categoryId può essere "" se il
+        // lookup inventario fallisce per lo schema ID)
+        const idHas = (kws: string[]) => linenItems.some((i) => kws.some((k) => String(i.id).toLowerCase().includes(k.toLowerCase())));
+        const hasBl = catsPresent.has("biancheria_letto") || idHas(["doubleSheets", "singleSheets", "pillowcases", "lenzuol", "federa"]);
+        const hasBa = catsPresent.has("biancheria_bagno") || idHas(["towels", "bathmat", "asciugaman", "telo", "tappetin"]);
+        if (!hasBl || !hasBa) {
+          // @ts-expect-error TODO-FIX: TS2339 Property 'serviceConfigs' does not exist on type 'Property'.
+          const svcCfgs = property.serviceConfigs as Record<string | number, any> | undefined;
+          const stdCfg = svcCfgs ? (svcCfgs[guestsCount] ?? svcCfgs[String(guestsCount)]) : undefined;
+          if (stdCfg) {
+            const already = new Set(linenItems.map((i) => i.id));
+            buildExpectedItems(stdCfg).forEach((e) => {
+              const isMissingCat =
+                (e.categoryId === "biancheria_letto" && !hasBl) ||
+                (e.categoryId === "biancheria_bagno" && !hasBa);
+              if (isMissingCat && !already.has(e.itemId)) {
+                const invData = inventoryData.get(e.itemId);
+                linenItems.push({
+                  id: e.itemId,
+                  name: invData?.name || e.itemId,
+                  quantity: e.quantity,
+                  price: invData?.sellPrice || 0,
+                  categoryId: invData?.categoryId || e.categoryId,
+                });
+              }
+            });
+            console.warn(`🛡️ [GUARDIA-BIANCHERIA] Proprietà ${propertyId}: customLinenItems senza ${!hasBl ? "letto" : ""}${!hasBl && !hasBa ? "+" : ""}${!hasBa ? "bagno" : ""} → completati dallo standard (${linenItems.length} items totali)`);
+          }
+        }
+      }
     } else if (createLinenOrder || linenOnly) {
       // Usa serviceConfigs della proprietà se esistono
       // @ts-expect-error TODO-FIX: TS2339 Property 'serviceConfigs' does not exist on type 'Property'.
@@ -667,13 +706,24 @@ export async function POST(request: Request) {
         }
       });
       
-      cleaningData.customLinenConfig = {
+      // 🛡️ FIX v2: mai salvare un custom DEGENERE (bl+ba vuoti) per una
+      // proprietà a biancheria gestita: healCustomConfig completa bl/ba dallo
+      // standard conservando ki/ex (identità se il custom è già sano).
+      const rawCustom = {
         beds: selectedBedIds || [],
         bl: { 'all': blAll },
         ba: ba,
         ki: ki,
         ex: ex
       };
+      if (!usesOwnLinen && isDegenerateCustomConfig(rawCustom)) {
+        // @ts-expect-error TODO-FIX: TS2339 Property 'serviceConfigs' does not exist on type 'Property'.
+        const svcCfgsForHeal = property.serviceConfigs as Record<string | number, any> | undefined;
+        const stdForHeal = svcCfgsForHeal ? (svcCfgsForHeal[guestsCount] ?? svcCfgsForHeal[String(guestsCount)]) : undefined;
+        cleaningData.customLinenConfig = stdForHeal ? healCustomConfig(rawCustom, stdForHeal) : rawCustom;
+      } else {
+        cleaningData.customLinenConfig = rawCustom;
+      }
       // 🔧 FIX: Solo se il frontend segnala modifica manuale, NON sovrascrivere sempre a true
       // (prima era sempre true quando c'erano items, causando badge "personalizzata" anche per config standard)
       if (linenConfigModified) {
