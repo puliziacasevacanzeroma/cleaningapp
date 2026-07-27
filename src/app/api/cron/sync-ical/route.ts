@@ -934,16 +934,18 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
                           type: 'EARLY_DEPARTURE', oldCheckIn: oldCiStr, newFeedStart: newStartStr, createdAt: Timestamp.now(),
                         });
                         const fmtItF = (s: string) => { const [y, m, d] = s.split('-'); return `${d}/${m}/${y}`; };
-                        const adminsSnapF = await adminDb.collection('users').where('role', '==', 'ADMIN').get();
-                        for (const adminDoc of adminsSnapF.docs) {
+                                                // 🔧 FIX DUPLICATI (27/07/2026): UNA sola notifica role-based invece del loop
+                        // per-admin. Il loop creava N copie (una per utente ADMIN) ma il reader admin
+                        // (subscribeToAdminNotifications) filtra solo per recipientRole ignorando
+                        // recipientId → ogni admin vedeva N duplicati. Convenzione allineata al resto
+                        // dell'app (es. notifiche Sgrosso): un documento, visto da tutti gli admin.
                           await adminDb.collection('notifications').add({
                             title: '🚪 Booking: giorni liberati a metà soggiorno',
                             message: `🏠 ${prop.name}\n\nIl blocco Booking iniziato il ${fmtItF(oldCiStr)} ora risulta libero fino al ${fmtItF(newStartStr)}: probabile partenza anticipata o cancellazione.\n\n👉 Verifica su Booking: se l'ospite è uscito, valuta se ANTICIPARE la pulizia già programmata al checkout originale.`,
-                            type: 'WARNING', recipientRole: 'ADMIN', recipientId: adminDoc.id,
+                            type: 'WARNING', recipientRole: 'ADMIN',
                             senderId: 'system', senderName: 'Sync iCal - Clip Guard',
                             status: 'UNREAD', createdAt: Timestamp.now(), updatedAt: Timestamp.now(),
                           });
-                        }
                         try {
                           const { sendPushNotification } = await import('~/lib/notifications/sendPushNotification');
                           await sendPushNotification(
@@ -974,16 +976,18 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
                           type: 'LEFT_MERGE', oldCheckIn: oldCiStr, newCheckIn: newCiStr, createdAt: Timestamp.now(),
                         });
                         const fmtItL = (s: string) => { const [y, m, d] = s.split('-'); return `${d}/${m}/${y}`; };
-                        const adminsSnapL = await adminDb.collection('users').where('role', '==', 'ADMIN').get();
-                        for (const adminDoc of adminsSnapL.docs) {
+                                                // 🔧 FIX DUPLICATI (27/07/2026): UNA sola notifica role-based invece del loop
+                        // per-admin. Il loop creava N copie (una per utente ADMIN) ma il reader admin
+                        // (subscribeToAdminNotifications) filtra solo per recipientRole ignorando
+                        // recipientId → ogni admin vedeva N duplicati. Convenzione allineata al resto
+                        // dell'app (es. notifiche Sgrosso): un documento, visto da tutti gli admin.
                           await adminDb.collection('notifications').add({
                             title: '⚠️ Blocco Booking anticipato — possibile pulizia MANCANTE',
                             message: `🏠 ${prop.name}\n\n📌 COSA È SUCCESSO\nIl feed iCal di Booking fonde le prenotazioni attaccate in un unico blocco. Il blocco di questa proprietà ora inizia il ${fmtItL(newCiStr)}, prima iniziava il ${fmtItL(oldCiStr)}: probabilmente è arrivata una prenotazione nuova che FINISCE il ${fmtItL(oldCiStr)}.\n\n⚠️ IL RISCHIO REALE\nSe è così, il ${fmtItL(oldCiStr)} c'è un cambio ospiti SENZA pulizia. Il gestionale non può crearla da solo: dal feed non si distingue una prenotazione nuova dallo stesso ospite che ha anticipato l'arrivo.\n\n👉 COSA DEVI FARE\nApri l'app Booking:\n• Se ci sono DUE prenotazioni (una finisce il ${fmtItL(oldCiStr)}, una inizia il ${fmtItL(oldCiStr)}) → crea A MANO la pulizia del ${fmtItL(oldCiStr)}, altrimenti il nuovo ospite entra in casa sporca.\n• Se è un solo ospite che ha anticipato l'arrivo → non serve fare nulla.`,
-                            type: 'WARNING', recipientRole: 'ADMIN', recipientId: adminDoc.id,
+                            type: 'WARNING', recipientRole: 'ADMIN',
                             senderId: 'system', senderName: 'Sync iCal - Turnover Recovery',
                             status: 'UNREAD', createdAt: Timestamp.now(), updatedAt: Timestamp.now(),
                           });
-                        }
                         try {
                           const { sendPushNotification } = await import('~/lib/notifications/sendPushNotification');
                           await sendPushNotification(
@@ -1205,17 +1209,19 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
                           },
                         } : {};
                         const notifMsg = `🏠 ${prop.name}\n\n📌 COSA È SUCCESSO\nIl calendario iCal di Booking non invia le prenotazioni singole: quando due prenotazioni sono attaccate (checkout e check-in lo stesso giorno) le fonde in un unico blocco "CLOSED". Il blocco di questa proprietà si è appena allungato da ${fmtIt(oldCoStr)} a ${fmtIt(newCoStr)}: quasi sicuramente è arrivata una NUOVA prenotazione che inizia il ${fmtIt(oldCoStr)}.\n\n🤖 COSA HA FATTO IL GESTIONALE\n✅ Ha mantenuto la pulizia del ${fmtIt(oldCoStr)} (probabile cambio ospiti)\n➕ Ha creato una nuova pulizia + ordine biancheria il ${fmtIt(newCoStr)}\n\n👉 COSA DEVI FARE\nApri l'app Booking e guarda le prenotazioni di questa proprietà:\n• Se il ${fmtIt(oldCoStr)} c'è davvero un cambio ospiti → tutto ok, non fare nulla.\n• Se invece è lo STESSO ospite che ha prolungato → cancella la pulizia del ${fmtIt(oldCoStr)}, altrimenti l'operatore si presenta con l'ospite ancora in casa.`;
-                        const adminsSnapR = await adminDb.collection('users').where('role', '==', 'ADMIN').get();
-                        for (const adminDoc of adminsSnapR.docs) {
+                                                // 🔧 FIX DUPLICATI (27/07/2026): UNA sola notifica role-based invece del loop
+                        // per-admin. Il loop creava N copie (una per utente ADMIN) ma il reader admin
+                        // (subscribeToAdminNotifications) filtra solo per recipientRole ignorando
+                        // recipientId → ogni admin vedeva N duplicati. Convenzione allineata al resto
+                        // dell'app (es. notifiche Sgrosso): un documento, visto da tutti gli admin.
                           await adminDb.collection('notifications').add({
                             title: '🔁 Turnover recuperato da blocco Booking',
                             message: notifMsg, type: 'WARNING',
                             ...turnoverActionFields,
-                            recipientRole: 'ADMIN', recipientId: adminDoc.id,
+                            recipientRole: 'ADMIN',
                             senderId: 'system', senderName: 'Sync iCal - Turnover Recovery',
                             status: 'UNREAD', createdAt: Timestamp.now(), updatedAt: Timestamp.now(),
                           });
-                        }
                         try {
                           const { sendPushNotification } = await import('~/lib/notifications/sendPushNotification');
                           await sendPushNotification(
@@ -1347,16 +1353,18 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
                           type: 'LONG_BLOCK', checkIn: ciStrN, checkOut: coStrN, nights: nightsNew, createdAt: Timestamp.now(),
                         });
                         const fmtItN = (s: string) => { const [y, m, d] = s.split('-'); return `${d}/${m}/${y}`; };
-                        const adminsSnapN = await adminDb.collection('users').where('role', '==', 'ADMIN').get();
-                        for (const adminDoc of adminsSnapN.docs) {
+                                                // 🔧 FIX DUPLICATI (27/07/2026): UNA sola notifica role-based invece del loop
+                        // per-admin. Il loop creava N copie (una per utente ADMIN) ma il reader admin
+                        // (subscribeToAdminNotifications) filtra solo per recipientRole ignorando
+                        // recipientId → ogni admin vedeva N duplicati. Convenzione allineata al resto
+                        // dell'app (es. notifiche Sgrosso): un documento, visto da tutti gli admin.
                           await adminDb.collection('notifications').add({
                             title: `⚠️ Blocco Booking di ${nightsNew} notti — possibili pulizie mancanti`,
                             message: `🏠 ${prop.name}\n\n📌 COSA È SUCCESSO\nÈ stato importato un blocco Booking di ${nightsNew} notti (${fmtItN(ciStrN)} → ${fmtItN(coStrN)}). Il feed iCal di Booking NON invia le prenotazioni singole: se in quel periodo ci sono più prenotazioni attaccate, il feed le mostra come un blocco unico e il gestionale ha potuto creare la pulizia SOLO a fine blocco (${fmtItN(coStrN)}).\n\n⚠️ IL RISCHIO REALE\nSe dentro il blocco ci sono più prenotazioni, i cambi ospiti intermedi NON hanno pulizia: gli ospiti entrerebbero in casa sporca senza che il gestionale possa accorgersene.\n\n👉 COSA DEVI FARE\nApri l'app Booking e guarda le prenotazioni tra il ${fmtItN(ciStrN)} e il ${fmtItN(coStrN)}: per ogni cambio ospiti intermedio crea A MANO la pulizia in quel giorno.`,
-                            type: 'WARNING', recipientRole: 'ADMIN', recipientId: adminDoc.id,
+                            type: 'WARNING', recipientRole: 'ADMIN',
                             senderId: 'system', senderName: 'Sync iCal - Turnover Recovery',
                             status: 'UNREAD', createdAt: Timestamp.now(), updatedAt: Timestamp.now(),
                           });
-                        }
                         try {
                           const { sendPushNotification } = await import('~/lib/notifications/sendPushNotification');
                           await sendPushNotification(
@@ -1678,21 +1686,22 @@ async function runSync(forceSync: boolean = false): Promise<NextResponse> {
             });
             
             // Invia notifica a tutti gli admin (1 sola volta per overlap)
-            const adminsSnap = await adminDb.collection('users').where('role', '==', 'ADMIN').get();
-            for (const adminDoc of adminsSnap.docs) {
+                        // 🔧 FIX DUPLICATI (27/07/2026): UNA sola notifica role-based invece del loop
+            // per-admin. Il loop creava N copie (una per utente ADMIN) ma il reader admin
+            // (subscribeToAdminNotifications) filtra solo per recipientRole ignorando
+            // recipientId → ogni admin vedeva N duplicati. Convenzione allineata al resto
+            // dell'app (es. notifiche Sgrosso): un documento, visto da tutti gli admin.
               await adminDb.collection('notifications').add({
                 title: `⚠️ Prenotazioni sovrapposte`,
                 message: overlapMsg,
                 type: 'WARNING',
                 recipientRole: 'ADMIN',
-                recipientId: adminDoc.id,
                 senderId: 'system',
                 senderName: 'Sync iCal - Overlap',
                 status: 'UNREAD',
                 createdAt: Timestamp.now(),
                 updatedAt: Timestamp.now(),
               });
-            }
           }
         }
       }
