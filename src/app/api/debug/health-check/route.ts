@@ -19,6 +19,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "~/lib/firebase/admin";
 import { Timestamp } from "firebase-admin/firestore";
 import { getApiUser } from "~/lib/api-auth";
+import { buildExpectedItems } from "~/lib/linen/linenCore";
+import { isPastModificationDeadline } from "~/lib/dateUtils";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -344,7 +346,7 @@ async function checkCompletateSenzaImporto(ctx: Ctx): Promise<CheckResult> {
  *  Sfaccettatura: solo status SCHEDULED (ASSIGNED = già assegnata, ok). */
 async function checkImminentiNonAssegnate(ctx: Ctx): Promise<CheckResult> {
   const id = "imminenti-non-assegnate";
-  const titolo = "Pulizie imminenti non ancora assegnate";
+  const titolo = "Pulizie non assegnate oltre le 20 del giorno prima";
   try {
     const oggi = new Date(); oggi.setHours(0, 0, 0, 0);
     const domaniSera = new Date(); domaniSera.setDate(domaniSera.getDate() + 1); domaniSera.setHours(23, 59, 59, 999);
@@ -352,14 +354,18 @@ async function checkImminentiNonAssegnate(ctx: Ctx): Promise<CheckResult> {
       const d = c.scheduledDate?.toDate?.();
       if (!d || d < oggi || d > domaniSera) return false;
       if (c.status !== "SCHEDULED") return false;   // ASSIGNED/IN_PROGRESS/COMPLETED = ok
-      return !getOperator(c);                        // né operatorId né assignedTo
+      if (getOperator(c)) return false;             // già assegnata → ok
+      // Prassi aziendale: le assegnazioni si fanno entro le 20 del giorno prima.
+      // Segnalo SOLO se quella deadline è già passata: prima è normale non averla
+      // ancora assegnata.
+      return isPastModificationDeadline(c.scheduledDate);
     
     });
     return {
       id, titolo, severity: "attenzione", ok: anomalie.length === 0, count: anomalie.length,
       messaggio: anomalie.length === 0
-        ? "Tutte le pulizie di oggi e domani hanno un operatore."
-        : `${anomalie.length} pulizie di oggi/domani non sono ancora assegnate a nessuno.`,
+        ? "Tutte le pulizie imminenti oltre la deadline delle 20 hanno un operatore."
+        : `${anomalie.length} pulizie non assegnate oltre le 20 del giorno prima (dovrebbero già avere un operatore).`,
       esempi: anomalie.slice(0, MAX_ESEMPI).map(c => ({
         cleaningId: c.id, proprieta: ctx.properties.get(c.propertyId)?.name, data: toDateStr(c.scheduledDate), ora: c.scheduledTime,
       })),
@@ -392,6 +398,117 @@ async function checkInCorsoIncastrate(ctx: Ctx): Promise<CheckResult> {
       esempi: anomalie.slice(0, MAX_ESEMPI).map(c => ({
         cleaningId: c.id, proprieta: ctx.properties.get(c.propertyId)?.name, data: toDateStr(c.scheduledDate), iniziata: toDateStr(c.startedAt), operatore: getOperator(c),
       })),
+    };
+  } catch (e: any) {
+    return { id, titolo, severity: "attenzione", ok: false, count: 0, messaggio: "Controllo fallito", errore: e?.message };
+  }
+}
+
+/** 11. Disallineamento biancheria: card PROPRIETARIO (che RICALCOLA con
+ *  calculateDotazioni) vs ORDINE reale (che mostrano modal e card admin).
+ *
+ *  Perché serve: le card admin e il modal leggono da order.items; la card
+ *  proprietario invece RICALCOLA sempre dallo standard. Se un ordine è stato
+ *  modificato/guarito ma diverge dal ricalcolo standard, il proprietario vede
+ *  numeri diversi da admin e modal (come nel caso Trastevere).
+ *
+ *  Sfaccettature (per NON generare falsi allarmi):
+ *   - ESCLUDE le pulizie con biancheria PERSONALIZZATA (linenConfigModified===true,
+ *     il badge): lì ordine e ricalcolo DEVONO divergere, è voluto;
+ *   - esclude pulizie senza ordine, a biancheria propria, hasLinenOrder===false;
+ *   - confronta il PREZZO totale dotazioni (tolleranza 1 centesimo per arrotondamenti);
+ *   - replica ESATTA della normalizzazione di deriveDotazioniFromOrder (card admin). */
+async function checkDisallineamentoCardProprietario(ctx: Ctx): Promise<CheckResult> {
+  const id = "disallineamento-card-proprietario";
+  const titolo = "Biancheria: card proprietario ≠ ordine";
+  try {
+    const oggi = new Date(); oggi.setHours(0, 0, 0, 0);
+
+    // inventario per risolvere prezzi/categorie (come fa la card)
+    const invSnap = await adminDb.collection("inventory").get();
+    const invMap = new Map<string, any>();
+    invSnap.docs.forEach(d => {
+      const it = { id: d.id, ...(d.data() as any) };
+      if (it.id) invMap.set(it.id, it);
+      if ((it as any).key) invMap.set((it as any).key, it);
+    });
+
+    const resolveCat = (item: any, inv: any): string | null => {
+      if (item?.categoryId) return item.categoryId;
+      const cn = String(item?.categoryName || "").toLowerCase();
+      if (cn.includes("letto")) return "biancheria_letto";
+      if (cn.includes("bagno")) return "biancheria_bagno";
+      if (cn.includes("kit") || cn.includes("cortesia")) return "kit_cortesia";
+      if (cn.includes("extra")) return "servizi_extra";
+      return inv?.categoryId || null;
+    };
+    const MANAGED = ["biancheria_letto", "biancheria_bagno", "kit_cortesia", "servizi_extra"];
+
+    // prezzo dotazioni da order.items (replica di deriveDotazioniFromOrder)
+    const prezzoDaOrdine = (order: any): number => {
+      let tot = 0;
+      (order?.items || []).forEach((item: any) => {
+        const qty = typeof item?.quantity === "number" ? item.quantity : 0;
+        if (qty <= 0) return;
+        const inv = invMap.get(item?.itemId) || invMap.get(item?.id);
+        const cat = resolveCat(item, inv);
+        if (!MANAGED.includes(String(cat))) return;
+        const price = typeof item?.unitPrice === "number" ? item.unitPrice : (inv?.sellPrice ?? inv?.price ?? 0);
+        tot += price * qty;
+      });
+      return Math.round(tot * 100) / 100;
+    };
+
+    // ordine attivo per cleaningId
+    const orderByCleaning = new Map<string, any>();
+    ctx.orders.forEach(o => {
+      if (o.status !== "CANCELLED" && o.cleaningId && !orderByCleaning.has(o.cleaningId)) {
+        orderByCleaning.set(o.cleaningId, o);
+      }
+    });
+
+    const anomalie: any[] = [];
+    for (const c of ctx.cleanings) {
+      const d = c.scheduledDate?.toDate?.();
+      if (!d || d < oggi) continue;                          // solo future/attuali
+      if (!["SCHEDULED", "ASSIGNED", "IN_PROGRESS"].includes(c.status)) continue;
+      if (c.linenConfigModified === true) continue;          // 🔑 ESCLUDE personalizzate (badge)
+      if (c.hasLinenOrder === false) continue;
+      const prop = ctx.properties.get(c.propertyId);
+      if (!prop || prop.usesOwnLinen === true) continue;
+      const order = orderByCleaning.get(c.id);
+      if (!order) continue;                                  // niente ordine → il check 1 se ne occupa
+
+      // prezzo che vede admin/modal (dall'ordine)
+      const prezzoOrdine = prezzoDaOrdine(order);
+      // prezzo che ricalcolerebbe la card proprietario: per confronto affidabile
+      // e SENZA dipendere dalla versione di calculateDotazioni deployata, usiamo
+      // buildExpectedItems sullo standard valorizzato con l'inventario.
+      const g = c.guestsCount || c.guests || 0;
+      const std = prop.serviceConfigs ? (prop.serviceConfigs[g] ?? prop.serviceConfigs[String(g)]) : null;
+      if (!std) continue;                                    // niente standard → non confrontabile
+      let prezzoStd = 0;
+      buildExpectedItems(std).forEach((e: any) => {
+        const inv = invMap.get(e.itemId);
+        const price = inv?.sellPrice ?? inv?.price ?? 0;
+        prezzoStd += price * (e.quantity || 0);
+      });
+      prezzoStd = Math.round(prezzoStd * 100) / 100;
+
+      if (Math.abs(prezzoOrdine - prezzoStd) > 0.01) {
+        anomalie.push({
+          cleaningId: c.id, proprieta: prop.name, data: toDateStr(c.scheduledDate),
+          prezzoOrdine, prezzoRicalcolo: prezzoStd, differenza: Math.round((prezzoOrdine - prezzoStd) * 100) / 100,
+        });
+      }
+    }
+
+    return {
+      id, titolo, severity: "attenzione", ok: anomalie.length === 0, count: anomalie.length,
+      messaggio: anomalie.length === 0
+        ? "Card proprietario, card admin e ordine mostrano la stessa biancheria."
+        : `${anomalie.length} pulizie in cui la card proprietario mostrerebbe una biancheria diversa dall'ordine (esclusi i casi personalizzati).`,
+      esempi: anomalie.slice(0, MAX_ESEMPI),
     };
   } catch (e: any) {
     return { id, titolo, severity: "attenzione", ok: false, count: 0, messaggio: "Controllo fallito", errore: e?.message };
@@ -461,6 +578,7 @@ export async function GET(request: NextRequest) {
       checkCompletateSenzaImporto(ctx),
       checkImminentiNonAssegnate(ctx),
       checkInCorsoIncastrate(ctx),
+      checkDisallineamentoCardProprietario(ctx),
     ]);
 
     const problemi = results.filter(r => !r.ok);
