@@ -44,10 +44,16 @@ interface Ctx {
   properties: Map<string, any>;
   cleanings: any[];
   orders: any[];
+  bookings: any[];
+  excludedByProp: Map<string, Set<string>>; // propertyId → date escluse (YYYY-MM-DD)
 }
 
 const MAX_ESEMPI = 8;
 const toDateStr = (ts: any) => ts?.toDate?.()?.toISOString?.()?.slice(0, 10) ?? null;
+
+// L'operatore assegnato: il gestionale usa operatorId (verificato sul codice
+// di assegnazione). Fallback su assignedTo per compatibilità con dati vecchi.
+const getOperator = (c: any): string | null => c?.operatorId || c?.assignedTo || null;
 
 // ────────────────────────────────────────────────────────────────────────────
 // CONTROLLI (ognuno READ-ONLY, isolato, ritorna un CheckResult)
@@ -172,8 +178,9 @@ async function checkAssegnazioniFantasma(ctx: Ctx, userIds: Set<string>): Promis
     const anomalie = ctx.cleanings.filter(c => {
       const d = c.scheduledDate?.toDate?.();
       if (!d || d < oggi) return false;
-      if (c.status !== "ASSIGNED" || !c.assignedTo) return false;
-      return !userIds.has(c.assignedTo);
+      const op = getOperator(c);
+      if (c.status !== "ASSIGNED" || !op) return false;
+      return !userIds.has(op);
     });
     return {
       id, titolo, severity: "attenzione", ok: anomalie.length === 0, count: anomalie.length,
@@ -181,7 +188,7 @@ async function checkAssegnazioniFantasma(ctx: Ctx, userIds: Set<string>): Promis
         ? "Ogni pulizia assegnata punta a un utente esistente."
         : `${anomalie.length} pulizie assegnate a operatori che non esistono più.`,
       esempi: anomalie.slice(0, MAX_ESEMPI).map(c => ({
-        cleaningId: c.id, proprieta: ctx.properties.get(c.propertyId)?.name, data: toDateStr(c.scheduledDate), assignedTo: c.assignedTo,
+        cleaningId: c.id, proprieta: ctx.properties.get(c.propertyId)?.name, data: toDateStr(c.scheduledDate), operatore: getOperator(c),
       })),
     };
   } catch (e: any) {
@@ -216,6 +223,181 @@ async function checkOrdiniVuoti(ctx: Ctx): Promise<CheckResult> {
   }
 }
 
+/** 7. Prenotazioni future CONFERMATE senza pulizia al checkout.
+ *  Sfaccettature gestite (per evitare falsi allarmi):
+ *   - solo prenotazioni FUTURE (checkout ≥ oggi); il passato non conta;
+ *   - esclude storiche (historicBooking), manuali/dirette/telefoniche;
+ *   - esclude prenotazioni CANCELLED;
+ *   - esclude proprietà SENZA feed iCal attivo (non generano pulizie auto);
+ *   - la pulizia è "trovata" se combacia per bookingId OPPURE per data di
+ *     checkout (copre le pulizie spostate a mano, originalScheduledDate);
+ *   - rispetta le date escluse volontariamente (syncExclusions). */
+async function checkPrenotazioniSenzaPulizia(ctx: Ctx): Promise<CheckResult> {
+  const id = "prenotazioni-senza-pulizia";
+  const titolo = "Prenotazioni future senza pulizia al checkout";
+  try {
+    const oggi = new Date(); oggi.setHours(0, 0, 0, 0);
+    const sameDay = (a: Date, b: Date) =>
+      a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+
+    // indice pulizie per proprietà (per non ciclare tutto ogni volta)
+    const cleanByProp = new Map<string, any[]>();
+    ctx.cleanings.forEach(c => {
+      if (!cleanByProp.has(c.propertyId)) cleanByProp.set(c.propertyId, []);
+      cleanByProp.get(c.propertyId)!.push(c);
+    });
+
+    const hasFeed = (p: any) =>
+      !!(p?.icalAirbnb || p?.icalBooking || p?.icalOktorate || p?.icalInreception || p?.icalKrossbooking);
+
+    // Tolleranza "sync non ancora passato": il sync crea la pulizia nello stesso
+    // ciclo in cui vede la prenotazione, ma tra un sync e l'altro (o subito dopo
+    // un import) esiste una finestra normale in cui la prenotazione c'è e la
+    // pulizia non ancora. Per NON generare falsi allarmi:
+    //  - ignoro prenotazioni importate da meno di 6 ore (createdAt recente);
+    //  - considero solo checkout entro i prossimi 45 giorni: oltre, anche se il
+    //    sync deve ancora arrivarci, non è azionabile ora e crea solo rumore.
+    const seiOreFa = new Date(Date.now() - 6 * 60 * 60 * 1000);
+    const orizzonte = new Date(); orizzonte.setDate(orizzonte.getDate() + 45); orizzonte.setHours(23, 59, 59, 999);
+
+    const anomalie = ctx.bookings.filter(b => {
+      if (b.status === "CANCELLED") return false;
+      if (b.historicBooking === true) return false;
+      if (b.isManual === true || ["manual", "direct", "phone"].includes(b.source)) return false;
+      const co = b.checkOut?.toDate?.();
+      if (!co || co < oggi || co > orizzonte) return false;     // solo futuro entro 45gg
+      // prenotazione appena importata → il sync deve ancora creare la pulizia
+      const created = b.createdAt?.toDate?.();
+      if (created && created > seiOreFa) return false;
+      const prop = ctx.properties.get(b.propertyId);
+      if (!prop || prop.status !== "ACTIVE" || !hasFeed(prop)) return false; // niente feed → niente pulizia auto
+      // proprietà non ancora assegnata a un owner (in fase di onboarding)
+      if (!prop.ownerId || prop.ownerId === "pending") return false;
+      // data esclusa volontariamente (pulizia tolta a mano)?
+      const coStr = co.toISOString().slice(0, 10);
+      if (ctx.excludedByProp.get(b.propertyId)?.has(coStr)) return false;
+      // esiste una pulizia collegata? (per bookingId o per data checkout, anche se spostata)
+      const list = cleanByProp.get(b.propertyId) || [];
+      const trovata = list.some(c => {
+        if (c.status === "CANCELLED") return false;             // una pulizia cancellata non conta
+        if (c.bookingId === b.id) return true;
+        const cd = c.scheduledDate?.toDate?.();
+        if (cd && sameDay(cd, co)) return true;
+        const orig = c.originalScheduledDate?.toDate?.();
+        if (orig && sameDay(orig, co)) return true;
+        return false;
+      });
+      return !trovata;
+    });
+
+    return {
+      id, titolo, severity: "critico", ok: anomalie.length === 0, count: anomalie.length,
+      messaggio: anomalie.length === 0
+        ? "Ogni prenotazione futura ha la sua pulizia al checkout."
+        : `${anomalie.length} prenotazioni future senza pulizia: l'ospite successivo troverebbe la casa non pulita.`,
+      esempi: anomalie.slice(0, MAX_ESEMPI).map(b => ({
+        proprieta: ctx.properties.get(b.propertyId)?.name, ospite: b.guestName, checkout: toDateStr(b.checkOut), canale: b.source,
+      })),
+    };
+  } catch (e: any) {
+    return { id, titolo, severity: "critico", ok: false, count: 0, messaggio: "Controllo fallito", errore: e?.message };
+  }
+}
+
+/** 9. Pulizie COMPLETATE senza importo → rischio di non fatturarle.
+ *  Sfaccettature: il prezzo può stare in price O contractPrice; considero solo
+ *  pulizie completate recenti (ultimi 60gg) per non pescare storico antico. */
+async function checkCompletateSenzaImporto(ctx: Ctx): Promise<CheckResult> {
+  const id = "completate-senza-importo";
+  const titolo = "Pulizie completate senza importo";
+  try {
+    const limite = new Date(); limite.setDate(limite.getDate() - 60);
+    const anomalie = ctx.cleanings.filter(c => {
+      if (c.status !== "COMPLETED") return false;
+      const d = c.scheduledDate?.toDate?.();
+      if (!d || d < limite) return false;
+      const prezzo = (typeof c.price === "number" ? c.price : 0) ||
+                     (typeof c.contractPrice === "number" ? c.contractPrice : 0);
+      if (prezzo > 0) return false;
+      // Se la proprietà stessa non ha un prezzo pulizia configurato, la pulizia
+      // a 0 è una conseguenza (va sistemata la proprietà, non la singola pulizia):
+      // non la conto qui per non moltiplicare l'allarme.
+      const prop = ctx.properties.get(c.propertyId);
+      const propHaPrezzo = typeof prop?.cleaningPrice === "number" && prop.cleaningPrice > 0;
+      return propHaPrezzo; // segnalo solo pulizie a 0 su proprietà CHE HANNO un prezzo
+    });
+    return {
+      id, titolo, severity: "attenzione", ok: anomalie.length === 0, count: anomalie.length,
+      messaggio: anomalie.length === 0
+        ? "Ogni pulizia completata di recente ha un importo."
+        : `${anomalie.length} pulizie completate (ultimi 60gg) hanno importo 0: rischi di non fatturarle.`,
+      esempi: anomalie.slice(0, MAX_ESEMPI).map(c => ({
+        cleaningId: c.id, proprieta: ctx.properties.get(c.propertyId)?.name, data: toDateStr(c.scheduledDate),
+      })),
+    };
+  } catch (e: any) {
+    return { id, titolo, severity: "attenzione", ok: false, count: 0, messaggio: "Controllo fallito", errore: e?.message };
+  }
+}
+
+/** 13. Pulizie imminenti (oggi/domani) ancora NON assegnate a nessuno.
+ *  Sfaccettatura: solo status SCHEDULED (ASSIGNED = già assegnata, ok). */
+async function checkImminentiNonAssegnate(ctx: Ctx): Promise<CheckResult> {
+  const id = "imminenti-non-assegnate";
+  const titolo = "Pulizie imminenti non ancora assegnate";
+  try {
+    const oggi = new Date(); oggi.setHours(0, 0, 0, 0);
+    const domaniSera = new Date(); domaniSera.setDate(domaniSera.getDate() + 1); domaniSera.setHours(23, 59, 59, 999);
+    const anomalie = ctx.cleanings.filter(c => {
+      const d = c.scheduledDate?.toDate?.();
+      if (!d || d < oggi || d > domaniSera) return false;
+      if (c.status !== "SCHEDULED") return false;   // ASSIGNED/IN_PROGRESS/COMPLETED = ok
+      return !getOperator(c);                        // né operatorId né assignedTo
+    
+    });
+    return {
+      id, titolo, severity: "attenzione", ok: anomalie.length === 0, count: anomalie.length,
+      messaggio: anomalie.length === 0
+        ? "Tutte le pulizie di oggi e domani hanno un operatore."
+        : `${anomalie.length} pulizie di oggi/domani non sono ancora assegnate a nessuno.`,
+      esempi: anomalie.slice(0, MAX_ESEMPI).map(c => ({
+        cleaningId: c.id, proprieta: ctx.properties.get(c.propertyId)?.name, data: toDateStr(c.scheduledDate), ora: c.scheduledTime,
+      })),
+    };
+  } catch (e: any) {
+    return { id, titolo, severity: "attenzione", ok: false, count: 0, messaggio: "Controllo fallito", errore: e?.message };
+  }
+}
+
+/** 14. Pulizie del PASSATO rimaste "in corso" (IN_PROGRESS mai chiuse).
+ *  Sfaccettatura: soglia 2 giorni fa, per non pescare quella di ieri sera
+ *  ancora legittimamente aperta. */
+async function checkInCorsoIncastrate(ctx: Ctx): Promise<CheckResult> {
+  const id = "in-corso-incastrate";
+  const titolo = "Pulizie passate rimaste in corso";
+  try {
+    const limite = new Date(); limite.setDate(limite.getDate() - 2); limite.setHours(0, 0, 0, 0);
+    const anomalie = ctx.cleanings.filter(c => {
+      if (c.status !== "IN_PROGRESS") return false;
+      // Misura da quando è INIZIATA (startedAt) se disponibile: è il dato giusto
+      // per "in corso da troppo". Fallback sulla data programmata.
+      const rif = c.startedAt?.toDate?.() || c.scheduledDate?.toDate?.();
+      return rif && rif < limite;
+    });
+    return {
+      id, titolo, severity: "attenzione", ok: anomalie.length === 0, count: anomalie.length,
+      messaggio: anomalie.length === 0
+        ? "Nessuna pulizia passata è rimasta bloccata in corso."
+        : `${anomalie.length} pulizie di 2+ giorni fa sono ancora 'in corso' (mai chiuse).`,
+      esempi: anomalie.slice(0, MAX_ESEMPI).map(c => ({
+        cleaningId: c.id, proprieta: ctx.properties.get(c.propertyId)?.name, data: toDateStr(c.scheduledDate), iniziata: toDateStr(c.startedAt), operatore: getOperator(c),
+      })),
+    };
+  } catch (e: any) {
+    return { id, titolo, severity: "attenzione", ok: false, count: 0, messaggio: "Controllo fallito", errore: e?.message };
+  }
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 // MOTORE
 // ────────────────────────────────────────────────────────────────────────────
@@ -240,16 +422,30 @@ export async function GET(request: NextRequest) {
 
   try {
     // Carica il contesto UNA volta sola
-    const [propsSnap, cleanSnap, ordersSnap, usersSnap] = await Promise.all([
+    const [propsSnap, cleanSnap, ordersSnap, usersSnap, bookingsSnap, exclSnap] = await Promise.all([
       adminDb.collection("properties").get(),
       adminDb.collection("cleanings").get(),
       adminDb.collection("orders").get(),
       adminDb.collection("users").get(),
+      adminDb.collection("bookings").get(),
+      adminDb.collection("syncExclusions").get(),
     ]);
+    // mappa date escluse per proprietà (pulizie tolte volontariamente)
+    const excludedByProp = new Map<string, Set<string>>();
+    exclSnap.docs.forEach(d => {
+      const x = d.data() as any;
+      const pid = x.propertyId;
+      const orig = x.originalDate?.toDate?.();
+      if (!pid || !orig) return;
+      if (!excludedByProp.has(pid)) excludedByProp.set(pid, new Set());
+      excludedByProp.get(pid)!.add(orig.toISOString().slice(0, 10));
+    });
     const ctx: Ctx = {
       properties: new Map(propsSnap.docs.map(d => [d.id, d.data()])),
       cleanings: cleanSnap.docs.map(d => ({ id: d.id, ...(d.data() as any) })),
       orders: ordersSnap.docs.map(d => ({ id: d.id, ...(d.data() as any) })),
+      bookings: bookingsSnap.docs.map(d => ({ id: d.id, ...(d.data() as any) })),
+      excludedByProp,
     };
     const userIds = new Set(usersSnap.docs.map(d => d.id));
 
@@ -261,6 +457,10 @@ export async function GET(request: NextRequest) {
       checkOrdiniDuplicati(ctx),
       checkAssegnazioniFantasma(ctx, userIds),
       checkOrdiniVuoti(ctx),
+      checkPrenotazioniSenzaPulizia(ctx),
+      checkCompletateSenzaImporto(ctx),
+      checkImminentiNonAssegnate(ctx),
+      checkInCorsoIncastrate(ctx),
     ]);
 
     const problemi = results.filter(r => !r.ok);
