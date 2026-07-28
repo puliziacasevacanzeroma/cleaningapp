@@ -560,6 +560,58 @@ export function debugDate(value: any, label: string = 'date'): void {
 // EXPORT DEFAULT
 // ═══════════════════════════════════════════════════════════════════════════
 
+/**
+ * ⏰ DEADLINE MODIFICHE — "entro le 20:00 del giorno prima della pulizia"
+ *
+ * Regola UNICA e condivisa per tutte le modifiche che un cliente/proprietario
+ * può fare in autonomia su una pulizia (cambio ospiti, cancellazione turnover,
+ * ecc.). Oltre questa soglia le modifiche self-service sono chiuse: la logistica
+ * (assegnazioni operatori, ordini biancheria) è già stata pianificata e un
+ * cambio last-minute causa errori non recuperabili (operatore a vuoto o, peggio,
+ * casa non pulita).
+ *
+ * Calcolata in fuso orario italiano (Europe/Rome) via getItalianNow(), quindi
+ * indipendente dal fuso del browser.
+ *
+ * @param cleaningDate data della pulizia (Date | Timestamp | stringa)
+ * @returns oggetto con: isPast (soglia superata?), deadline (Date della soglia),
+ *          e helper di formattazione per i messaggi.
+ */
+export function getModificationDeadline(cleaningDate: any): {
+  isPast: boolean;
+  deadline: Date | null;
+  deadlineLabel: string; // es. "19/10/2026 alle 20:00"
+} {
+  const cd = toDate(cleaningDate);
+  if (!cd) return { isPast: false, deadline: null, deadlineLabel: "" };
+
+  // Deadline = giorno-prima della pulizia, ore 20:00 (ora italiana)
+  const deadline = new Date(cd);
+  deadline.setDate(deadline.getDate() - 1);
+  deadline.setHours(20, 0, 0, 0);
+
+  // "adesso" in ora italiana, ricostruito come Date confrontabile
+  const it = getItalianNow();
+  const nowItalian = new Date(it.year, it.month - 1, it.day, it.hours, it.minutes, it.seconds);
+
+  const isPast = nowItalian.getTime() >= deadline.getTime();
+
+  const dd = String(deadline.getDate()).padStart(2, "0");
+  const mm = String(deadline.getMonth() + 1).padStart(2, "0");
+  const yyyy = deadline.getFullYear();
+  const deadlineLabel = `${dd}/${mm}/${yyyy} alle 20:00`;
+
+  return { isPast, deadline, deadlineLabel };
+}
+
+/**
+ * Scorciatoia booleana: true se la deadline "entro le 20:00 del giorno prima"
+ * è già passata per la pulizia data.
+ */
+export function isPastModificationDeadline(cleaningDate: any): boolean {
+  return getModificationDeadline(cleaningDate).isPast;
+}
+
 const dateUtils = {
   // Costanti
   TIMEZONE,
@@ -600,6 +652,10 @@ const dateUtils = {
   addDays,
   subtractDays,
   getMillisecondsUntilMidnight,
+
+  // Deadline modifiche (entro le 20 del giorno prima)
+  getModificationDeadline,
+  isPastModificationDeadline,
   
   // Formattazione
   formatDate,

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Timestamp } from "firebase-admin/firestore";
 import { adminDb } from "~/lib/firebase/admin";
 import { getApiUser } from "~/lib/api-auth";
+import { getModificationDeadline } from "~/lib/dateUtils";
 
 export const dynamic = "force-dynamic";
 
@@ -82,6 +83,23 @@ export async function POST(req: NextRequest) {
     let resultMsg = "";
 
     if (decision === "CANCEL") {
+      // ⏰ GUARDIA DEADLINE (solo PROPRIETARIO): oltre le 20:00 del giorno prima
+      // le cancellazioni self-service sono chiuse. La logistica è già pianificata
+      // e una disdetta last-minute è irrecuperabile (operatore dirottato / casa
+      // non pulita). L'ADMIN resta senza limite: è l'ultimo cancello prima che
+      // una pulizia sparisca. La regola vive in dateUtils (unica per tutta l'app).
+      if (!isAdminUser && cleaning) {
+        const dl = getModificationDeadline(ta.cleaningDate);
+        if (dl.isPast) {
+          return NextResponse.json({
+            error: "DEADLINE_SUPERATA",
+            message: `Non è più possibile annullare online questa pulizia: siamo oltre il termine delle ${dl.deadlineLabel} (le 20:00 del giorno prima). ` +
+                     `A ridosso della data la pulizia è già stata organizzata e una disdetta dell'ultimo minuto rischia di lasciare la casa non pronta per il prossimo ospite. ` +
+                     `Se sei sicuro che si tratti di un prolungamento dello stesso ospite, scrivici o chiamaci subito e ce ne occupiamo noi.`,
+          }, { status: 409 });
+        }
+      }
+
       if (!cleaning) {
         resultMsg = "La pulizia era già stata rimossa.";
       } else if (PROTECTED_STATUSES.includes(cleaning.status)) {

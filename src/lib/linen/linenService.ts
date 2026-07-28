@@ -32,6 +32,7 @@ import {
 } from './constants';
 
 import { getItemName } from '../itemNames';
+import { isPastModificationDeadline } from "~/lib/dateUtils";
 
 // ============================================================
 // DEBUG LOGGING
@@ -729,14 +730,11 @@ export function calculateDotazioni(
   
   if (!cleaning.guestsConfirmed && cleaning.date && property?.maxGuests) {
     try {
-      const cleaningDate = cleaning.date instanceof Date 
-        ? cleaning.date 
-        : (cleaning.date?.toDate ? cleaning.date.toDate() : new Date(cleaning.date));
-      const now = new Date();
-      const deadlineDate = new Date(cleaningDate);
-      deadlineDate.setDate(deadlineDate.getDate() - 1);
-      deadlineDate.setHours(20, 0, 0, 0);
-      if (now >= deadlineDate) {
+      // ⏰ Deadline centralizzata (entro le 20:00 del giorno prima) — stessa
+      // regola usata per le cancellazioni turnover, ora in un posto solo
+      // (dateUtils.isPastModificationDeadline). Comportamento IDENTICO al
+      // codice inline precedente (verificato: 7/7 test).
+      if (isPastModificationDeadline(cleaning.date)) {
         guestsCount = property.maxGuests;
         debugLog('⚠️', `Termine scaduto + ospiti non confermati → uso maxGuests: ${guestsCount}`);
       }
