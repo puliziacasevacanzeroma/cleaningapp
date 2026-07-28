@@ -663,22 +663,20 @@ export async function POST() {
                           type: 'LEFT_MERGE', oldCheckIn: oldCiStr, newCheckIn: newCiStr, createdAt: Timestamp.now(),
                         });
                         const fmtItL = (s: string) => { const [y, m, d] = s.split('-'); return `${d}/${m}/${y}`; };
-                                                // 🔧 FIX DUPLICATI (27/07/2026): UNA sola notifica role-based invece del loop
-                        // per-admin. Il loop creava N copie (una per utente ADMIN) ma il reader admin
-                        // (subscribeToAdminNotifications) filtra solo per recipientRole ignorando
-                        // recipientId → ogni admin vedeva N duplicati. Convenzione allineata al resto
-                        // dell'app (es. notifiche Sgrosso): un documento, visto da tutti gli admin.
+                        const adminsSnapL = await adminDb.collection('users').where('role', '==', 'ADMIN').get();
+                        for (const adminDoc of adminsSnapL.docs) {
                           await adminDb.collection('notifications').add({
-                            title: '⚠️ Blocco Booking anticipato — possibile pulizia MANCANTE',
-                            message: `🏠 ${property.name}\n\n📌 COSA È SUCCESSO\nIl feed iCal di Booking fonde le prenotazioni attaccate in un unico blocco. Il blocco di questa proprietà ora inizia il ${fmtItL(newCiStr)}, prima iniziava il ${fmtItL(oldCiStr)}: probabilmente è arrivata una prenotazione nuova che FINISCE il ${fmtItL(oldCiStr)}.\n\n⚠️ IL RISCHIO REALE\nSe è così, il ${fmtItL(oldCiStr)} c'è un cambio ospiti SENZA pulizia. Il gestionale non può crearla da solo: dal feed non si distingue una prenotazione nuova dallo stesso ospite che ha anticipato l'arrivo.\n\n👉 COSA DEVI FARE\nApri l'app Booking:\n• Se ci sono DUE prenotazioni (una finisce il ${fmtItL(oldCiStr)}, una inizia il ${fmtItL(oldCiStr)}) → crea A MANO la pulizia del ${fmtItL(oldCiStr)}, altrimenti il nuovo ospite entra in casa sporca.\n• Se è un solo ospite che ha anticipato l'arrivo → non serve fare nulla.`,
-                            type: 'WARNING', recipientRole: 'ADMIN',
+                            title: '⚠️ Possibile pulizia mancante — una prenotazione inizia prima',
+                            message: `🏠 ${property.name}\n\nUna prenotazione ora inizia prima del previsto: partiva il ${fmtItL(oldCiStr)}, adesso il calendario la fa partire dal ${fmtItL(newCiStr)}.\n\nQuesto di solito vuol dire che è arrivato un nuovo ospite prima, attaccato a quello che c'era già: Booking li unisce e non ci dice dove finisce uno e inizia l'altro. In questo caso il cambio ospiti sarebbe il ${fmtItL(oldCiStr)} — ma una pulizia in quel giorno non è stata creata, perché da qui non possiamo sapere con certezza se serve.\n\n👉 Controlla su Booking le prenotazioni intorno al ${fmtItL(oldCiStr)}:\n• Se il ${fmtItL(oldCiStr)} entra un nuovo ospite → crea tu la pulizia quel giorno, altrimenti chi arriva trova la casa sporca.\n• Se è lo stesso ospite che è semplicemente entrato prima → è tutto a posto, non fare niente.`,
+                            type: 'WARNING', recipientRole: 'ADMIN', recipientId: adminDoc.id,
                             senderId: 'system', senderName: 'Sync iCal - Turnover Recovery',
                             status: 'UNREAD', createdAt: Timestamp.now(), updatedAt: Timestamp.now(),
                           });
+                        }
                         try {
                           const { sendPushNotification } = await import('~/lib/notifications/sendPushNotification');
                           await sendPushNotification(
-                            { title: '⚠️ Possibile pulizia MANCANTE', body: `${property.name}: il blocco Booking è stato anticipato — possibile cambio ospiti il ${fmtItL(oldCiStr)} senza pulizia. Verifica su Booking e creala a mano se serve.` },
+                            { title: '⚠️ Possibile pulizia MANCANTE', body: `${property.name}: una prenotazione ora inizia prima — possibile cambio ospiti il ${fmtItL(oldCiStr)} senza pulizia. Controlla su Booking e creala se serve.` },
                             { role: 'ADMIN', priority: 'high' }
                           );
                         } catch {}
@@ -687,8 +685,8 @@ export async function POST() {
                           const ownerIdN = typeof property.ownerId === 'string' ? property.ownerId.trim() : '';
                           if (ownerIdN && ownerIdN !== 'pending') {
                             await adminDb.collection('notifications').add({
-                              title: '⚠️ Possibile cambio ospiti da verificare su Booking',
-                              message: `🏠 ${property.name}\n\nBooking, nel calendario che ci invia, UNISCE le prenotazioni attaccate: non ci dice dove finisce una e inizia l'altra.\n\nIl blocco della tua proprietà ora inizia prima (${fmtItL(newCiStr)} invece di ${fmtItL(oldCiStr)}): probabilmente è arrivata una nuova prenotazione che FINISCE il ${fmtItL(oldCiStr)}. Se è così, il ${fmtItL(oldCiStr)} serve una pulizia di cambio ospiti che dal calendario non possiamo vedere.\n\n👉 Apri il tuo account Booking e verifica:\n• Se il ${fmtItL(oldCiStr)} una prenotazione finisce e un'altra inizia → avvisaci subito così programmiamo la pulizia.\n• Se è un solo ospite che ha anticipato l'arrivo → non serve fare nulla.`,
+                              title: '⚠️ Una prenotazione inizia prima — controlla su Booking',
+                              message: `🏠 ${property.name}\n\nUna tua prenotazione ora inizia prima: partiva il ${fmtItL(oldCiStr)}, adesso parte dal ${fmtItL(newCiStr)}.\n\nSe davanti si è aggiunto un nuovo ospite, il ${fmtItL(oldCiStr)} ci sarebbe un cambio che ha bisogno di una pulizia — che al momento non è prevista.\n\n👉 Apri Booking e controlla intorno al ${fmtItL(oldCiStr)}: se sono due ospiti diversi, scrivici così programmiamo la pulizia del cambio. Se è lo stesso ospite entrato prima, va bene così.`,
                               type: 'WARNING', recipientRole: 'PROPRIETARIO', recipientId: ownerIdN,
                               senderId: 'system', senderName: 'Sync iCal - Turnover Recovery',
                               status: 'UNREAD', createdAt: Timestamp.now(), updatedAt: Timestamp.now(),
@@ -696,7 +694,7 @@ export async function POST() {
                             try {
                               const { sendPushNotification } = await import('~/lib/notifications/sendPushNotification');
                               await sendPushNotification(
-                                { title: '⚠️ Verifica su Booking', body: `${property.name}: Booking unisce le prenotazioni attaccate — possibile cambio ospiti il ${fmtItL(oldCiStr)} da confermare. Controlla il tuo account Booking e avvisaci.` },
+                                { title: '⚠️ Verifica su Booking', body: `${property.name}: una prenotazione inizia prima del previsto — possibile cambio ospiti il ${fmtItL(oldCiStr)}. Controlla su Booking e avvisaci.` },
                                 { userId: ownerIdN, priority: 'high' }
                               );
                             } catch {}
@@ -877,24 +875,22 @@ export async function POST() {
                             propertyName: property.name,
                           },
                         } : {};
-                        const notifMsg = `🏠 ${property.name}\n\n📌 COSA È SUCCESSO\nIl calendario iCal di Booking non invia le prenotazioni singole: quando due prenotazioni sono attaccate (checkout e check-in lo stesso giorno) le fonde in un unico blocco "CLOSED". Il blocco di questa proprietà si è appena allungato da ${fmtIt(oldCoStr)} a ${fmtIt(newCoStr)}: quasi sicuramente è arrivata una NUOVA prenotazione che inizia il ${fmtIt(oldCoStr)}.\n\n🤖 COSA HA FATTO IL GESTIONALE\n✅ Ha mantenuto la pulizia del ${fmtIt(oldCoStr)} (probabile cambio ospiti)\n➕ Ha creato una nuova pulizia + ordine biancheria il ${fmtIt(newCoStr)}\n\n👉 COSA DEVI FARE\nApri l'app Booking e guarda le prenotazioni di questa proprietà:\n• Se il ${fmtIt(oldCoStr)} c'è davvero un cambio ospiti → tutto ok, non fare nulla.\n• Se invece è lo STESSO ospite che ha prolungato → cancella la pulizia del ${fmtIt(oldCoStr)}, altrimenti l'operatore si presenta con l'ospite ancora in casa.`;
-                                                // 🔧 FIX DUPLICATI (27/07/2026): UNA sola notifica role-based invece del loop
-                        // per-admin. Il loop creava N copie (una per utente ADMIN) ma il reader admin
-                        // (subscribeToAdminNotifications) filtra solo per recipientRole ignorando
-                        // recipientId → ogni admin vedeva N duplicati. Convenzione allineata al resto
-                        // dell'app (es. notifiche Sgrosso): un documento, visto da tutti gli admin.
+                        const notifMsg = `🏠 ${property.name}\n\nUna prenotazione si è allungata. Prima finiva il ${fmtIt(oldCoStr)}, ora il calendario la porta fino al ${fmtIt(newCoStr)}.\n\nDi solito questo vuol dire che è entrato un nuovo ospite dal ${fmtIt(oldCoStr)}, attaccato al precedente: Booking li unisce e non ci dice dove finisce uno e inizia l'altro.\n\nCosa abbiamo fatto: abbiamo tenuto la pulizia del ${fmtIt(oldCoStr)} (il cambio ospiti) e ne abbiamo aggiunta una a fine soggiorno, il ${fmtIt(newCoStr)}.\n\n👉 Controlla su Booking:\n• Se il ${fmtIt(oldCoStr)} entra davvero un nuovo ospite → è tutto giusto, non fare niente.\n• Se invece è lo stesso ospite rimasto più giorni → apri questa notifica e cancella la pulizia del ${fmtIt(oldCoStr)}, così l'operatore non va a vuoto.`;
+                        const adminsSnapR = await adminDb.collection('users').where('role', '==', 'ADMIN').get();
+                        for (const adminDoc of adminsSnapR.docs) {
                           await adminDb.collection('notifications').add({
-                            title: '🔁 Turnover recuperato da blocco Booking',
+                            title: '🔁 Una prenotazione si è allungata — verifica il cambio ospiti',
                             message: notifMsg, type: 'WARNING',
                             ...turnoverActionFields,
-                            recipientRole: 'ADMIN',
+                            recipientRole: 'ADMIN', recipientId: adminDoc.id,
                             senderId: 'system', senderName: 'Sync iCal - Turnover Recovery',
                             status: 'UNREAD', createdAt: Timestamp.now(), updatedAt: Timestamp.now(),
                           });
+                        }
                         try {
                           const { sendPushNotification } = await import('~/lib/notifications/sendPushNotification');
                           await sendPushNotification(
-                            { title: '🔁 Pulizia turnover recuperata', body: `${property.name}: blocco Booking fuso (prenotazioni accorpate). Pulizia mantenuta il ${fmtIt(oldCoStr)}, nuova creata il ${fmtIt(newCoStr)}. Se era un prolungamento, cancella quella del ${fmtIt(oldCoStr)}.` },
+                            { title: '🔁 Pulizia turnover recuperata', body: `${property.name}: una prenotazione si è allungata (prima finiva il ${fmtIt(oldCoStr)}, ora il ${fmtIt(newCoStr)}). Abbiamo tenuto la pulizia del ${fmtIt(oldCoStr)}. Se è lo stesso ospite che resta, cancellala.` },
                             { role: 'ADMIN', priority: 'high' }
                           );
                         } catch {}
@@ -903,8 +899,8 @@ export async function POST() {
                           const ownerIdN = typeof property.ownerId === 'string' ? property.ownerId.trim() : '';
                           if (ownerIdN && ownerIdN !== 'pending') {
                             await adminDb.collection('notifications').add({
-                              title: '🔁 Cambio ospiti rilevato — verifica su Booking',
-                              message: `🏠 ${property.name}\n\nBooking, nel calendario che ci invia, UNISCE le prenotazioni attaccate in un unico blocco: quando due soggiorni sono uno dietro l'altro non ci dice dove finisce il primo e inizia il secondo.\n\nIl blocco della tua proprietà si è appena allungato: quasi sicuramente è arrivata una nuova prenotazione che inizia il ${fmtIt(oldCoStr)}. Per questo abbiamo programmato la pulizia del cambio ospiti il ${fmtIt(oldCoStr)}, oltre a quella di fine blocco il ${fmtIt(newCoStr)}.\n\n👉 Ti chiediamo 30 secondi: apri il tuo account Booking e verifica.\n• Se il ${fmtIt(oldCoStr)} c'è davvero un cambio ospiti → tutto ok, non serve fare nulla.\n• Se invece è lo STESSO ospite che ha prolungato il soggiorno → avvisaci subito, così togliamo la pulizia del ${fmtIt(oldCoStr)}.`,
+                              title: '🔁 Una prenotazione si è allungata — controlla su Booking',
+                              message: `🏠 ${property.name}\n\nUna tua prenotazione si è allungata: prima finiva il ${fmtIt(oldCoStr)}, ora arriva fino al ${fmtIt(newCoStr)}.\n\nDi solito significa che entra un nuovo ospite il ${fmtIt(oldCoStr)}. Per questo abbiamo previsto la pulizia del cambio quel giorno, più quella di fine soggiorno il ${fmtIt(newCoStr)}.\n\n👉 Ti chiediamo 30 secondi: controlla su Booking.\n• Se il ${fmtIt(oldCoStr)} entra un nuovo ospite → tutto ok.\n• Se è lo stesso ospite rimasto più giorni → apri questa notifica e togli la pulizia del ${fmtIt(oldCoStr)} (entro le 20:00 del giorno prima).`,
                               type: 'WARNING', recipientRole: 'PROPRIETARIO', recipientId: ownerIdN,
                           ...turnoverActionFields,
                               senderId: 'system', senderName: 'Sync iCal - Turnover Recovery',
@@ -913,7 +909,7 @@ export async function POST() {
                             try {
                               const { sendPushNotification } = await import('~/lib/notifications/sendPushNotification');
                               await sendPushNotification(
-                                { title: '🔁 Verifica cambio ospiti', body: `${property.name}: Booking unisce le prenotazioni attaccate — abbiamo programmato una pulizia il ${fmtIt(oldCoStr)}. Verifica sul tuo account Booking se è un cambio ospiti o un prolungamento.` },
+                                { title: '🔁 Verifica cambio ospiti', body: `${property.name}: una prenotazione si è allungata — abbiamo previsto una pulizia il ${fmtIt(oldCoStr)}. Controlla su Booking se è un nuovo ospite o lo stesso che resta.` },
                                 { userId: ownerIdN, priority: 'high' }
                               );
                             } catch {}
@@ -1080,22 +1076,20 @@ export async function POST() {
                           type: 'LONG_BLOCK', checkIn: ciStrN, checkOut: coStrN, nights: nightsNew, createdAt: Timestamp.now(),
                         });
                         const fmtItN = (s: string) => { const [y, m, d] = s.split('-'); return `${d}/${m}/${y}`; };
-                                                // 🔧 FIX DUPLICATI (27/07/2026): UNA sola notifica role-based invece del loop
-                        // per-admin. Il loop creava N copie (una per utente ADMIN) ma il reader admin
-                        // (subscribeToAdminNotifications) filtra solo per recipientRole ignorando
-                        // recipientId → ogni admin vedeva N duplicati. Convenzione allineata al resto
-                        // dell'app (es. notifiche Sgrosso): un documento, visto da tutti gli admin.
+                        const adminsSnapN = await adminDb.collection('users').where('role', '==', 'ADMIN').get();
+                        for (const adminDoc of adminsSnapN.docs) {
                           await adminDb.collection('notifications').add({
-                            title: `⚠️ Blocco Booking di ${nightsNew} notti — possibili pulizie mancanti`,
-                            message: `🏠 ${property.name}\n\n📌 COSA È SUCCESSO\nÈ stato importato un blocco Booking di ${nightsNew} notti (${fmtItN(ciStrN)} → ${fmtItN(coStrN)}). Il feed iCal di Booking NON invia le prenotazioni singole: se in quel periodo ci sono più prenotazioni attaccate, il feed le mostra come un blocco unico e il gestionale ha potuto creare la pulizia SOLO a fine blocco (${fmtItN(coStrN)}).\n\n⚠️ IL RISCHIO REALE\nSe dentro il blocco ci sono più prenotazioni, i cambi ospiti intermedi NON hanno pulizia: gli ospiti entrerebbero in casa sporca senza che il gestionale possa accorgersene.\n\n👉 COSA DEVI FARE\nApri l'app Booking e guarda le prenotazioni tra il ${fmtItN(ciStrN)} e il ${fmtItN(coStrN)}: per ogni cambio ospiti intermedio crea A MANO la pulizia in quel giorno.`,
-                            type: 'WARNING', recipientRole: 'ADMIN',
+                            title: `⚠️ Prenotazione lunga: controlla se ci sono più ospiti`,
+                            message: `🏠 ${property.name}\n\nÈ arrivata una prenotazione di ${nightsNew} notti, dal ${fmtItN(ciStrN)} al ${fmtItN(coStrN)}.\n\nA volte Booking mette insieme più prenotazioni una dietro l'altra e le mostra come se fossero una sola. Se in questo periodo si sono alternati ospiti diversi, in mezzo serve una pulizia — ma noi da qui non riusciamo a vederlo.\n\nAbbiamo previsto la pulizia solo alla fine, il ${fmtItN(coStrN)}.\n\n👉 Cosa fare: apri Booking e guarda le prenotazioni tra il ${fmtItN(ciStrN)} e il ${fmtItN(coStrN)}.\n• Se è un unico ospite per tutto il periodo → è tutto a posto, non fare niente.\n• Se sono più ospiti che si alternano → aggiungi tu la pulizia nel giorno di ogni cambio, altrimenti chi arriva trova la casa sporca.`,
+                            type: 'WARNING', recipientRole: 'ADMIN', recipientId: adminDoc.id,
                             senderId: 'system', senderName: 'Sync iCal - Turnover Recovery',
                             status: 'UNREAD', createdAt: Timestamp.now(), updatedAt: Timestamp.now(),
                           });
+                        }
                         try {
                           const { sendPushNotification } = await import('~/lib/notifications/sendPushNotification');
                           await sendPushNotification(
-                            { title: '⚠️ Possibili pulizie mancanti', body: `${property.name}: blocco Booking di ${nightsNew} notti (${fmtItN(ciStrN)}→${fmtItN(coStrN)}) — può contenere più prenotazioni fuse. Verifica i cambi ospiti interni su Booking.` },
+                            { title: '⚠️ Possibili pulizie mancanti', body: `${property.name}: prenotazione lunga di ${nightsNew} notti (${fmtItN(ciStrN)}→${fmtItN(coStrN)}). Se dentro ci sono più ospiti, controlla su Booking e aggiungi le pulizie dei cambi.` },
                             { role: 'ADMIN', priority: 'normal' }
                           );
                         } catch {}
@@ -1104,8 +1098,8 @@ export async function POST() {
                           const ownerIdN = typeof property.ownerId === 'string' ? property.ownerId.trim() : '';
                           if (ownerIdN && ownerIdN !== 'pending') {
                             await adminDb.collection('notifications').add({
-                              title: `⚠️ Blocco Booking di ${nightsNew} notti — verifica le prenotazioni`,
-                              message: `🏠 ${property.name}\n\nBooking, nel calendario che ci invia, UNISCE le prenotazioni attaccate in un unico blocco. È appena arrivato un blocco di ${nightsNew} notti (${fmtItN(ciStrN)} → ${fmtItN(coStrN)}): potrebbe essere UNA prenotazione lunga oppure PIÙ prenotazioni una dietro l'altra — dal calendario non possiamo saperlo.\n\nAbbiamo programmato la pulizia solo a fine blocco (${fmtItN(coStrN)}).\n\n👉 Apri il tuo account Booking e guarda le prenotazioni tra il ${fmtItN(ciStrN)} e il ${fmtItN(coStrN)}: se ci sono più soggiorni, mandaci le date dei cambi ospiti così programmiamo le pulizie — altrimenti gli ospiti troverebbero la casa non preparata.`,
+                              title: `⚠️ Prenotazione lunga da verificare su Booking`,
+                              message: `🏠 ${property.name}\n\nÈ arrivata una prenotazione di ${nightsNew} notti, dal ${fmtItN(ciStrN)} al ${fmtItN(coStrN)}.\n\nA volte Booking unisce più prenotazioni vicine e le mostra come una sola. Se in questo periodo ci sono ospiti diversi, tra un soggiorno e l'altro serve una pulizia che al momento non è prevista.\n\n👉 Ti chiediamo 30 secondi: apri Booking e controlla quelle date. Se sono più soggiorni diversi, scrivici le date dei cambi e programmiamo noi le pulizie. Se è un'unica prenotazione lunga, va bene così.`,
                               type: 'WARNING', recipientRole: 'PROPRIETARIO', recipientId: ownerIdN,
                               senderId: 'system', senderName: 'Sync iCal - Turnover Recovery',
                               status: 'UNREAD', createdAt: Timestamp.now(), updatedAt: Timestamp.now(),
@@ -1113,7 +1107,7 @@ export async function POST() {
                             try {
                               const { sendPushNotification } = await import('~/lib/notifications/sendPushNotification');
                               await sendPushNotification(
-                                { title: '⚠️ Verifica prenotazioni su Booking', body: `${property.name}: Booking unisce le prenotazioni attaccate — blocco di ${nightsNew} notti in arrivo, dicci se contiene più soggiorni.` },
+                                { title: '⚠️ Verifica prenotazioni su Booking', body: `${property.name}: prenotazione lunga di ${nightsNew} notti in arrivo. Se contiene più soggiorni diversi, dicci le date dei cambi.` },
                                 { userId: ownerIdN, priority: 'high' }
                               );
                             } catch {}
