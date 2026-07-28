@@ -170,16 +170,26 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
       setDecisionDone(notifData.actionResolved || null);
       return;
     }
-    setIsOpen(false);
+    // Notifiche con link esplicito → naviga. Le informative (no link) →
+    // modal dettaglio, NON fallback verso la home.
     const link = resolveNotificationLink({ link: n.link, type: n.type, relatedEntityId: n.relatedEntityId, relatedEntityType: n.relatedEntityType, relatedType: notifData.relatedType, relatedId: notifData.relatedId, recipientRole: n.recipientRole });
-    console.log('🔔 [notifClick] tipo:', n.type, '| link salvato:', n.link, '| link risolto:', link, '| relatedEntityId:', n.relatedEntityId);
-    if (link) router.push(link);
+    if (n.link && link) {
+      setIsOpen(false);
+      router.push(link);
+      return;
+    }
+    // nessuna azione, nessun link salvato → apri il dettaglio leggibile
+    setDetailNotif(notifData);
   };
 
   // ═══════════════════════════════════════════════════════════════
   // MODAL DECISIONE TURNOVER (blocchi Booking fusi)
   // ═══════════════════════════════════════════════════════════════
   const [decisionNotif, setDecisionNotif] = useState<any | null>(null);
+  // 🔎 FIX (27/07/2026): modal dettaglio per notifiche informative (no azione,
+  // no link) — es. "Blocco Booking di N notti". Prima il click risolveva un
+  // link fallback e ti buttava in home.
+  const [detailNotif, setDetailNotif] = useState<any | null>(null);
   const [decisionBusy, setDecisionBusy] = useState<"KEEP" | "CANCEL" | null>(null);
   const [decisionDone, setDecisionDone] = useState<string | null>(null);
   const [decisionError, setDecisionError] = useState<string | null>(null);
@@ -222,6 +232,31 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
     if (!s) return "-";
     const p = String(s).split("-");
     return p.length === 3 ? `${p[2]}/${p[1]}/${p[0]}` : s;
+  };
+
+  const closeDetail = () => setDetailNotif(null);
+
+  const DetailModal = () => {
+    if (!detailNotif || !portalReady) return null;
+    return createPortal(
+      <div className="fixed inset-0 z-[10001] flex items-end sm:items-center justify-center bg-black/50 p-0 sm:p-4" onClick={closeDetail}>
+        <div className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl shadow-2xl flex flex-col max-h-[80vh]" onClick={e => e.stopPropagation()} style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
+          <div className="bg-gradient-to-r from-amber-500 to-orange-500 px-5 py-4 flex items-start justify-between flex-shrink-0">
+            <h3 className="font-bold text-white text-[14px] leading-snug pr-2">{detailNotif.title}</h3>
+            <button onClick={closeDetail} className="w-8 h-8 rounded-lg bg-white/15 flex items-center justify-center active:scale-95 transition-transform flex-shrink-0">
+              <Ic d={ic.close} className="w-4 h-4 text-white" />
+            </button>
+          </div>
+          <div className="p-5 overflow-y-auto">
+            <p className="text-[13px] text-slate-600 leading-relaxed whitespace-pre-line">{detailNotif.message}</p>
+          </div>
+          <div className="p-4 border-t border-slate-100 flex-shrink-0">
+            <button onClick={closeDetail} className="w-full py-2.5 rounded-xl bg-slate-800 text-white text-[13px] font-semibold active:scale-95 transition-transform">Chiudi</button>
+          </div>
+        </div>
+      </div>,
+      document.body
+    );
   };
 
   const DecisionModal = () => {
@@ -541,7 +576,7 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
 
       <DesktopDropdown />
       <MobilePanel />
-      <DecisionModal />
+      <DecisionModal /><DetailModal />
     </div>
   );
 }

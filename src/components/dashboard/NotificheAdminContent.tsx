@@ -879,8 +879,8 @@ export function NotificheAdminContent({ embedded = false, initialTab }: { embedd
       {/* 🔎 Modal dettaglio notifica — apre al click sulla card e mostra il
           messaggio COMPLETO (i messaggi del sync-ical usano \n: whitespace-pre-line) */}
       {detailNotification && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setDetailNotification(null)}>
-          <div className="bg-white w-full max-w-md rounded-2xl shadow-xl max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/50 z-[10001] flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={() => setDetailNotification(null)}>
+          <div className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl shadow-2xl max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()} style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
             <div className="p-5 border-b border-slate-100 flex items-start gap-3">
               <div className={`w-9 h-9 rounded-[10px] flex items-center justify-center flex-shrink-0 ${getNotificationColor(detailNotification.type, detailNotification.actionStatus)}`}>
                 {getNotificationIcon(detailNotification.type)}
