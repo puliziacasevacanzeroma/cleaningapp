@@ -373,7 +373,7 @@ export function InventarioClient({ categories: initialCategories, stats: initial
               </div>
               <label className="flex items-center gap-3 p-3.5 bg-slate-50 rounded-xl cursor-pointer border border-slate-200">
                 <input type="checkbox" name="isForLinen" defaultChecked={editingItem?.isForLinen ?? true} className="w-4 h-4 text-slate-900 rounded" />
-                <div><span className="text-xs font-semibold text-slate-700">Articolo biancheria</span><p className="text-[10px] text-slate-500">Visibile nel configuratore</p></div>
+                <div><span className="text-xs font-semibold text-slate-700">Articolo gestito dalla lavanderia</span><p className="text-[10px] text-slate-500">Se attivo: l'articolo entra nei conteggi della pagina Lavanderia (richiesti/consegnati/costi) ed è visibile nel configuratore dotazioni. Se spento: non arriva mai alla lavanderia, di qualunque categoria sia.</p></div>
               </label>
               <div className="flex gap-3 pt-1">
                 <button type="button" onClick={() => { setShowAddModal(false); setEditingItem(null); setError(null); }} className="flex-1 py-2.5 bg-slate-100 text-slate-700 rounded-xl text-sm font-semibold">Annulla</button>
