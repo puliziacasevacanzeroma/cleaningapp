@@ -200,14 +200,20 @@ export default function LavanderiaPage() {
         const res = await fetch('/api/inventory/list');
         const data = await res.json();
         const ids = new Set<string>(); const names = new Set<string>(); const display: string[] = [];
-        data.categories?.forEach((cat: { id: string; items?: { key?: string; id: string; name: string }[] }) => {
-          if (cat.id === 'biancheria_letto' || cat.id === 'biancheria_bagno') {
-            cat.items?.forEach((it) => {
-              const id = it.key || it.id;
-              if (id) ids.add(id);
-              if (it.name) { names.add(it.name); if (!display.includes(it.name)) display.push(it.name); }
-            });
-          }
+        // 🔑 FIX (28/07/2026): il criterio "va alla lavanderia" è il FLAG
+        // isForLinen dell'articolo, NON la categoria. Prima si caricavano solo
+        // le categorie letto+bagno: un articolo da lavanderia in altra categoria
+        // (es. canovaccio cucina in kit_cortesia) non arrivava MAI alla
+        // lavanderia pur essendo nella config e negli ordini. Ora: qualsiasi
+        // articolo con la spunta "Articolo biancheria" in inventario entra nei
+        // totali lavanderia, di qualunque categoria sia.
+        data.categories?.forEach((cat: { id: string; items?: { key?: string; id: string; name: string; isForLinen?: boolean }[] }) => {
+          cat.items?.forEach((it) => {
+            if (it.isForLinen !== true) return;
+            const id = it.key || it.id;
+            if (id) ids.add(id);
+            if (it.name) { names.add(it.name); if (!display.includes(it.name)) display.push(it.name); }
+          });
         });
         if (!cancelled) { setLinenInvIds(ids); setLinenInvNames(names); setLinenInvDisplay(display); }
       } catch (e) { console.error("Errore caricamento inventario lavanderia:", e); }
