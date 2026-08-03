@@ -865,6 +865,9 @@ export async function POST() {
                         const fmtIt = (s: string) => { const [y, m, d] = s.split('-'); return `${d}/${m}/${y}`; };
                         const turnoverActionFields = keptCleaningId ? {
                           actionRequired: true,
+                          // ⚠️ actionStatus OBBLIGATORIO: i filtri "azioni richieste"
+                          // cercano actionRequired && actionStatus === 'PENDING'.
+                          actionStatus: 'PENDING',
                           actionType: 'TURNOVER_DECISION',
                           actionKey: alertKey,
                           turnoverAction: {
@@ -875,7 +878,7 @@ export async function POST() {
                             propertyName: property.name,
                           },
                         } : {};
-                        const notifMsg = `🏠 ${property.name}\n\nUna prenotazione si è allungata. Prima finiva il ${fmtIt(oldCoStr)}, ora il calendario la porta fino al ${fmtIt(newCoStr)}.\n\nDi solito questo vuol dire che è entrato un nuovo ospite dal ${fmtIt(oldCoStr)}, attaccato al precedente: Booking li unisce e non ci dice dove finisce uno e inizia l'altro.\n\nCosa abbiamo fatto: abbiamo tenuto la pulizia del ${fmtIt(oldCoStr)} (il cambio ospiti) e ne abbiamo aggiunta una a fine soggiorno, il ${fmtIt(newCoStr)}.\n\n👉 Controlla su Booking:\n• Se il ${fmtIt(oldCoStr)} entra davvero un nuovo ospite → è tutto giusto, non fare niente.\n• Se invece è lo stesso ospite rimasto più giorni → apri questa notifica e cancella la pulizia del ${fmtIt(oldCoStr)}, così l'operatore non va a vuoto.`;
+                        const notifMsg = `🏠 ${property.name}\n\nUna prenotazione si è allungata. Prima finiva il ${fmtIt(oldCoStr)}, ora il calendario la porta fino al ${fmtIt(newCoStr)}.\n\nDi solito questo vuol dire che è entrato un nuovo ospite dal ${fmtIt(oldCoStr)}, attaccato al precedente: Booking li unisce e non ci dice dove finisce uno e inizia l'altro.\n\nCosa abbiamo fatto: abbiamo tenuto la pulizia del ${fmtIt(oldCoStr)} (il cambio ospiti) e ne abbiamo aggiunta una a fine soggiorno, il ${fmtIt(newCoStr)}.\n\n👉 Controlla su Booking:\n• Se il ${fmtIt(oldCoStr)} entra davvero un nuovo ospite → è tutto giusto, non fare niente.\n• Se invece è lo stesso ospite rimasto più giorni → apri questa notifica e cancella la pulizia del ${fmtIt(oldCoStr)}, così l'operatore non va a vuoto.\n\n⚠️ IMPORTANTE: se non premi né \"Mantieni pulizia\" né \"Cancella pulizia\", la pulizia del ${fmtIt(oldCoStr)} RESTA IN PROGRAMMA: verrà assegnata a un operatore, la biancheria verrà consegnata e il servizio verrà fatturato. Nel dubbio non facciamo sparire nulla, ma la scelta sta a te.`;
                         const adminsSnapR = await adminDb.collection('users').where('role', '==', 'ADMIN').get();
                         for (const adminDoc of adminsSnapR.docs) {
                           await adminDb.collection('notifications').add({
@@ -900,7 +903,7 @@ export async function POST() {
                           if (ownerIdN && ownerIdN !== 'pending') {
                             await adminDb.collection('notifications').add({
                               title: '🔁 Una prenotazione si è allungata — controlla su Booking',
-                              message: `🏠 ${property.name}\n\nUna tua prenotazione si è allungata: prima finiva il ${fmtIt(oldCoStr)}, ora arriva fino al ${fmtIt(newCoStr)}.\n\nDi solito significa che entra un nuovo ospite il ${fmtIt(oldCoStr)}. Per questo abbiamo previsto la pulizia del cambio quel giorno, più quella di fine soggiorno il ${fmtIt(newCoStr)}.\n\n👉 Ti chiediamo 30 secondi: controlla su Booking.\n• Se il ${fmtIt(oldCoStr)} entra un nuovo ospite → tutto ok.\n• Se è lo stesso ospite rimasto più giorni → apri questa notifica e togli la pulizia del ${fmtIt(oldCoStr)} (entro le 20:00 del giorno prima).`,
+                              message: `🏠 ${property.name}\n\nUna tua prenotazione si è allungata: prima finiva il ${fmtIt(oldCoStr)}, ora arriva fino al ${fmtIt(newCoStr)}.\n\nDi solito significa che entra un nuovo ospite il ${fmtIt(oldCoStr)}. Per questo abbiamo previsto la pulizia del cambio quel giorno, più quella di fine soggiorno il ${fmtIt(newCoStr)}.\n\n👉 Ti chiediamo 30 secondi: controlla su Booking.\n• Se il ${fmtIt(oldCoStr)} entra un nuovo ospite → tutto ok.\n• Se è lo stesso ospite rimasto più giorni → apri questa notifica e togli la pulizia del ${fmtIt(oldCoStr)} (entro le 20:00 del giorno prima).\n\n⚠️ IMPORTANTE: se non premi né \"Mantieni pulizia\" né \"Cancella pulizia\", la pulizia del ${fmtIt(oldCoStr)} RESTA IN PROGRAMMA e ti verrà fatturata. Nel dubbio non cancelliamo niente da soli, così la casa non resta sporca: ma se l'ospite ha solo prolungato, tocca a te dircelo entro le 20:00 del giorno prima.`,
                               type: 'WARNING', recipientRole: 'PROPRIETARIO', recipientId: ownerIdN,
                           ...turnoverActionFields,
                               senderId: 'system', senderName: 'Sync iCal - Turnover Recovery',

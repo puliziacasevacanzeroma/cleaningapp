@@ -152,6 +152,9 @@ export async function POST(req: NextRequest) {
           actionResolvedByRole: role,
           actionResolvedAt: resolvedAt,
           actionRequired: false,
+          // Chiude anche actionStatus: senza questo la notifica resterebbe
+          // "PENDING" per sempre nei filtri "azioni richieste".
+          actionStatus: "DONE",
           updatedAt: resolvedAt,
         });
       }
@@ -159,7 +162,7 @@ export async function POST(req: NextRequest) {
       await notifRef.update({
         actionResolved: decision, actionResolvedBy: user.name || user.id,
         actionResolvedByRole: role, actionResolvedAt: resolvedAt,
-        actionRequired: false, updatedAt: resolvedAt,
+        actionRequired: false, actionStatus: "DONE", updatedAt: resolvedAt,
       });
     }
 
