@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { getModificationDeadline } from "~/lib/dateUtils";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { collection, query, where, onSnapshot } from "firebase/firestore";
@@ -264,10 +263,6 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
     if (!decisionNotif || !portalReady) return null;
     const ta = decisionNotif.turnoverAction || {};
     const resolved = decisionDone || decisionNotif.actionResolved;
-    // ⏰ Deadline: il proprietario non può cancellare oltre le 20:00 del giorno
-    // prima (stessa regola del backend). L'admin non ha limiti.
-    const dl = getModificationDeadline(ta.cleaningDate);
-    const cancelBloccato = !isAdmin && dl.isPast;
     return createPortal(
       <div className="fixed inset-0 z-[10001] flex items-end sm:items-center justify-center bg-black/50 p-0 sm:p-4" onClick={closeDecisionModal}>
         <div className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()} style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
@@ -321,18 +316,7 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
                   {decisionBusy === "KEEP" ? <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> : "✅"}
                   Lascia pulizia — è un cambio ospiti
                 </button>
-                {cancelBloccato ? (
-                  <div className="w-full rounded-xl bg-amber-50 border border-amber-200 p-3.5">
-                    <p className="text-[13px] font-bold text-amber-800 flex items-center gap-1.5">🔒 Non è più possibile annullare online</p>
-                    <p className="text-[12px] text-amber-700 leading-relaxed mt-1.5">
-                      Siamo oltre il termine delle <span className="font-semibold">{dl.deadlineLabel}</span> (le 20:00 del giorno prima).
-                      A ridosso della data la pulizia è già stata organizzata: una disdetta dell'ultimo minuto rischia di lasciare la casa non pronta per il prossimo ospite.
-                    </p>
-                    <p className="text-[12px] text-amber-700 leading-relaxed mt-2">
-                      Se sei sicuro che è lo <span className="font-semibold">stesso ospite</span> che ha prolungato, scrivici o chiamaci subito e ce ne occupiamo noi.
-                    </p>
-                  </div>
-                ) : !confirmCancel ? (
+                {!confirmCancel ? (
                   <button
                     onClick={() => setConfirmCancel(true)}
                     disabled={decisionBusy !== null}

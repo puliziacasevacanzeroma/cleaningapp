@@ -76,6 +76,16 @@ export async function GET(req: NextRequest) {
         const status = data.status || "";
         const createdAt = data.createdAt;
 
+        // 🛡️ PROTEZIONE (03/08/2026): non eliminare MAI una notifica che
+        //    aspetta ancora una decisione. Prima una decisione turnover su una
+        //    pulizia lontana (es. 2027) veniva creata oggi e cancellata dopo
+        //    30/60 giorni: la notifica spariva, la pulizia dubbia restava, e il
+        //    cron di sollecito non trovava più nulla da sollecitare.
+        const azioneInSospeso =
+          (data.actionType === "TURNOVER_DECISION" || data.actionType === "GAP_VERIFICATION") &&
+          !data.actionResolved;
+        if (azioneInSospeso) continue;
+
         // READ/ARCHIVED più vecchi di 30 giorni → elimina
         if (status === "READ" || status === "ARCHIVED") {
           toDelete.push(docSnap.ref);
