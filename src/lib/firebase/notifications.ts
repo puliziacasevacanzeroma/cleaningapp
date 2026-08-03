@@ -400,6 +400,12 @@ export async function markAllAsRead(
   
   if (isAdmin) {
     notifications = await getAdminNotifications({ unreadOnly: true });
+    // 🔁 Coerente col listener: un admin segna come lette SOLO le notifiche
+    //    broadcast e le proprie, non le copie fan-out degli altri admin
+    //    (altrimenti le marcava lette prima ancora che le vedessero).
+    if (recipientId) {
+      notifications = notifications.filter(n => !n.recipientId || n.recipientId === recipientId);
+    }
   } else {
     notifications = await getUserNotifications(
       recipientId || "", 
@@ -618,7 +624,8 @@ export function subscribeToNotifications(
 //   limit. Si scaricano solo le ~100 notifiche più recenti (pochi KB).
 //   Indice composito già presente: notifications.recipientRole + createdAt DESC.
 export function subscribeToAdminNotifications(
-  callback: (notifications: FirebaseNotification[]) => void
+  callback: (notifications: FirebaseNotification[]) => void,
+  adminUserId?: string
 ): Unsubscribe {
   return onSnapshot(
     query(
@@ -628,10 +635,25 @@ export function subscribeToAdminNotifications(
       limit(NOTIFICATION_FEED_LIMIT)
     ),
     (snapshot) => {
-      // Già filtrate e ordinate dal server: nessun filtro/sort client necessario.
-      const notifications = snapshot.docs.map(
+      // Già filtrate e ordinate dal server per ruolo.
+      let notifications = snapshot.docs.map(
         doc => ({ id: doc.id, ...(doc.data() as Record<string, any>) } as FirebaseNotification)
       );
+      // 🔁 FIX DUPLICATI (03/08/2026): quasi tutte le route fanno FAN-OUT, cioè
+      //    creano UNA notifica PER OGNI utente ADMIN, ciascuna col proprio
+      //    recipientId. Questo listener però filtrava solo per recipientRole,
+      //    quindi ogni admin vedeva TUTTE le copie: con 4 admin in anagrafica,
+      //    la stessa notifica compariva 4 volte.
+      //    Ora si tiene solo: (a) le notifiche broadcast, cioè SENZA
+      //    recipientId (destinate a tutti gli admin), e (b) quelle indirizzate
+      //    proprio a questo admin. Nessun contenuto va perso: la copia di ogni
+      //    admin resta visibile al suo destinatario.
+      //    Se adminUserId non è passato, il comportamento resta quello vecchio.
+      if (adminUserId) {
+        notifications = notifications.filter(
+          n => !n.recipientId || n.recipientId === adminUserId
+        );
+      }
       callback(notifications);
     },
     (error) => {

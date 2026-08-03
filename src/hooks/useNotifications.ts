@@ -61,7 +61,7 @@ export function useNotifications(): UseNotificationsReturn {
       ? subscribeToAdminNotifications((notifs) => {
           setNotifications(notifs);
           setLoading(false);
-        })
+        }, user.id)
       : subscribeToNotifications(user.role, user.id, (notifs) => {
           setNotifications(notifs);
           setLoading(false);
