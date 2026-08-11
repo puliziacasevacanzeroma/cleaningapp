@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { collection, query, onSnapshot, doc, updateDoc, Timestamp } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 import { useSearchParams } from "next/navigation";
+import { matchesPropertyQuery, isInRange, type RangeKey } from "~/components/ui/PropertySearchBar";
 
 interface Issue {
   id: string;
@@ -50,7 +51,15 @@ const STATUS_COLORS: Record<string, string> = {
   resolved: 'bg-emerald-100 text-emerald-700',
 };
 
-export function SegnalazioniAdminContent({ embedded = false, initialIssueId }: { embedded?: boolean; initialIssueId?: string }) {
+export function SegnalazioniAdminContent({
+  embedded = false, initialIssueId,
+  // 🔎 Filtri passati dal guscio della pagina Centro Messaggi.
+  // Opzionali: senza, il componente si comporta esattamente come prima.
+  searchTerm = "", searchProperty = null, range = "recenti",
+}: {
+  embedded?: boolean; initialIssueId?: string;
+  searchTerm?: string; searchProperty?: string | null; range?: RangeKey;
+}) {
   const searchParams = useSearchParams();
   const highlightId = initialIssueId || searchParams.get('id');
   
@@ -96,12 +105,23 @@ export function SegnalazioniAdminContent({ embedded = false, initialIssueId }: {
   }, [highlightId]);
 
   // Filter issues - supporta sia status che resolved
-  const filteredIssues = issues.filter(issue => {
-    const isResolved = issue.resolved === true || issue.status === 'resolved';
-    if (filter === 'open') return !isResolved;
-    if (filter === 'resolved') return isResolved;
-    return true;
-  });
+  const filteredIssues = issues
+    .filter(issue => {
+      const isResolved = issue.resolved === true || issue.status === 'resolved';
+      if (filter === 'open') return !isResolved;
+      if (filter === 'resolved') return isResolved;
+      return true;
+    })
+    .filter(issue => isInRange((issue as any).reportedAt || (issue as any).createdAt, range))
+    .filter(issue =>
+      matchesPropertyQuery(
+        [issue.propertyName, issue.title, (issue as any).description],
+        searchTerm,
+        searchProperty,
+      ),
+    );
+
+  const searchActive = !!(searchTerm || searchProperty || range !== "recenti");
 
   // Counts
   const openCount = issues.filter(i => !(i.resolved === true || i.status === 'resolved')).length;
@@ -220,7 +240,7 @@ export function SegnalazioniAdminContent({ embedded = false, initialIssueId }: {
       {filteredIssues.length === 0 ? (
         <div className="bg-white rounded-2xl p-8 text-center">
           <span className="text-4xl block mb-3">✨</span>
-          <p className="text-slate-500">Nessuna segnalazione {filter !== 'all' && 'in questa categoria'}</p>
+          <p className="text-slate-500">{searchActive ? 'Nessuna segnalazione per questa ricerca' : <>Nessuna segnalazione {filter !== 'all' && 'in questa categoria'}</>}</p>
         </div>
       ) : (
         <div className="space-y-3">

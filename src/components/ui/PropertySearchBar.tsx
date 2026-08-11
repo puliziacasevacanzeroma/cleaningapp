@@ -220,3 +220,74 @@ export function PropertySearchBar({
     </div>
   );
 }
+
+// ══════════════════════════════════════════════════════════════════
+// PERIODO — chip piccoli, stesso stile della pagina Pulizie
+// ══════════════════════════════════════════════════════════════════
+
+/**
+ * "recenti" = ciò che è già caricato in pagina, nessuna lettura extra.
+ * È il default e non cambia il comportamento preesistente.
+ */
+export type RangeKey = "recenti" | "7g" | "30g" | "90g" | "tutte";
+
+export const RANGES: Array<{ key: RangeKey; label: string; days: number | null }> = [
+  { key: "recenti", label: "Recenti", days: null },
+  { key: "7g", label: "7g", days: 7 },
+  { key: "30g", label: "30g", days: 30 },
+  { key: "90g", label: "90g", days: 90 },
+  { key: "tutte", label: "Tutte", days: 0 },
+];
+
+/** Inizio del periodo, o null se il periodo non filtra ("recenti"/"tutte"). */
+export function rangeStart(key: RangeKey): Date | null {
+  const r = RANGES.find(x => x.key === key);
+  if (!r || r.days === null || r.days === 0) return null;
+  const d = new Date();
+  d.setDate(d.getDate() - r.days);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+/** Data di un documento Firestore (Timestamp, Date o null). */
+export function docDate(v: any): Date | null {
+  try {
+    if (!v) return null;
+    if (typeof v.toDate === "function") return v.toDate();
+    if (v instanceof Date) return v;
+    if (v.seconds) return new Date(v.seconds * 1000);
+  } catch {
+    /* data non leggibile */
+  }
+  return null;
+}
+
+/** Un elemento rientra nel periodo? Senza data NON viene escluso. */
+export function isInRange(v: any, key: RangeKey): boolean {
+  const since = rangeStart(key);
+  if (!since) return true;
+  const d = docDate(v);
+  return d ? d >= since : true;
+}
+
+export function TimeRangeChips({
+  value, onChange, loading = false, className = "",
+}: { value: RangeKey; onChange: (k: RangeKey) => void; loading?: boolean; className?: string }) {
+  return (
+    <div className={`flex items-center gap-1.5 overflow-x-auto pb-0.5 ${className}`} style={{ scrollbarWidth: "none" }}>
+      {RANGES.map(r => (
+        <button
+          key={r.key}
+          type="button"
+          onClick={() => onChange(r.key)}
+          className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold whitespace-nowrap transition-colors flex-shrink-0 ${
+            value === r.key ? "bg-violet-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+          }`}
+        >
+          {r.label}
+        </button>
+      ))}
+      {loading && <span className="text-[10px] text-slate-400 flex-shrink-0 pl-1">carico…</span>}
+    </div>
+  );
+}

@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useNotifications } from "~/hooks/useNotifications";
 import type { FirebaseNotification } from "~/lib/firebase/types";
 import Link from "next/link";
+import { matchesPropertyQuery, isInRange, type RangeKey } from "~/components/ui/PropertySearchBar";
 
 // ==================== ICONS ====================
 const BellIcon = () => (
@@ -345,7 +346,15 @@ function ModificationModal({ request, action, onClose, onConfirm }: Modification
 }
 
 // ==================== MAIN PAGE ====================
-export function NotificheAdminContent({ embedded = false, initialTab }: { embedded?: boolean; initialTab?: string }) {
+export function NotificheAdminContent({
+  embedded = false, initialTab,
+  // 🔎 Filtri passati dal guscio della pagina Centro Messaggi.
+  // Opzionali: se il componente è usato altrove si comporta come prima.
+  searchTerm = "", searchProperty = null, range = "recenti",
+}: {
+  embedded?: boolean; initialTab?: string;
+  searchTerm?: string; searchProperty?: string | null; range?: RangeKey;
+}) {
   const [activeTab, setActiveTab] = useState<TabType>((initialTab as TabType) || "all");
   const [selectedNotification, setSelectedNotification] = useState<FirebaseNotification | null>(null);
   // 🔎 FIX (27/07/2026): modal dettaglio notifica. Prima il click sulla card non
@@ -394,21 +403,35 @@ export function NotificheAdminContent({ embedded = false, initialTab }: { embedd
 
   const pendingChangeRequests = changeRequests.filter(r => r.status === "PENDING");
 
-  // Filtra notifiche in base al tab
-  const filteredNotifications = notifications.filter(n => {
-    switch (activeTab) {
-      case "pending":
-        return n.actionRequired && n.actionStatus === "PENDING";
-      case "modifications":
-        return false; // Le modifiche sono gestite separatamente
-      case "read":
-        return n.status === "READ";
-      case "archived":
-        return n.status === "ARCHIVED";
-      default:
-        return n.status !== "ARCHIVED";
-    }
-  });
+  // Filtra notifiche: prima il tab, poi periodo e ricerca.
+  // Il nome dell'appartamento nelle notifiche non ha un campo dedicato:
+  // sta dentro titolo/messaggio/relatedEntityName/turnoverAction, quindi
+  // si cerca su tutti insieme (stessa regola della campanella).
+  const filteredNotifications = notifications
+    .filter(n => {
+      switch (activeTab) {
+        case "pending":
+          return n.actionRequired && n.actionStatus === "PENDING";
+        case "modifications":
+          return false; // Le modifiche sono gestite separatamente
+        case "read":
+          return n.status === "READ";
+        case "archived":
+          return n.status === "ARCHIVED";
+        default:
+          return n.status !== "ARCHIVED";
+      }
+    })
+    .filter(n => isInRange((n as any).createdAt, range))
+    .filter(n =>
+      matchesPropertyQuery(
+        [n.title, n.message, (n as any).relatedEntityName, (n as any).turnoverAction?.propertyName, (n as any).data?.propertyName],
+        searchTerm,
+        searchProperty,
+      ),
+    );
+
+  const searchActive = !!(searchTerm || searchProperty || range !== "recenti");
 
   const handleOpenAction = (notification: FirebaseNotification, action: "approve" | "reject") => {
     setSelectedNotification(notification);
@@ -764,9 +787,11 @@ export function NotificheAdminContent({ embedded = false, initialTab }: { embedd
               </div>
               <h3 className="text-lg font-semibold text-slate-700 mb-2">Nessuna notifica</h3>
               <p className="text-slate-500">
-                {activeTab === "pending" 
-                  ? "Non ci sono richieste in attesa di approvazione"
-                  : "Non hai notifiche in questa sezione"
+                {searchActive
+                  ? "Nessuna notifica per questa ricerca"
+                  : activeTab === "pending"
+                    ? "Non ci sono richieste in attesa di approvazione"
+                    : "Non hai notifiche in questa sezione"
                 }
               </p>
             </div>

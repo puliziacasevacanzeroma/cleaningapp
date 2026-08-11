@@ -3,13 +3,16 @@
 import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import { collection, query, where, onSnapshot } from "firebase/firestore";
+import { collection, query, where, onSnapshot, getDocs, orderBy, limit, Timestamp } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 import { useAuth } from "~/lib/firebase/AuthContext";
 import { useNotifications } from "~/hooks/useNotifications";
 import { resolveNotificationLink } from "~/lib/notifications/linkGenerator";
 import type { FirebaseNotification } from "~/lib/firebase/types";
-import { PropertySearchBar, matchesPropertyQuery, type PropertyOption } from "~/components/ui/PropertySearchBar";
+import {
+  PropertySearchBar, TimeRangeChips, matchesPropertyQuery, rangeStart, isInRange,
+  type PropertyOption, type RangeKey,
+} from "~/components/ui/PropertySearchBar";
 
 interface Issue {
   id: string; propertyId: string; propertyName: string; type: string;
@@ -79,6 +82,10 @@ const SEV_L: Record<string, string> = { low: "Bassa", medium: "Media", high: "Al
 
 type BellTab = "notifiche" | "segnalazioni";
 
+/** Tetto di sicurezza sulla lettura mirata. */
+const DEEP_LIMIT = 800;
+
+
 interface NotificationBellProps { isAdmin?: boolean; }
 
 export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
@@ -117,6 +124,20 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
   const [issueProperty, setIssueProperty] = useState<PropertyOption | null>(null);
   // Elenco appartamenti per i suggerimenti (id + nome + indirizzo)
   const [propertyOptions, setPropertyOptions] = useState<PropertyOption[]>([]);
+
+  // ⏱️ Periodo (come i filtri della pagina Pulizie)
+  const [range, setRange] = useState<RangeKey>("recenti");
+
+  // 🔍 RICERCA PROFONDA
+  // Il feed realtime carica solo le ultime 100 notifiche di TUTTA la flotta:
+  // con ~80 appartamenti attivi coprono pochi giorni, ed è il motivo per cui
+  // di un singolo appartamento se ne vedevano 2. Quando si cerca (testo,
+  // appartamento o periodo diverso da "recenti") si fa una query mirata sul
+  // periodo scelto, invece di gonfiare il listener sempre attivo — che è già
+  // stato una fonte di lentezza in passato e resta leggero.
+  const [deepNotifs, setDeepNotifs] = useState<any[] | null>(null);
+  const [deepLoading, setDeepLoading] = useState(false);
+  const [deepCapped, setDeepCapped] = useState(false);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -177,6 +198,50 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
     }
   }, [isMobile, isOpen]);
 
+  // ═══════════════════════════════════════════════════════════════
+  // 🔍 LETTURA MIRATA (solo quando serve davvero)
+  // Parte se il pannello è aperto sulle notifiche E c'è un periodo
+  // diverso da "recenti". Una sola lettura per cambio di periodo: il
+  // testo digitato e l'appartamento filtrano poi in memoria, quindi
+  // scrivere non genera traffico.
+  // ═══════════════════════════════════════════════════════════════
+  useEffect(() => {
+    if (!isOpen || tab !== "notifiche" || range === "recenti") {
+      setDeepNotifs(null);
+      setDeepCapped(false);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      setDeepLoading(true);
+      try {
+        const since = rangeStart(range);
+        const base = isAdmin
+          ? [where("recipientRole", "in", ["ADMIN", "ALL"])]
+          : [where("recipientId", "==", user?.id || "__none__")];
+        const clauses: any[] = [...base];
+        if (since) clauses.push(where("createdAt", ">=", Timestamp.fromDate(since)));
+        const snap = await getDocs(
+          query(collection(db, "notifications"), ...clauses, orderBy("createdAt", "desc"), limit(DEEP_LIMIT)),
+        );
+        if (cancelled) return;
+        let rows = snap.docs.map(d => ({ id: d.id, ...(d.data() as Record<string, any>) }));
+        // Stesso de-duplicatore del listener: con più admin ogni notifica
+        // esiste in copia per ciascuno; si tengono broadcast + le proprie.
+        if (isAdmin && user?.id) {
+          rows = rows.filter(n => !n.recipientId || n.recipientId === user.id);
+        }
+        setDeepNotifs(rows);
+        setDeepCapped(snap.docs.length >= DEEP_LIMIT);
+      } catch (e) {
+        if (!cancelled) { setDeepNotifs(null); setDeepCapped(false); }
+      } finally {
+        if (!cancelled) setDeepLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [isOpen, tab, range, isAdmin, user?.id]);
+
   const totalBadge = unreadCount;
 
   // ═══════════════════════════════════════════════════════════════
@@ -200,23 +265,39 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
     n.data?.propertyName,
   ];
 
-  const filteredNotifs = notifications
+  // Sorgente: la lettura mirata se attiva, altrimenti il feed realtime.
+  const notifSource: any[] = deepNotifs ?? notifications;
+
+  // Periodo: helper condiviso (senza data non si esclude nulla)
+  const inRange = (x: any): boolean => isInRange(x?.createdAt || x?.reportedAt, range);
+
+  const filteredNotifs = notifSource
     .filter(n => n.status !== "ARCHIVED")
+    .filter(inRange)
     .filter(n => matchesPropertyQuery(notifHaystack(n), notifSearch, notifProperty?.name));
-  const visibleNotifs = filteredNotifs.slice(0, 30);
+  // Cercando si mostra di più: con un appartamento agganciato serve vedere
+  // tutto lo storico trovato, non i primi 30.
+  const notifFilterActive = !!(notifSearch || notifProperty || range !== "recenti");
+  const visibleNotifs = filteredNotifs.slice(0, notifFilterActive ? 200 : 30);
 
   const openIssues = issues.filter(i => !(i.resolved === true || i.status === "resolved"));
-  const filteredIssues = issues.filter(i =>
-    matchesPropertyQuery([i.propertyName, i.title, i.description], issueSearch, issueProperty?.name),
-  );
-  const visibleIssues = filteredIssues.slice(0, 15);
+  const filteredIssues = issues
+    .filter(inRange)
+    .filter(i => matchesPropertyQuery([i.propertyName, i.title, i.description], issueSearch, issueProperty?.name));
+  const issueFilterActive = !!(issueSearch || issueProperty || range !== "recenti");
+  const visibleIssues = filteredIssues.slice(0, issueFilterActive ? 200 : 15);
 
-  const notifFilterActive = !!(notifSearch || notifProperty);
-  const issueFilterActive = !!(issueSearch || issueProperty);
+  // ⚠️ NON trasformare questo in un componente (`const SearchBar = () => ...`).
+  // Definito dentro il render, ogni battuta di tasto creava una NUOVA identità
+  // di componente: React smontava e rimontava l'input, che perdeva il fuoco a
+  // ogni lettera. È una FUNZIONE che restituisce JSX, invocata come
+  // `{renderSearchBar()}`: gli elementi vengono inseriti nell'albero del
+  // genitore e l'input mantiene il fuoco.
+  const renderSearchBar = () => (
+    <div className="px-4 pb-2 space-y-2">
+      {/* ⏱️ Periodo — componente condiviso */}
+      <TimeRangeChips value={range} onChange={setRange} loading={deepLoading} />
 
-  /** Barra di ricerca della scheda attiva. */
-  const SearchBar = () => (
-    <div className="px-4 pb-2">
       {tab === "notifiche" ? (
         <PropertySearchBar
           value={notifSearch}
@@ -237,6 +318,17 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
           placeholder="Cerca segnalazione o appartamento..."
           resultCount={filteredIssues.length}
         />
+      )}
+
+      {tab === "notifiche" && range === "recenti" && (notifSearch || notifProperty) && (
+        <p className="text-[10px] text-amber-600 px-1 leading-snug">
+          Stai cercando solo fra le notifiche recenti. Scegli un periodo per cercare più indietro.
+        </p>
+      )}
+      {tab === "notifiche" && deepCapped && (
+        <p className="text-[10px] text-amber-600 px-1 leading-snug">
+          Periodo molto ampio: mostrate le {DEEP_LIMIT} più recenti. Restringi il periodo per vedere il resto.
+        </p>
       )}
     </div>
   );
@@ -318,7 +410,7 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
 
   const closeDetail = () => setDetailNotif(null);
 
-  const DetailModal = () => {
+  const renderDetailModal = () => {
     if (!detailNotif || !portalReady) return null;
     return createPortal(
       <div className="fixed inset-0 z-[10001] flex items-end sm:items-center justify-center bg-black/50 p-0 sm:p-4" onClick={closeDetail}>
@@ -341,7 +433,7 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
     );
   };
 
-  const DecisionModal = () => {
+  const renderDecisionModal = () => {
     if (!decisionNotif || !portalReady) return null;
     const ta = decisionNotif.turnoverAction || {};
     const resolved = decisionDone || decisionNotif.actionResolved;
@@ -432,7 +524,7 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
   // SHARED CONTENT (tabs + lists)
   // ═══════════════════════════════════════════════════════════════
 
-  const TabSlider = () => (
+  const renderTabSlider = () => (
     <div className="bg-slate-100 rounded-[10px] p-0.5 flex relative">
       <div className={`absolute top-0.5 left-0.5 w-[calc(50%-2px)] h-[calc(100%-4px)] bg-gradient-to-r from-sky-500 to-blue-500 rounded-[8px] shadow-sm transition-transform duration-300 ease-[cubic-bezier(.4,0,.2,1)] ${tab === "segnalazioni" ? "translate-x-full" : ""}`} />
       {(["notifiche", "segnalazioni"] as BellTab[]).map(t => (
@@ -446,7 +538,10 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
     </div>
   );
 
-  const NotifList = ({ maxH }: { maxH?: string }) => (
+  // Anche queste sono FUNZIONI, non componenti: definite dentro il render,
+  // come componenti verrebbero smontate e rimontate a ogni battuta di tasto,
+  // azzerando la posizione di scorrimento mentre cerchi.
+  const renderNotifList = ({ maxH }: { maxH?: string } = {}) => (
     <div className={maxH ? `max-h-[${maxH}] overflow-y-auto` : "flex-1 overflow-y-auto"} style={maxH ? undefined : { WebkitOverflowScrolling: "touch" }}>
       {nLoad ? (
         <div className="p-8 text-center"><div className="w-8 h-8 border-2 border-slate-200 border-t-sky-500 rounded-full animate-spin mx-auto" /><p className="text-xs text-slate-400 mt-2">Caricamento...</p></div>
@@ -479,7 +574,7 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
     </div>
   );
 
-  const IssueList = ({ maxH }: { maxH?: string }) => (
+  const renderIssueList = ({ maxH }: { maxH?: string } = {}) => (
     <div className={maxH ? `max-h-[${maxH}] overflow-y-auto` : "flex-1 overflow-y-auto"} style={maxH ? undefined : { WebkitOverflowScrolling: "touch" }}>
       {visibleIssues.length === 0 ? (
         <div className="p-8 text-center"><Ic d={ic.check} className="w-10 h-10 text-slate-300 mx-auto mb-2" /><p className="text-xs text-slate-400">{issueFilterActive ? "Nessuna segnalazione per questa ricerca" : "Nessuna segnalazione"}</p></div>
@@ -506,7 +601,7 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
   // ═══════════════════════════════════════════════════════════════
   // MOBILE: Full-screen panel via portal
   // ═══════════════════════════════════════════════════════════════
-  const MobilePanel = () => {
+  const renderMobilePanel = () => {
     if (!isOpen || !isMobile || !portalReady) return null;
     return createPortal(
       <div className="fixed inset-0 z-[10000] flex flex-col bg-white" style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
@@ -529,16 +624,16 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
 
         {/* Tabs */}
         <div className="flex-shrink-0 bg-white px-4 pt-3 pb-2">
-          <TabSlider />
+          {renderTabSlider()}
         </div>
 
-        {/* 🔎 Ricerca per appartamento */}
+        {/* 🔎 Periodo + ricerca per appartamento */}
         <div className="flex-shrink-0 bg-white">
-          <SearchBar />
+          {renderSearchBar()}
         </div>
 
         {/* Content */}
-        {tab === "notifiche" ? <NotifList /> : <IssueList />}
+        {tab === "notifiche" ? renderNotifList() : renderIssueList()}
 
         {/* Footer — solo se esiste la pagina notifiche per questo ruolo */}
         {hasNotifPage && (
@@ -582,11 +677,11 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
 
         {/* Tab slider */}
         <div className="bg-white px-3 pt-3 pb-1">
-          <TabSlider />
+          {renderTabSlider()}
         </div>
 
-        {/* 🔎 Ricerca per appartamento */}
-        <SearchBar />
+        {/* 🔎 Periodo + ricerca per appartamento */}
+        {renderSearchBar()}
 
         {/* NOTIFICHE LIST */}
         {tab === "notifiche" && (
@@ -595,7 +690,7 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
               <div className="p-8 text-center"><div className="w-8 h-8 border-2 border-slate-200 border-t-sky-500 rounded-full animate-spin mx-auto" /><p className="text-xs text-slate-400 mt-2">Caricamento...</p></div>
             ) : visibleNotifs.length === 0 ? (
               <div className="p-8 text-center"><Ic d={ic.bell} className="w-10 h-10 text-slate-300 mx-auto mb-2" /><p className="text-xs text-slate-400">{notifFilterActive ? "Nessuna notifica per questa ricerca" : "Nessuna notifica"}</p></div>
-            ) : visibleNotifs.slice(0, 10).map(n => {
+            ) : visibleNotifs.slice(0, notifFilterActive ? 200 : 10).map(n => {
               const ur = n.status === "UNREAD"; const ca = n.createdAt?.toDate?.() || new Date(); const { d, color } = getNotifIconData(n.type);
               return (
                 <div key={n.id} onClick={() => handleNotifClick(n)} className={`px-3 py-2.5 flex gap-2.5 cursor-pointer transition-all border-b border-slate-50 last:border-b-0 ${ur ? "bg-sky-50/40" : "bg-white"} hover:bg-slate-50 active:bg-slate-100`}>
@@ -624,7 +719,7 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
           <div className="max-h-[360px] overflow-y-auto">
             {visibleIssues.length === 0 ? (
               <div className="p-8 text-center"><Ic d={ic.check} className="w-10 h-10 text-slate-300 mx-auto mb-2" /><p className="text-xs text-slate-400">{issueFilterActive ? "Nessuna segnalazione per questa ricerca" : "Nessuna segnalazione"}</p></div>
-            ) : visibleIssues.slice(0, 8).map(issue => {
+            ) : visibleIssues.slice(0, issueFilterActive ? 200 : 8).map(issue => {
               const isRes = issue.resolved === true || issue.status === "resolved"; const { d, bg } = getIssueIconData(issue.type, issue.isUrgent);
               return (
                 <div key={issue.id} onClick={() => { if (hasNotifPage) { setIsOpen(false); router.push(isAdmin ? "/dashboard/notifiche?tab=segnalazioni&id=" + issue.id : "/proprietario/notifiche?id=" + issue.id); } }} className={`px-3 py-2.5 flex gap-2.5 ${hasNotifPage ? "cursor-pointer" : ""} transition-all border-b border-slate-50 last:border-b-0 hover:bg-slate-50 active:bg-slate-100 border-l-[3px] ${issue.isUrgent ? "border-l-red-500 bg-red-50/20" : isRes ? "border-l-emerald-500 opacity-60" : "border-l-amber-500"}`}>
@@ -665,8 +760,8 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
       </button>
 
       <DesktopDropdown />
-      <MobilePanel />
-      <DecisionModal /><DetailModal />
+      {renderMobilePanel()}
+      {renderDecisionModal()}{renderDetailModal()}
     </div>
   );
 }

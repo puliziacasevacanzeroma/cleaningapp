@@ -2,6 +2,12 @@
 
 import { useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
+import { collection, onSnapshot, query } from "firebase/firestore";
+import { db } from "~/lib/firebase/config";
+import {
+  PropertySearchBar, TimeRangeChips,
+  type PropertyOption, type RangeKey,
+} from "~/components/ui/PropertySearchBar";
 import { NotificheAdminContent } from "~/components/dashboard/NotificheAdminContent";
 import { SegnalazioniAdminContent } from "~/components/dashboard/SegnalazioniAdminContent";
 
@@ -20,6 +26,33 @@ export default function CentroMessaggiPage() {
   const initialIssueId = searchParams.get("id") || undefined;
   const [tab, setTab] = useState<Tab>(urlTab === "segnalazioni" ? "segnalazioni" : "notifiche");
 
+  // ═══════════════════════════════════════════════════════════════
+  // 🔎 RICERCA CONDIVISA fra le due schede
+  //
+  // La barra vive QUI, nel guscio della pagina, non dentro i due
+  // contenuti: così è una sola, sta esattamente fra le schede e la
+  // lista, e cambiando scheda il filtro resta. Testo e appartamento
+  // sono comuni — cercare "Campo De Fiori" e passare da Notifiche a
+  // Segnalazioni mostra le segnalazioni dello stesso appartamento
+  // senza ridigitare.
+  // ═══════════════════════════════════════════════════════════════
+  const [search, setSearch] = useState("");
+  const [property, setProperty] = useState<PropertyOption | null>(null);
+  const [range, setRange] = useState<RangeKey>("recenti");
+  const [propertyOptions, setPropertyOptions] = useState<PropertyOption[]>([]);
+
+  useEffect(() => {
+    const unsub = onSnapshot(query(collection(db, "properties")), snap => {
+      const opts: PropertyOption[] = snap.docs.map(d => {
+        const data = d.data() as Record<string, any>;
+        return { id: d.id, name: data.name || "Senza nome", subtitle: data.address || undefined };
+      });
+      opts.sort((a, b) => a.name.localeCompare(b.name, "it"));
+      setPropertyOptions(opts);
+    });
+    return () => unsub();
+  }, []);
+
   return (
     <div className="min-h-screen bg-[#f0f2f5]">
       <div className="bg-gradient-to-br from-sky-500 via-blue-500 to-indigo-600 px-4 pt-5 pb-14 text-white">
@@ -37,8 +70,37 @@ export default function CentroMessaggiPage() {
           ))}
         </div>
       </div>
+      {/* 🔎 Ricerca condivisa: sta fra le schede e il contenuto */}
+      <div className="mx-4 mt-3 space-y-2">
+        <TimeRangeChips value={range} onChange={setRange} />
+        <PropertySearchBar
+          value={search}
+          onChange={setSearch}
+          selected={property}
+          onSelect={setProperty}
+          properties={propertyOptions}
+          placeholder={tab === "notifiche" ? "Cerca notifica o appartamento..." : "Cerca segnalazione o appartamento..."}
+        />
+      </div>
+
       <div key={tab} className="animate-[fadeUp_.3s_ease]">
-        {tab === "notifiche" ? <NotificheAdminContent embedded={true} initialTab={initialInternalTab} /> : <SegnalazioniAdminContent embedded={true} initialIssueId={initialIssueId} />}
+        {tab === "notifiche" ? (
+          <NotificheAdminContent
+            embedded={true}
+            initialTab={initialInternalTab}
+            searchTerm={search}
+            searchProperty={property?.name || null}
+            range={range}
+          />
+        ) : (
+          <SegnalazioniAdminContent
+            embedded={true}
+            initialIssueId={initialIssueId}
+            searchTerm={search}
+            searchProperty={property?.name || null}
+            range={range}
+          />
+        )}
       </div>
       <style dangerouslySetInnerHTML={{ __html: "@keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}" }} />
     </div>
