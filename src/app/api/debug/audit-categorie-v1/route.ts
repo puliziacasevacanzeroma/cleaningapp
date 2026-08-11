@@ -185,10 +185,12 @@ export async function GET(req: NextRequest) {
       if (data.key) inventory.set(data.key, entry);
       if (d.id.startsWith("item_")) inventory.set(d.id.replace("item_", ""), entry);
     });
-    const inventoryById = buildInventoryMap(invSnap.docs.map((d: any) => ({ id: d.id, ...(d.data() as any) })) as any);
+    const inventoryById = buildInventoryMap(
+      invSnap.docs.map((d: any) => ({ id: d.id, data: d.data() })),
+    );
 
     const properties = new Map<string, any>();
-    propsSnap.docs.forEach(d => properties.set(d.id, { id: d.id, ...(d.data() as any) }));
+    propsSnap.docs.forEach((d: any) => properties.set(d.id, { id: d.id, ...(d.data() as any) }));
 
     const cleanings = cleaningsSnap.docs
       .map((d: any) => ({ id: d.id, ...(d.data() as any) }))
