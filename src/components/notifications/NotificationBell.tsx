@@ -130,12 +130,16 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
   const [props, setProps] = useState<string[]>([]);
 
   // 🔎 RICERCA PER APPARTAMENTO (stessa barra della pagina Pulizie)
-  // Stato separato per scheda: cercare fra le notifiche e cercare fra le
-  // segnalazioni sono due gesti diversi, non devono darsi fastidio.
-  const [notifSearch, setNotifSearch] = useState("");
-  const [notifProperty, setNotifProperty] = useState<PropertyOption | null>(null);
-  const [issueSearch, setIssueSearch] = useState("");
-  const [issueProperty, setIssueProperty] = useState<PropertyOption | null>(null);
+  //
+  // Stato CONDIVISO fra le due schede — testo, appartamento e date insieme.
+  // Prima testo e appartamento erano separati per scheda mentre le date no:
+  // cambiando scheda restava la data e spariva l'appartamento, cioè metà
+  // filtro. Ed era anche diverso dalla pagina Centro Messaggi, dove è tutto
+  // condiviso. Ora vale ovunque la stessa regola: cerchi "Campo De Fiori"
+  // sulle notifiche, passi alle segnalazioni e vedi quelle dello stesso
+  // appartamento senza ridigitare.
+  const [search, setSearch] = useState("");
+  const [property, setProperty] = useState<PropertyOption | null>(null);
   // Elenco appartamenti per i suggerimenti (id + nome + indirizzo)
   const [propertyOptions, setPropertyOptions] = useState<PropertyOption[]>([]);
 
@@ -343,22 +347,22 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
       notifSource
         .filter(n => n.status !== "ARCHIVED")
         .filter(n => isInDateRange(n?.createdAt, dateRange))
-        .filter(n => matchesPropertyQuery(notifHaystack(n), notifSearch, notifProperty?.name)),
-    [notifSource, dateRange.from, dateRange.to, notifSearch, notifProperty?.name],
+        .filter(n => matchesPropertyQuery(notifHaystack(n), search, property?.name)),
+    [notifSource, dateRange.from, dateRange.to, search, property?.name],
   );
 
-  const notifFilterActive = !!(notifSearch || notifProperty || hasDateRange(dateRange));
+  const notifFilterActive = !!(search || property || hasDateRange(dateRange));
 
   const filteredIssues = useMemo(
     () =>
       issues
         .filter(i => isInDateRange((i as any).reportedAt || (i as any).createdAt, dateRange))
-        .filter(i => matchesPropertyQuery([i.propertyName, i.title, i.description], issueSearch, issueProperty?.name)),
-    [issues, dateRange.from, dateRange.to, issueSearch, issueProperty?.name],
+        .filter(i => matchesPropertyQuery([i.propertyName, i.title, i.description], search, property?.name)),
+    [issues, dateRange.from, dateRange.to, search, property?.name],
   );
 
   const openIssues = issues.filter(i => !(i.resolved === true || i.status === "resolved"));
-  const issueFilterActive = !!(issueSearch || issueProperty || hasDateRange(dateRange));
+  const issueFilterActive = !!(search || property || hasDateRange(dateRange));
 
   // ⚡ QUANTE RIGHE DISEGNARE
   // Prima, cercando, se ne disegnavano fino a 200: ridisegnare 200 righe a
@@ -371,8 +375,8 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
   const [issueShown, setIssueShown] = useState(PAGE);
 
   // Cambiando ricerca si riparte dall'inizio della lista.
-  useEffect(() => { setNotifShown(PAGE); }, [notifSearch, notifProperty?.name, dateRange.from, dateRange.to]);
-  useEffect(() => { setIssueShown(PAGE); }, [issueSearch, issueProperty?.name, dateRange.from, dateRange.to]);
+  useEffect(() => { setNotifShown(PAGE); }, [search, property?.name, dateRange.from, dateRange.to]);
+  useEffect(() => { setIssueShown(PAGE); }, [search, property?.name, dateRange.from, dateRange.to]);
 
   const visibleNotifs = filteredNotifs.slice(0, notifFilterActive ? notifShown : 30);
   const visibleIssues = filteredIssues.slice(0, issueFilterActive ? issueShown : 15);
@@ -398,31 +402,21 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
   // genitore e l'input mantiene il fuoco.
   const renderSearchBar = () => (
     <div className="px-4 pb-2 space-y-1.5">
-      {tab === "notifiche" ? (
-        <PropertySearchBar
-          value={notifSearch}
-          onChange={setNotifSearch}
-          selected={notifProperty}
-          onSelect={setNotifProperty}
-          properties={propertyOptions}
-          placeholder="Cerca notifica o appartamento..."
-          resultCount={filteredNotifs.length}
-          trailing={<DateRangeButton value={dateRange} onChange={setDateRange} />}
-        />
-      ) : (
-        <PropertySearchBar
-          value={issueSearch}
-          onChange={setIssueSearch}
-          selected={issueProperty}
-          onSelect={setIssueProperty}
-          properties={propertyOptions}
-          placeholder="Cerca segnalazione o appartamento..."
-          resultCount={filteredIssues.length}
-          trailing={<DateRangeButton value={dateRange} onChange={setDateRange} />}
-        />
-      )}
+      {/* Una sola barra per entrambe le schede: due elementi distinti in un
+          ternario avrebbero fatto rimontare l'input a ogni cambio scheda,
+          azzerando fuoco e menù dei suggerimenti. Cambiano solo le parole. */}
+      <PropertySearchBar
+        value={search}
+        onChange={setSearch}
+        selected={property}
+        onSelect={setProperty}
+        properties={propertyOptions}
+        placeholder={tab === "notifiche" ? "Cerca notifica o appartamento..." : "Cerca segnalazione o appartamento..."}
+        resultCount={tab === "notifiche" ? filteredNotifs.length : filteredIssues.length}
+        trailing={<DateRangeButton value={dateRange} onChange={setDateRange} />}
+      />
 
-      {tab === "notifiche" && !hasDateRange(dateRange) && (notifSearch || notifProperty) && (
+      {tab === "notifiche" && !hasDateRange(dateRange) && (search || property) && (
         <p className="text-[10px] text-amber-600 px-1 leading-snug">
           Stai cercando solo fra le notifiche recenti. Scegli un periodo con «Date» per cercare più indietro.
         </p>
