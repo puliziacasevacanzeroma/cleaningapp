@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, createContext, useContext, useRef } from "react";
 import { collection, onSnapshot, addDoc, Timestamp, query, where, orderBy, limit } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
+import { livePresence } from "~/lib/notifications/livePresence";
 
 // ==================== TIPI ====================
 
@@ -53,119 +54,40 @@ export function useToast() {
   return context;
 }
 
-// ==================== TRACCIAMENTO VISIBILITÀ (anti-raffica) ====================
-// PROBLEMA: quando l'app va in background (o viene "chiusa" ma resta sospesa) e
-// poi la riapri, i listener Firestore consegnano IN BLOCCO tutte le notifiche
-// accumulate nel frattempo. Quelle le hai gia' ricevute come PUSH: NON devono
-// ricomparire come raffica di toast/modal all'apertura.
+// ==================== PRESENZA IN APP (anti-raffica) ====================
 //
-// SOLUZIONE ROBUSTA (non dipende dalla velocita' di riconnessione di Firestore):
-// registriamo l'istante in cui l'app e' tornata in primo piano e mostriamo come
-// toast SOLO le notifiche il cui createdAt e' SUCCESSIVO a quel momento. Il
-// backlog (creato mentre l'app era chiusa) e' sempre piu' vecchio -> solo push.
-// Cosi' non importa se la consegna del backlog arriva dopo 1s o dopo 30s: viene
-// giudicata in base alla SUA data di creazione, non al cronometro.
-let lastBecameVisibleAt = Date.now();
+// Tutta la logica "questo evento è vivo o è backlog?" sta in
+// `~/lib/notifications/livePresence` — modulo PURO e testato (vedi
+// tests/livePresence.test.mjs, 40+ casi fra cui il risveglio del mattino
+// con riconnessione lenta). Qui restano solo i punti di chiamata.
+//
+// REGOLA: toast + suono SOLO se l'utente è davanti all'app nel momento
+// in cui l'evento accade. Minimizzata, in background, chiusa o altra
+// finestra a fuoco → solo campanella + push.
 
-// Tolleranza per lo sfasamento tra orologio del client e timestamp del server
-// (createdAt e' ora-server). 🔧 FIX raffica: era 60s e faceva passare come "vive"
-// tutte le notifiche create nell'ultimo minuto PRIMA della riapertura. I telefoni
-// sono sincronizzati NTP (skew tipico <2s): 10s bastano e chiudono il buco.
-const CLOCK_SKEW_TOLERANCE_MS = 10_000;
+const currentForegroundEpoch = () => livePresence.currentEpoch();
+const canEmitLiveAlert = () => livePresence.canEmitLiveAlert();
 
-// Grazia breve di base (rete di sicurezza per diff in blocco al risveglio).
-const VISIBILITY_GRACE_MS = 1500;
-
-// 🔧 FIX raffica — FINESTRA DI RIENTRO: la grazia di 1.5s non bastava, perche'
-// su mobile la riconnessione Firestore dopo un resume puo' impiegare 2-10s e il
-// backlog veniva consegnato A GRAZIA SCADUTA → cascata di toast.
-// Ora: se l'app e' stata in background per un periodo REALE (>10s), al rientro
-// apriamo una finestra di soppressione di 12s: tutto cio' che viene consegnato
-// li' dentro (il backlog, quando arriva arriva) NON fa toast — resta campanella
-// + push, come deve. Le micro-uscite (<10s, es. alt-tab) non attivano nulla:
-// l'esperienza dentro l'app non cambia.
-const MIN_HIDDEN_FOR_RESUME_MS = 10_000;
-const RESUME_SUPPRESS_MS = 12_000;
-let lastBecameHiddenAt: number | null = null;
-let resumeSuppressUntil = 0;
-
-/** Vero se siamo nella finestra di soppressione post-rientro. */
-function inResumeSuppressionWindow(): boolean {
-  return Date.now() < resumeSuppressUntil;
-}
-
-function markForeground() {
-  if (typeof document === "undefined" || document.visibilityState === "visible") {
-    const now = Date.now();
-    // Rientro da un background "vero" → apri la finestra di soppressione
-    if (lastBecameHiddenAt !== null && now - lastBecameHiddenAt >= MIN_HIDDEN_FOR_RESUME_MS) {
-      resumeSuppressUntil = now + RESUME_SUPPRESS_MS;
-    }
-    lastBecameHiddenAt = null;
-    lastBecameVisibleAt = now;
-  }
-}
-
-if (typeof document !== "undefined") {
-  document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") {
-      markForeground();
-    } else {
-      // Registra QUANDO siamo andati in background (serve a distinguere
-      // micro-uscite da assenze vere al rientro)
-      if (lastBecameHiddenAt === null) lastBecameHiddenAt = Date.now();
-    }
-  });
-  // Page Lifecycle (mobile/PWA): freeze puo' scattare senza visibilitychange
-  document.addEventListener("freeze", () => {
-    if (lastBecameHiddenAt === null) lastBecameHiddenAt = Date.now();
-  });
-  document.addEventListener("resume", markForeground);
-}
-if (typeof window !== "undefined") {
-  // Mobile/PWA: a volte al risveglio scatta focus/pageshow invece di
-  // visibilitychange. Aggiorniamo il riferimento anche in quei casi.
-  window.addEventListener("focus", markForeground);
-  window.addEventListener("pageshow", markForeground);
-}
-
-// 🔒 TAPPO DI FRESCHEZZA (fix definitivo raffica): una notifica può fare toast
-// SOLO se creata negli ultimi 15 secondi. Le notifiche "vive" arrivano al
-// listener entro 1-3s dalla creazione; il backlog accumulato mentre l'app era
-// minimizzata/chiusa è per definizione più vecchio → mai toast, SEMPRE e solo
-// campanella + push. Questo regge anche quando visibilitychange/freeze/pageshow
-// non scattano (iOS PWA) e la finestra di soppressione non si apre.
-const LIVE_MAX_AGE_MS = 15_000;
-
-// Una notifica va mostrata come toast SOLO se:
-// 1) e' stata creata DOPO l'ultimo ritorno in primo piano (con tolleranza skew), E
-// 2) e' FRESCA (creata negli ultimi LIVE_MAX_AGE_MS).
-// Tutto cio' che e' piu' vecchio = backlog -> niente toast, resta in campanella.
-// Se manca il createdAt siamo permissivi (mostriamo): non vogliamo perdere nulla.
-function isLiveNotification(createdAt: any): boolean {
+/** Millisecondi da un Timestamp Firestore, o null se non risolvibile. */
+function tsToMillis(ts: any): number | null {
   try {
-    if (!createdAt || typeof createdAt.toMillis !== "function") return true;
-    const ms = createdAt.toMillis();
-    if (ms < lastBecameVisibleAt - CLOCK_SKEW_TOLERANCE_MS) return false;
-    if (Date.now() - ms > LIVE_MAX_AGE_MS) return false; // backlog vecchio: mai toast
-    return true;
+    if (ts && typeof ts.toMillis === "function") return ts.toMillis();
   } catch {
-    return true;
+    /* timestamp non risolvibile */
   }
+  return null;
 }
+
+const isLiveEvent = (ts: any, hasPendingWrites = false) =>
+  livePresence.isLiveEvent(tsToMillis(ts), hasPendingWrites);
 
 // ==================== SUONO DOLCE A DUE NOTE ====================
 
-// 🔇 THROTTLE SUONO: mai piu' di un suono ogni 2.5s. Anche se piu' toast
-// arrivassero ravvicinati (raffica residua), l'utente sente UN suono solo.
-let lastSoundPlayedAt = 0;
-const SOUND_MIN_GAP_MS = 2_500;
-
+// 🔇 THROTTLE SUONO: mai piu' di un suono ogni 2.5s (gestito da livePresence,
+// cosi' la soglia e' una sola e testata insieme al resto).
 function playNotificationSound() {
   try {
-    const now = Date.now();
-    if (now - lastSoundPlayedAt < SOUND_MIN_GAP_MS) return;
-    lastSoundPlayedAt = now;
+    if (!livePresence.canPlaySound()) return;
 
     const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
     
@@ -277,6 +199,10 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   }, [preferences, soundEnabled]);
 
   const addToast = useCallback((toast: Omit<ToastNotification, 'id' | 'timestamp'>) => {
+    // 🔇 Stessa regola dell'altro percorso: nessun avviso se non sei davanti
+    // all'app (minimizzata, in background o altra finestra a fuoco).
+    if (!canEmitLiveAlert()) return;
+
     const newToast: ToastNotification = {
       ...toast,
       id: `toast-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
@@ -285,8 +211,8 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 
     setToasts(prev => [newToast, ...prev].slice(0, 5)); // Max 5 toast
     
-    // Suono dolce a due note - SOLO se l'app è visibile (in foreground)
-    if (soundEnabled && shouldPlaySound(toast.notificationType) && document.visibilityState === 'visible') {
+    // Suono SOLO se l'utente è davanti all'app in questo istante.
+    if (soundEnabled && shouldPlaySound(toast.notificationType) && canEmitLiveAlert()) {
       playNotificationSound();
     }
 
@@ -301,18 +227,13 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     toast: Omit<ToastNotification, 'id' | 'timestamp'>,
     notificationType: string
   ) => {
-    // 🔇 Non mostrare toast/suono se l'app è in background (la push notification gestisce tutto)
-    if (document.visibilityState !== 'visible') {
-      return;
-    }
-
-    // 🔇 Non mostrare il "backlog": quando l'app torna in primo piano dopo essere
-    // stata in background/chiusa, i listener Firestore sputano in blocco le
-    // notifiche accumulate. Quelle le hai già ricevute come push: NON devono
-    // comparire come raffica di toast.
-    // 🔧 FIX raffica: oltre alla grazia breve, rispettiamo la FINESTRA DI RIENTRO
-    // (12s dopo un background reale) — copre anche le riconnessioni lente.
-    if (inResumeSuppressionWindow() || Date.now() - lastBecameVisibleAt < VISIBILITY_GRACE_MS) {
+    // 🔇 REGOLA UNICA: l'avviso vivo si vede solo se sei davanti all'app in
+    // questo istante. App minimizzata, in background, chiusa o altra finestra a
+    // fuoco → l'evento resta in campanella + push, niente toast e niente suono.
+    // Il filtraggio del backlog non sta più qui: lo fanno i listener, che al
+    // rientro ri-seminano la baseline invece di emettere (vedi epoca di primo
+    // piano). Così non dipende da nessuna finestra temporale.
+    if (!canEmitLiveAlert()) {
       return;
     }
     
@@ -330,7 +251,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 
     setToasts(prev => [newToast, ...prev].slice(0, 5));
     
-    if (shouldPlaySound(notificationType) && document.visibilityState === 'visible') {
+    if (shouldPlaySound(notificationType) && canEmitLiveAlert()) {
       playNotificationSound();
     }
 
@@ -494,8 +415,12 @@ export function useAdminRealtimeNotifications() {
   const { addToastWithPreferences } = useToast();
   const previousOrdersRef = useRef<Map<string, any>>(new Map());
   const seenNotificationsRef = useRef<Set<string>>(new Set());
-  const ordersInitializedRef = useRef(false);
-  const notificationsInitializedRef = useRef(false);
+  // 🔁 Epoca con cui ogni listener si è seminato. Se l'app rientra dopo
+  // un'assenza l'epoca globale avanza e il primo snapshot successivo
+  // ri-semina la baseline in silenzio, invece di sparare la raffica.
+  // -1 = mai seminato.
+  const ordersEpochRef = useRef(-1);
+  const notificationsEpochRef = useRef(-1);
 
   useEffect(() => {
 
@@ -515,12 +440,14 @@ export function useAdminRealtimeNotifications() {
     );
 
     const unsubNotifications = onSnapshot(notificationsQuery, (snapshot) => {
-      // Prima volta: segna tutte le notifiche esistenti come già viste
-      if (!notificationsInitializedRef.current) {
+      // Primo avvio OPPURE rientro dopo un'assenza: assorbi tutto come
+      // baseline, senza emettere nulla. È ciò che elimina la raffica del
+      // mattino a prescindere da quanto ci mette Firestore a riconnettersi.
+      if (notificationsEpochRef.current !== currentForegroundEpoch()) {
         snapshot.docs.forEach(doc => {
           seenNotificationsRef.current.add(doc.id);
         });
-        notificationsInitializedRef.current = true;
+        notificationsEpochRef.current = currentForegroundEpoch();
         return;
       }
 
@@ -529,9 +456,8 @@ export function useAdminRealtimeNotifications() {
         if (change.type === 'added' && !seenNotificationsRef.current.has(change.doc.id)) {
           const data = change.doc.data();
 
-          // 🔇 ANTI-RAFFICA: se la notifica e' stata creata mentre l'app era in
-          // background (backlog), l'hai gia' avuta come push -> niente toast.
-          if (!isLiveNotification(data.createdAt)) {
+          // 🔇 Rete di sicurezza: solo eventi accaduti mentre eri davanti all'app.
+          if (!isLiveEvent(data.createdAt, change.doc.metadata.hasPendingWrites)) {
             seenNotificationsRef.current.add(change.doc.id);
             return;
           }
@@ -573,11 +499,21 @@ export function useAdminRealtimeNotifications() {
     );
 
     const unsubOrders = onSnapshot(ordersQuery, (snapshot) => {
-      if (!ordersInitializedRef.current) {
+      // 🔧 QUESTO ERA IL BUCO PRINCIPALE.
+      // Questo listener era l'UNICO dei cinque senza alcun controllo: bastava
+      // che lo `status` differisse da quello in memoria per sparare un toast.
+      // Dopo una notte il telefono si disconnette; alla riapertura Firestore
+      // consegna in blocco TUTTI i cambi di stato notturni come `modified`, e
+      // la baseline in memoria era quella di ieri → raffica di toast + suono.
+      //
+      // Ora, al primo avvio e a ogni rientro da un'assenza, lo stato corrente
+      // diventa la nuova baseline SENZA emettere nulla: il backlog viene
+      // assorbito, non annunciato.
+      if (ordersEpochRef.current !== currentForegroundEpoch()) {
         snapshot.docs.forEach(doc => {
           previousOrdersRef.current.set(doc.id, doc.data());
         });
-        ordersInitializedRef.current = true;
+        ordersEpochRef.current = currentForegroundEpoch();
         return;
       }
 
@@ -586,9 +522,14 @@ export function useAdminRealtimeNotifications() {
         const prevData = previousOrdersRef.current.get(change.doc.id);
 
         if (change.type === 'modified' && prevData && data.status !== prevData.status) {
-          const statusConfig = getOrderStatusConfig(data.status, data.propertyName);
-          if (statusConfig) {
-            addToastWithPreferences(statusConfig.toast, statusConfig.notificationType);
+          // 🔇 Rete di sicurezza: il cambio di stato dev'essere avvenuto
+          // mentre eri davanti all'app. Un ordine aggiornato stanotte non
+          // diventa un toast solo perché la modifica arriva adesso.
+          if (isLiveEvent(data.updatedAt, change.doc.metadata.hasPendingWrites)) {
+            const statusConfig = getOrderStatusConfig(data.status, data.propertyName);
+            if (statusConfig) {
+              addToastWithPreferences(statusConfig.toast, statusConfig.notificationType);
+            }
           }
         }
 
@@ -708,7 +649,8 @@ function getCleaningStatusConfig(status: string, propertyName: string) {
 export function useProprietarioRealtimeNotifications(userId: string, userPropertyIds: string[]) {
   const { addToastWithPreferences } = useToast();
   const seenNotificationsRef = useRef<Set<string>>(new Set());
-  const initializedRef = useRef(false);
+  // 🔁 Epoca di primo piano con cui il listener si è seminato (-1 = mai).
+  const epochRef = useRef(-1);
 
   useEffect(() => {
     if (!userId) {
@@ -728,12 +670,12 @@ export function useProprietarioRealtimeNotifications(userId: string, userPropert
     );
 
     const unsubNotifications = onSnapshot(notificationsQuery, (snapshot) => {
-      // Prima volta: segna tutte le notifiche esistenti come già viste
-      if (!initializedRef.current) {
+      // Primo avvio O rientro dopo un'assenza: assorbi come baseline, muto.
+      if (epochRef.current !== currentForegroundEpoch()) {
         snapshot.docs.forEach(doc => {
           seenNotificationsRef.current.add(doc.id);
         });
-        initializedRef.current = true;
+        epochRef.current = currentForegroundEpoch();
         return;
       }
 
@@ -745,8 +687,8 @@ export function useProprietarioRealtimeNotifications(userId: string, userPropert
           // Filtra solo notifiche per proprietario
           if (data.recipientRole !== 'PROPRIETARIO') return;
 
-          // 🔇 ANTI-RAFFICA: backlog creato in background -> solo push, niente toast
-          if (!isLiveNotification(data.createdAt)) {
+          // 🔇 Rete di sicurezza: solo eventi accaduti mentre eri davanti all'app.
+          if (!isLiveEvent(data.createdAt, change.doc.metadata.hasPendingWrites)) {
             seenNotificationsRef.current.add(change.doc.id);
             return;
           }
@@ -794,7 +736,8 @@ export function useProprietarioRealtimeNotifications(userId: string, userPropert
 export function useOperatoreRealtimeNotifications(userId: string) {
   const { addToastWithPreferences } = useToast();
   const seenNotificationsRef = useRef<Set<string>>(new Set());
-  const initializedRef = useRef(false);
+  // 🔁 Epoca di primo piano con cui il listener si è seminato (-1 = mai).
+  const epochRef = useRef(-1);
 
   useEffect(() => {
     if (!userId) {
@@ -813,12 +756,12 @@ export function useOperatoreRealtimeNotifications(userId: string) {
     );
 
     const unsubNotifications = onSnapshot(notificationsQuery, (snapshot) => {
-      // Prima volta: segna tutte le notifiche esistenti come già viste
-      if (!initializedRef.current) {
+      // Primo avvio O rientro dopo un'assenza: assorbi come baseline, muto.
+      if (epochRef.current !== currentForegroundEpoch()) {
         snapshot.docs.forEach(doc => {
           seenNotificationsRef.current.add(doc.id);
         });
-        initializedRef.current = true;
+        epochRef.current = currentForegroundEpoch();
         return;
       }
 
@@ -830,8 +773,8 @@ export function useOperatoreRealtimeNotifications(userId: string) {
           // Filtra solo notifiche per operatore
           if (data.recipientRole !== 'OPERATORE_PULIZIE' && data.recipientRole !== 'OPERATORE') return;
 
-          // 🔇 ANTI-RAFFICA: backlog creato in background -> solo push, niente toast
-          if (!isLiveNotification(data.createdAt)) {
+          // 🔇 Rete di sicurezza: solo eventi accaduti mentre eri davanti all'app.
+          if (!isLiveEvent(data.createdAt, change.doc.metadata.hasPendingWrites)) {
             seenNotificationsRef.current.add(change.doc.id);
             return;
           }
@@ -874,7 +817,8 @@ export function useOperatoreRealtimeNotifications(userId: string) {
 export function useRiderRealtimeNotifications(userId: string) {
   const { addToastWithPreferences } = useToast();
   const seenNotificationsRef = useRef<Set<string>>(new Set());
-  const initializedRef = useRef(false);
+  // 🔁 Epoca di primo piano con cui il listener si è seminato (-1 = mai).
+  const epochRef = useRef(-1);
 
   useEffect(() => {
     if (!userId) {
@@ -898,8 +842,8 @@ export function useRiderRealtimeNotifications(userId: string) {
       
       if (!isForThisRider) return;
 
-      // 🔇 ANTI-RAFFICA: backlog creato in background -> solo push, niente toast
-      if (!isLiveNotification(data.createdAt)) {
+      // 🔇 Rete di sicurezza: solo eventi accaduti mentre eri davanti all'app.
+      if (!isLiveEvent(data.createdAt, docSnapshot.metadata?.hasPendingWrites)) {
         seenNotificationsRef.current.add(docId);
         return;
       }
@@ -955,12 +899,12 @@ export function useRiderRealtimeNotifications(userId: string) {
     );
 
     const unsubscribe = onSnapshot(notificationsQuery, (snapshot) => {
-      // Prima volta: segna tutte le notifiche esistenti come già viste
-      if (!initializedRef.current) {
+      // Primo avvio O rientro dopo un'assenza: assorbi come baseline, muto.
+      if (epochRef.current !== currentForegroundEpoch()) {
         snapshot.docs.forEach(doc => {
           seenNotificationsRef.current.add(doc.id);
         });
-        initializedRef.current = true;
+        epochRef.current = currentForegroundEpoch();
         return;
       }
 
