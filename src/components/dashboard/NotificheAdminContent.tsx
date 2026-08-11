@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useNotifications } from "~/hooks/useNotifications";
 import type { FirebaseNotification } from "~/lib/firebase/types";
 import Link from "next/link";
-import { matchesPropertyQuery, isInDateRange, EMPTY_RANGE, type DateRange } from "~/components/ui/PropertySearchBar";
+import { matchesPropertyQuery, isInDateRange, isBeyondRetention, NOTIFICATION_RETENTION_DAYS, EMPTY_RANGE, type DateRange } from "~/components/ui/PropertySearchBar";
 import { useDeepNotifications } from "~/hooks/useDeepNotifications";
 
 // ==================== ICONS ====================
@@ -633,6 +633,12 @@ export function NotificheAdminContent({
       )}
       {deep.loading && (
         <p className="text-[11px] text-slate-400 mb-3">Carico il periodo…</p>
+      )}
+      {isBeyondRetention(dateRange.from) && (
+        <p className="text-[11px] text-amber-600 mb-3 leading-snug">
+          Le notifiche lette vengono conservate {NOTIFICATION_RETENTION_DAYS} giorni: oltre quella data non ne esistono più.
+          Le pulizie e gli ordini restano comunque nello storico.
+        </p>
       )}
       {deep.capped && (
         <p className="text-[11px] text-amber-600 mb-3 leading-snug">

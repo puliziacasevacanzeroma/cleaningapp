@@ -558,3 +558,26 @@ export function DateRangeButton({
     </>
   );
 }
+
+// ══════════════════════════════════════════════════════════════════
+// CONSERVAZIONE — deve combaciare con cleanup-notifications
+// ══════════════════════════════════════════════════════════════════
+//
+// Le notifiche lette vengono cancellate da un cron giornaliero dopo
+// RETENTION_READ_DAYS. Cercare più indietro non dà errore: semplicemente
+// non trova nulla, perché quei documenti non esistono più.
+// Senza avviso sembrerebbe un difetto della ricerca.
+//
+// ⚠️ Se cambi il valore nel cron, cambialo anche qui.
+export const NOTIFICATION_RETENTION_DAYS = 90;
+
+/** La data scelta è oltre il limite di conservazione delle notifiche? */
+export function isBeyondRetention(from: string, retentionDays = NOTIFICATION_RETENTION_DAYS): boolean {
+  if (!from) return false;
+  const limit = new Date();
+  limit.setDate(limit.getDate() - retentionDays);
+  limit.setHours(0, 0, 0, 0);
+  const d = new Date(from);
+  d.setHours(0, 0, 0, 0);
+  return d < limit;
+}

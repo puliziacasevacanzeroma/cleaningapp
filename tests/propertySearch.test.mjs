@@ -35,12 +35,15 @@ const pureOnly = [
   slice("export interface PropertyOption", "function PropertyThumb"),
   // date: DateRange + docDate + isInDateRange + hasDateRange
   slice("export interface DateRange", "function fmtShort"),
+  // conservazione: isBeyondRetention
+  slice("export const NOTIFICATION_RETENTION_DAYS"),
 ].join("\n").replace(/^import .*$/gm, "");
 
 const js = ts.transpileModule(pureOnly, {
   compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
 }).outputText;
-const { normalizeSearch, matchesPropertyQuery, isInDateRange, hasDateRange, EMPTY_RANGE, docDate } =
+const { normalizeSearch, matchesPropertyQuery, isInDateRange, hasDateRange, EMPTY_RANGE, docDate,
+        isBeyondRetention, NOTIFICATION_RETENTION_DAYS } =
   await import("data:text/javascript;base64," + Buffer.from(js).toString("base64"));
 
 let passed = 0;
@@ -198,6 +201,21 @@ check("docDate legge {seconds}",
 check("docDate legge una Date", docDate(D(2026,8,11))?.getDate() === 11);
 check("docDate su null → null", docDate(null) === null);
 check("docDate su oggetto strano → null", docDate({ pippo: 1 }) === null);
+
+
+// ══════════════════════════════════════════════════════════════════
+group("12 · Limite di conservazione delle notifiche");
+// ══════════════════════════════════════════════════════════════════
+const ymd = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+const backDays = n => { const d = new Date(); d.setDate(d.getDate() - n); return ymd(d); };
+
+check("nessuna data → nessun avviso", !isBeyondRetention(""));
+check("ieri → dentro il limite", !isBeyondRetention(backDays(1)));
+check("due mesi fa → dentro il limite (requisito)", !isBeyondRetention(backDays(60)));
+check("appena dentro il limite", !isBeyondRetention(backDays(NOTIFICATION_RETENTION_DAYS - 1)));
+check("appena oltre il limite → avvisa", isBeyondRetention(backDays(NOTIFICATION_RETENTION_DAYS + 1)));
+check("un anno fa → avvisa", isBeyondRetention(backDays(365)));
+check("il limite copre i due mesi richiesti", NOTIFICATION_RETENTION_DAYS > 60);
 
 console.log(`\n${"═".repeat(56)}`);
 if (failures.length === 0) {

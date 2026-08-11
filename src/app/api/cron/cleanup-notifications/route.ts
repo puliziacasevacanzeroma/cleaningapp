@@ -17,14 +17,37 @@ export const maxDuration = 60; // cuscinetto Railway, ma cron-job.org tronca a 3
 // così la spalmiamo su più run giornaliere senza rischio timeout.
 const MAX_DELETIONS_PER_RUN = 5000;
 
+// ════════════════════════════════════════════════════════════════════
+// 🗓️ CONSERVAZIONE DELLE NOTIFICHE
+//
+// Requisito (11/08/2026): dev'essere possibile cercare nella campanella
+// e nel Centro Messaggi almeno DUE MESI indietro.
+//
+// Perché 90 e non 60: con una soglia di 60 giorni, una notifica di 61
+// giorni fa sarebbe già sparita — cioè "due mesi indietro" funzionerebbe
+// solo a intermittenza, proprio sul bordo. 90 giorni danno un mese di
+// margine, così la ricerca a due mesi è SEMPRE completa.
+//
+// Le non lette durano di più delle lette: se non le hai ancora aperte
+// possono contenere qualcosa che ti serve.
+//
+// ⚠️ Alzare questi numeri fa crescere la collezione `notifications`.
+// Sono documenti piccoli (titolo, messaggio, riferimenti) e il cron gira
+// ogni giorno cancellando solo il giorno che scade, quindi la crescita è
+// lineare e prevedibile: ~50-100 notifiche al giorno × 90 giorni.
+// ════════════════════════════════════════════════════════════════════
+const RETENTION_READ_DAYS = 90;    // lette / archiviate
+const RETENTION_UNREAD_DAYS = 120; // non lette
+
 /**
  * GET /api/cron/cleanup-notifications?secret=CRON_SECRET
  *
  * Chiamato da cron-job.org una volta al giorno per pulire notifiche vecchie.
  *
- * Regole:
- *   - Notifiche READ/ARCHIVED più vecchie di 30 giorni → eliminate
- *   - Notifiche UNREAD più vecchie di 60 giorni → eliminate
+ * Regole (vedi RETENTION_* in cima al file):
+ *   - Notifiche lette/archiviate più vecchie di 90 giorni → eliminate
+ *   - Notifiche non lette più vecchie di 120 giorni → eliminate
+ *   - MAI eliminate quelle che aspettano ancora una decisione
  *
  * 🚀 FIX v2 (14/05/2026):
  *   - Bug critico precedente: cercava il secret nell'header Authorization
@@ -49,14 +72,15 @@ export async function GET(req: NextRequest) {
     }
 
     const now = new Date();
-    const thirtyDaysAgo = Timestamp.fromDate(new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000));
-    const sixtyDaysAgo = Timestamp.fromDate(new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000));
-    const sixtyDaysAgoMs = sixtyDaysAgo.toMillis();
+    const DAY_MS = 24 * 60 * 60 * 1000;
+    const readCutoff = Timestamp.fromDate(new Date(now.getTime() - RETENTION_READ_DAYS * DAY_MS));
+    const unreadCutoffMs = now.getTime() - RETENTION_UNREAD_DAYS * DAY_MS;
 
-    // Query: tutte le notifiche più vecchie di 30 giorni
-    // (filtraggio fine per status avviene in JS)
+    // Query: tutto ciò che ha superato la soglia PIÙ BREVE (quella delle
+    // lette). Il filtro fine per stato avviene poi in JS. Nota: la query
+    // scarica meno documenti di prima, perché la soglia si è allungata.
     const oldSnap = await adminDb.collection("notifications")
-      .where("createdAt", "<", thirtyDaysAgo)
+      .where("createdAt", "<", readCutoff)
       .get();
 
     // 🚀 PERF: raccolgo ref da eliminare e applico in batch
@@ -86,19 +110,19 @@ export async function GET(req: NextRequest) {
           !data.actionResolved;
         if (azioneInSospeso) continue;
 
-        // READ/ARCHIVED più vecchi di 30 giorni → elimina
+        // Lette / archiviate oltre la soglia → elimina
         if (status === "READ" || status === "ARCHIVED") {
           toDelete.push(docSnap.ref);
           deletedRead++;
           continue;
         }
 
-        // UNREAD più vecchi di 60 giorni → elimina
+        // Non lette: sopravvivono più a lungo → elimina solo oltre la loro soglia
         if (status === "UNREAD" && createdAt) {
           const createdMs = typeof createdAt?.toMillis === "function"
             ? createdAt.toMillis()
             : (createdAt?._seconds ? createdAt._seconds * 1000 : 0);
-          if (createdMs > 0 && createdMs < sixtyDaysAgoMs) {
+          if (createdMs > 0 && createdMs < unreadCutoffMs) {
             toDelete.push(docSnap.ref);
             deletedUnread++;
           }
@@ -136,6 +160,8 @@ export async function GET(req: NextRequest) {
         scanned: oldSnap.size,
         reachedLimit,
         maxDeletionsPerRun: MAX_DELETIONS_PER_RUN,
+        retentionReadDays: RETENTION_READ_DAYS,
+        retentionUnreadDays: RETENTION_UNREAD_DAYS,
       },
     });
   } catch (error) {

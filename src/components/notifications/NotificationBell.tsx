@@ -12,7 +12,7 @@ import { useDeepNotifications, DEEP_LIMIT } from "~/hooks/useDeepNotifications";
 import type { FirebaseNotification } from "~/lib/firebase/types";
 import {
   PropertySearchBar, DateRangeButton, matchesPropertyQuery, isInDateRange,
-  EMPTY_RANGE, hasDateRange,
+  EMPTY_RANGE, hasDateRange, isBeyondRetention, NOTIFICATION_RETENTION_DAYS,
   type PropertyOption, type DateRange,
 } from "~/components/ui/PropertySearchBar";
 
@@ -326,6 +326,11 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
       {tab === "notifiche" && !hasDateRange(dateRange) && (search || property) && (
         <p className="text-[10px] text-amber-600 px-1 leading-snug">
           Stai cercando solo fra le notifiche recenti. Scegli un periodo con «Date» per cercare più indietro.
+        </p>
+      )}
+      {tab === "notifiche" && isBeyondRetention(dateRange.from) && (
+        <p className="text-[10px] text-amber-600 px-1 leading-snug">
+          Le notifiche lette si conservano {NOTIFICATION_RETENTION_DAYS} giorni: oltre quella data non ne esistono più.
         </p>
       )}
       {tab === "notifiche" && deepLoading && (
