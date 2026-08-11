@@ -331,33 +331,61 @@ function CategorySummary({
   }, []);
 
   // ════════════════════════════════════════════════════════════════
-  // 🔧 INTERAZIONE RISCRITTA CON POINTER EVENTS
+  // 🔧 INTERAZIONE: SCROLL LIBERO + DRAG SOLO DOPO TIENI-PREMUTO
   //
-  // La versione precedente registrava un listener `touchmove` non-passivo
-  // solo DOPO il re-render innescato da setIsDragging(true). In quella
-  // finestra di uno o più frame nessuno chiamava preventDefault: se il
-  // browser decideva che il gesto era uno scroll, da lì in poi ignorava
-  // ogni preventDefault successivo. Risultato: la tessera si armava e
-  // vibrava, ma poi la pagina scorreva sotto il dito e l'unione falliva.
+  // Requisito: il dito appoggiato su una tessera deve poter scorrere la
+  // pagina normalmente. Lo scroll si blocca SOLO dopo che il tieni-premuto
+  // ha "armato" la tessera per l'unione.
   //
-  // Inoltre:
-  //   - un timer di sicurezza a 5s chiamava finish(), che PRIMA unisce:
-  //     tenendo premuto più di 5 secondi si otteneva un'unione a caso;
-  //   - `touch-action:none` veniva applicato solo a gesto già iniziato,
-  //     quando il browser l'ha già valutato → non aveva alcun effetto;
-  //   - `document.body.style.overflow = hidden` a metà gesto poteva
-  //     generare un touchcancel e uccidere il drag in silenzio.
+  // Perché non basta `touch-action`:
+  //   `touch-action` viene valutato dal browser all'INIZIO del gesto, non
+  //   si può cambiare a gesto in corso. Metterlo a `none` sempre (come
+  //   nella versione precedente) blocca lo scroll anche quando l'utente
+  //   voleva solo scorrere; metterlo a `pan-y` renderebbe impossibile
+  //   bloccarlo dopo l'arming.
   //
-  // Ora: `touch-action: none` è SEMPRE sulle tessere (il contenitore è
-  // alto poche decine di px, lo scroll resta possibile ovunque intorno),
-  // il puntatore viene catturato con setPointerCapture — quindi tutti gli
-  // eventi arrivano all'elemento anche fuori dai suoi bordi — e non serve
-  // né bloccare il body né alcun timer di sicurezza.
+  // Soluzione: un listener `touchmove` NON PASSIVO registrato AL MOUNT sul
+  // contenitore, che chiama preventDefault SOLO quando la tessera è armata.
+  //   - non armata → nessun preventDefault → lo scroll nativo funziona;
+  //   - armata     → preventDefault → la pagina sta ferma e si trascina.
+  //
+  // Il dettaglio che fa funzionare tutto: la presenza stessa di un listener
+  // non passivo impedisce a Chrome di gestire lo scroll sul compositor
+  // senza consultare il JS. Quindi il preventDefault fa sempre in tempo.
+  // E poiché l'arming richiede ~300ms di immobilità, quando scatta nessuno
+  // scroll è ancora iniziato: non esiste la finestra di gara che rompeva
+  // la versione precedente.
+  //
+  // Se invece il dito si muove prima dei 300ms, il timer viene annullato e
+  // il browser porta avanti lo scroll: gesto interpretato come scorrimento.
   // ════════════════════════════════════════════════════════════════
 
+  useEffect(() => {
+    const cont = containerRef.current;
+    if (!cont) return;
+    const onTouchMove = (ev: TouchEvent) => {
+      // Blocca lo scroll SOLO a trascinamento attivo.
+      if (gesture.current.armed) ev.preventDefault();
+    };
+    cont.addEventListener("touchmove", onTouchMove, { passive: false });
+    return () => cont.removeEventListener("touchmove", onTouchMove);
+  }, []);
+
+  // Bersaglio del rilascio. Se la tessera contiene il puntatore vince
+  // subito; altrimenti si prende la più vicina, ma solo restando entro un
+  // margine ragionevole dal riquadro: trascinando via si annulla l'unione
+  // invece di unire per sbaglio l'ultima tessera sfiorata.
+  const DROP_TOLERANCE = 90; // px oltre i bordi del contenitore
   const findNearest = useCallback((x: number, y: number): number | null => {
     const cont = containerRef.current;
     if (!cont) return null;
+    const cr = cont.getBoundingClientRect();
+    if (
+      x < cr.left - DROP_TOLERANCE || x > cr.right + DROP_TOLERANCE ||
+      y < cr.top - DROP_TOLERANCE || y > cr.bottom + DROP_TOLERANCE
+    ) {
+      return null; // trascinato via → nessun bersaglio
+    }
     const tiles = Array.from(cont.querySelectorAll("[data-idx]")) as HTMLElement[];
     let nearest: number | null = null;
     let nd = Infinity;
@@ -393,8 +421,9 @@ function CategorySummary({
       pointerId: e.pointerId, fromIdx: idx, overIdx: null,
       armed: false, startX: e.clientX, startY: e.clientY, el,
     };
-    // Il mouse arma subito (c'è già il feedback del cursore),
-    // il tocco richiede il tieni-premuto per non confondersi con lo scroll.
+    // Il mouse arma subito (il cursore dà già il feedback); il tocco
+    // richiede il tieni-premuto, così lo scorrimento resta il gesto di
+    // default e il trascinamento è quello intenzionale.
     const armDelay = e.pointerType === "mouse" ? 0 : 300;
     clearPress();
     pressTimer.current = setTimeout(() => {
@@ -414,8 +443,9 @@ function CategorySummary({
     const g = gesture.current;
     if (g.pointerId !== e.pointerId) return;
     if (!g.armed) {
-      // Prima dell'arming: se il dito si sposta è uno scroll → annulla.
-      if (Math.abs(e.clientX - g.startX) > 8 || Math.abs(e.clientY - g.startY) > 8) {
+      // Prima dell'arming un movimento = intenzione di scorrere:
+      // annulla il tieni-premuto e lascia scorrere il browser.
+      if (Math.abs(e.clientX - g.startX) > 10 || Math.abs(e.clientY - g.startY) > 10) {
         resetGesture();
       }
       return;
@@ -431,12 +461,17 @@ function CategorySummary({
     // L'unione avviene SOLO su rilascio reale, mai su timeout.
     if (g.armed && g.fromIdx !== null && g.overIdx !== null && g.overIdx !== g.fromIdx) {
       mergeGroups(g.fromIdx, g.overIdx);
+      if (typeof navigator !== "undefined" && navigator.vibrate) {
+        try { navigator.vibrate(10); } catch { /* noop */ }
+      }
     }
     resetGesture();
   };
 
   const onPointerCancel = (e: React.PointerEvent<HTMLDivElement>) => {
     const g = gesture.current;
+    // pointercancel arriva anche quando il browser prende il gesto per uno
+    // scroll: è il comportamento voluto, si annulla e si lascia scorrere.
     if (g.pointerId !== e.pointerId) return;
     resetGesture();
   };
@@ -454,7 +489,12 @@ function CategorySummary({
   return (
     <div className="bg-white border border-slate-200 rounded-xl p-3">
       <p className="text-[10px] text-slate-400 uppercase tracking-wide mb-2.5">
-        Totale per categoria <span className="text-slate-300 normal-case tracking-normal">· tieni premuto e trascina per unire</span>
+        Totale per categoria{" "}
+        <span className={`normal-case tracking-normal transition-colors ${armedIdx !== null ? "text-violet-500 font-medium" : "text-slate-300"}`}>
+          {armedIdx !== null
+            ? (overIdx !== null ? "· rilascia per unire" : "· trascina su un'altra tessera · porta fuori per annullare")
+            : "· tieni premuto e trascina per unire"}
+        </span>
       </p>
       <div ref={containerRef} className="grid grid-cols-2 gap-2">
         {groups.map((group, idx) => {
@@ -475,10 +515,12 @@ function CategorySummary({
               onPointerUp={onPointerUp}
               onPointerCancel={onPointerCancel}
               onContextMenu={(e) => e.preventDefault()}
-              // `touch-action: none` è SEMPRE attivo: il browser lo valuta
-              // all'inizio del gesto, applicarlo dopo non avrebbe effetto.
-              style={{ touchAction: "none", ...(isArmed ? { position: "relative", zIndex: 20 } : null) }}
-              className={`${lead.bg} rounded-lg px-3 py-2.5 select-none cursor-grab active:cursor-grabbing transition-all ${isCombined ? "col-span-2" : ""} ${dragIdx === idx ? "opacity-50 scale-[0.97]" : ""} ${isArmed ? "ring-2 ring-violet-400 shadow-lg scale-[1.03] -rotate-1 z-10" : ""} ${isOver ? "ring-2 ring-blue-400 ring-offset-1" : ""}`}
+              onLostPointerCapture={onPointerCancel}
+              // `manipulation` lascia libero lo scroll verticale (e toglie
+              // solo il ritardo del doppio-tap). Il blocco durante il
+              // trascinamento lo fa il listener touchmove non passivo.
+              style={{ touchAction: isArmed ? "none" : "manipulation", ...(isArmed ? { position: "relative", zIndex: 20 } : null) }}
+              className={`${lead.bg} rounded-lg px-3 py-2.5 select-none cursor-grab active:cursor-grabbing transition-all duration-150 ease-out ${isCombined ? "col-span-2" : ""} ${isArmed ? "ring-2 ring-violet-400 shadow-lg shadow-violet-500/20 scale-[1.04] -rotate-1 z-10" : ""} ${isOver ? "ring-2 ring-blue-400 ring-offset-1 scale-[1.02]" : ""}`}
             >
               {isOver ? (
                 <div className="flex items-center gap-1.5 mb-1">
