@@ -565,10 +565,10 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
             <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${color}`}><Ic d={d} className="w-[18px] h-[18px]" /></div>
             <div className="flex-1 min-w-0">
               <div className="flex items-start justify-between gap-2">
-                <p className={`text-[13px] text-slate-800 leading-snug ${ur ? "font-bold" : "font-medium"}`}>{n.title}</p>
+                <p className={`text-[13px] text-slate-800 leading-snug min-w-0 break-words ${ur ? "font-bold" : "font-medium"}`}>{n.title}</p>
                 <span className="text-[10px] text-slate-400 whitespace-nowrap mt-0.5">{timeAgo(ca)}</span>
               </div>
-              <p className="text-[12px] text-slate-500 mt-0.5 line-clamp-2">{n.message}</p>
+              <p className="text-[12px] text-slate-500 mt-0.5 line-clamp-2 break-words">{n.message}</p>
               {(n as any).actionType === "TURNOVER_DECISION" && (
                 (n as any).actionResolved
                   ? <span className={`inline-flex items-center gap-1 mt-1 text-[9px] font-bold px-1.5 py-[2px] rounded-full ${(n as any).actionResolved === "CANCEL" ? "bg-slate-100 text-slate-500" : "bg-emerald-100 text-emerald-700"}`}>{(n as any).actionResolved === "CANCEL" ? "Gestita: pulizia cancellata" : "Gestita: pulizia confermata"}</span>

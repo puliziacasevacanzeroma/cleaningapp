@@ -59,7 +59,7 @@ export default function CentroMessaggiPage() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-[#f0f2f5]">
+    <div className="min-h-screen bg-[#f0f2f5] overflow-x-hidden">
       <div className="bg-gradient-to-br from-sky-500 via-blue-500 to-indigo-600 px-4 pt-5 pb-14 text-white">
         <h1 className="text-[20px] font-bold">Centro Messaggi</h1>
         <p className="text-sky-100 text-[12px] mt-0.5">Notifiche e segnalazioni</p>

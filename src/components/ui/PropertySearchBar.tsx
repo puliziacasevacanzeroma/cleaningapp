@@ -242,9 +242,9 @@ function PropertySearchBarInner({
         {selected ? (
           // Appartamento agganciato: pillola al posto del testo libero
           <div className="w-full pl-10 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl flex items-center gap-2 min-h-[42px]">
-            <span className="inline-flex items-center gap-1.5 max-w-full bg-violet-100 text-violet-700 text-[12px] font-semibold pl-1 pr-2.5 py-1 rounded-lg">
+            <span className="inline-flex items-center gap-1.5 max-w-full min-w-0 bg-violet-100 text-violet-700 text-[12px] font-semibold pl-1 pr-2.5 py-1 rounded-lg">
               <PropertyThumb property={selected} size={22} />
-              <span className="truncate">{selected.name}</span>
+              <span className="truncate min-w-0">{selected.name}</span>
             </span>
           </div>
         ) : (

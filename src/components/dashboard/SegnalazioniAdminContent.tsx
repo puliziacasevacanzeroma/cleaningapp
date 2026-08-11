@@ -177,7 +177,10 @@ export function SegnalazioniAdminContent({
   }
 
   return (
-    <div className={embedded ? "px-4 pt-3" : "space-y-6"}>
+    // `overflow-x-hidden`: rete di sicurezza. Anche se un domani qualcuno
+    // aggiunge un elemento troppo largo, non potrà più trascinare l'intera
+    // pagina in orizzontale sul telefono.
+    <div className={`overflow-x-hidden ${embedded ? "px-4 pt-3" : "space-y-6"}`}>
       {/* Header — nascosto quando embedded */}
       {!embedded && (
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -272,9 +275,15 @@ export function SegnalazioniAdminContent({
                   {/* Content */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2">
-                      <div>
+                      {/* ⚠️ `min-w-0` è OBBLIGATORIO: un figlio flex ha per
+                          impostazione predefinita larghezza minima pari al
+                          contenuto, quindi senza di esso `truncate` non ha
+                          nulla contro cui restringersi. Il titolo lungo
+                          allargava la card, che a sua volta allargava la
+                          pagina e faceva scorrere lo schermo in orizzontale. */}
+                      <div className="min-w-0 flex-1">
                         <h3 className="font-bold text-slate-800 truncate">{issue.title}</h3>
-                        <p className="text-xs text-slate-500">{issue.propertyName}</p>
+                        <p className="text-xs text-slate-500 truncate">{issue.propertyName}</p>
                       </div>
                       
                       {/* Status Badge */}
@@ -283,10 +292,10 @@ export function SegnalazioniAdminContent({
                       </span>
                     </div>
                     
-                    <p className="text-sm text-slate-600 mt-1 line-clamp-2">{issue.description}</p>
+                    <p className="text-sm text-slate-600 mt-1 line-clamp-2 break-words">{issue.description}</p>
                     
                     {/* Meta */}
-                    <div className="flex items-center gap-3 mt-2 text-xs text-slate-400">
+                    <div className="flex items-center flex-wrap gap-x-3 gap-y-1 mt-2 text-xs text-slate-400">
                       <span className={`px-2 py-0.5 rounded-full ${SEVERITY_COLORS[issue.severity]}`}>
                         {issue.severity === 'low' ? 'Bassa' : issue.severity === 'medium' ? 'Media' : issue.severity === 'high' ? 'Alta' : 'Critica'}
                       </span>

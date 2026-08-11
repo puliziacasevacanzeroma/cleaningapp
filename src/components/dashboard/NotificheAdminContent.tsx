@@ -540,7 +540,7 @@ export function NotificheAdminContent({
   };
 
   return (
-    <div className={embedded ? "px-4 pt-3" : "max-w-4xl mx-auto"}>
+    <div className={`overflow-x-hidden ${embedded ? "px-4 pt-3" : "max-w-4xl mx-auto"}`}>
       {/* Header — nascosto quando embedded nelle tab */}
       {!embedded && (
       <div className="mb-6">
@@ -682,12 +682,12 @@ export function NotificheAdminContent({
                             <div className="w-14 h-14 rounded-2xl bg-sky-100 flex items-center justify-center flex-shrink-0">
                               <span className="text-2xl">🏠</span>
                             </div>
-                            <div className="flex-1">
-                              <div className="flex items-start justify-between mb-2">
-                                <div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-start justify-between gap-2 mb-2">
+                                <div className="min-w-0 flex-1">
                                   <Link 
                                     href={`/dashboard/proprieta/${request.propertyId}`}
-                                    className="font-semibold text-slate-800 hover:text-sky-600"
+                                    className="font-semibold text-slate-800 hover:text-sky-600 block truncate"
                                   >
                                     {request.propertyName}
                                   </Link>
@@ -804,9 +804,9 @@ export function NotificheAdminContent({
                             }`}>
                               {request.status === "APPROVED" ? "✅" : "❌"}
                             </span>
-                            <div>
-                              <p className="font-medium text-slate-800">{request.propertyName}</p>
-                              <p className="text-xs text-slate-500">
+                            <div className="min-w-0 flex-1">
+                              <p className="font-medium text-slate-800 truncate">{request.propertyName}</p>
+                              <p className="text-xs text-slate-500 truncate">
                                 {request.status === "APPROVED" ? "Approvata" : "Rifiutata"} da {request.processedByName}
                               </p>
                             </div>
@@ -814,7 +814,7 @@ export function NotificheAdminContent({
                           <p className="text-xs text-slate-400">{formatRequestDate(request.processedAt || request.createdAt)}</p>
                         </div>
                         {request.adminNote && (
-                          <p className="text-sm text-slate-500 mt-2 ml-11 italic">"{request.adminNote}"</p>
+                          <p className="text-sm text-slate-500 mt-2 ml-11 italic break-words">"{request.adminNote}"</p>
                         )}
                       </div>
                     ))}
@@ -896,11 +896,11 @@ export function NotificheAdminContent({
                           </div>
                           <span className="text-[10px] text-slate-400 flex-shrink-0">{formatTimeAgo(createdAt)}</span>
                         </div>
-                        <p className="text-[11px] text-slate-500 mt-[3px] leading-[1.35] line-clamp-2">
+                        <p className="text-[11px] text-slate-500 mt-[3px] leading-[1.35] line-clamp-2 break-words">
                           {notification.senderName && `${notification.senderName} — `}{notification.message}
                         </p>
                         {notification.actionNote && (
-                          <p className="text-[10px] text-slate-400 mt-1 italic line-clamp-1">"{notification.actionNote}"</p>
+                          <p className="text-[10px] text-slate-400 mt-1 italic line-clamp-1 break-words">"{notification.actionNote}"</p>
                         )}
                       </div>
                     </div>
