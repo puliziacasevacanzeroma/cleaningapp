@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { collection, query, onSnapshot, doc, updateDoc, Timestamp } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 import { useSearchParams } from "next/navigation";
@@ -105,7 +105,7 @@ export function SegnalazioniAdminContent({
   }, [highlightId]);
 
   // Filter issues - supporta sia status che resolved
-  const filteredIssues = issues
+  const filteredIssues = useMemo(() => issues
     .filter(issue => {
       const isResolved = issue.resolved === true || issue.status === 'resolved';
       if (filter === 'open') return !isResolved;
@@ -119,7 +119,9 @@ export function SegnalazioniAdminContent({
         searchTerm,
         searchProperty,
       ),
-    );
+    ),
+    [issues, filter, dateRange.from, dateRange.to, searchTerm, searchProperty],
+  );
 
   const searchActive = !!(searchTerm || searchProperty || dateRange.from || dateRange.to);
 

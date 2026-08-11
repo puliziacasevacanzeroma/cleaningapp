@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import { collection, query, where, onSnapshot, getDocs, orderBy, limit, Timestamp } from "firebase/firestore";
+import { collection, query, where, onSnapshot, getDocs, getDocsFromCache, orderBy, limit, Timestamp } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 import { useAuth } from "~/lib/firebase/AuthContext";
 import { useNotifications } from "~/hooks/useNotifications";
@@ -83,8 +83,21 @@ const SEV_L: Record<string, string> = { low: "Bassa", medium: "Media", high: "Al
 
 type BellTab = "notifiche" | "segnalazioni";
 
-/** Tetto di sicurezza sulla lettura mirata. */
-const DEEP_LIMIT = 800;
+/**
+ * Tetto sulla lettura mirata. Abbassato da 800: 800 documenti su rete
+ * mobile erano il grosso dei 3 secondi di attesa, e oltre i 300 risultati
+ * nessuno scorre più — si restringe il periodo.
+ */
+const DEEP_LIMIT = 300;
+
+/**
+ * Cache di modulo delle letture mirate, per chiave (ruolo + data "Da").
+ * Riselezionare lo stesso periodo — o riaprire la campanella — è
+ * istantaneo invece di rifare il giro sul server.
+ * Vive quanto la pagina: nessuna scadenza da gestire, e il listener
+ * realtime resta comunque la fonte per le notifiche nuove.
+ */
+const deepCache = new Map<string, any[]>();
 
 
 interface NotificationBellProps { isAdmin?: boolean; }
@@ -217,39 +230,82 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
       setDeepCapped(false);
       return;
     }
+
+    // ⚡ Solo il "Da" determina cosa si legge dal server: il "A" è un
+    // filtro in memoria. Dipendere anche da lui rifaceva la lettura per
+    // nulla ogni volta che stringevi la fine del periodo.
+    const fromKey = dateRange.from || "__all__";
+    const cacheKey = `${isAdmin ? "admin" : user?.id || "?"}:${fromKey}`;
+
+    // 1) Già letto in questa sessione → istantaneo, niente attesa.
+    const cached = deepCache.get(cacheKey);
+    if (cached) {
+      setDeepNotifs(cached);
+      setDeepCapped(cached.length >= DEEP_LIMIT);
+      setDeepLoading(false);
+      return;
+    }
+
     let cancelled = false;
+
+    const buildQuery = () => {
+      const since = dateRange.from ? new Date(dateRange.from) : null;
+      if (since) since.setHours(0, 0, 0, 0);
+      const clauses: any[] = isAdmin
+        ? [where("recipientRole", "in", ["ADMIN", "ALL"])]
+        : [where("recipientId", "==", user?.id || "__none__")];
+      if (since) clauses.push(where("createdAt", ">=", Timestamp.fromDate(since)));
+      return query(collection(db, "notifications"), ...clauses, orderBy("createdAt", "desc"), limit(DEEP_LIMIT));
+    };
+
+    const shape = (snap: any) => {
+      let rows = snap.docs.map((d: any) => ({ id: d.id, ...(d.data() as Record<string, any>) }));
+      // Con più admin ogni notifica esiste in copia per ciascuno:
+      // si tengono le broadcast e le proprie.
+      if (isAdmin && user?.id) {
+        rows = rows.filter((n: any) => !n.recipientId || n.recipientId === user.id);
+      }
+      return rows;
+    };
+
     (async () => {
+      const q = buildQuery();
+
+      // 2) DIPINGI SUBITO dalla cache locale di Firestore (IndexedDB).
+      //    L'app è già configurata con persistentLocalCache, ma la
+      //    lettura andava sempre e solo in rete: da lì i ~3 secondi.
+      //    Quasi tutte le notifiche del periodo sono già su disco,
+      //    perché i listener le hanno scaricate.
+      try {
+        const cachedSnap = await getDocsFromCache(q);
+        if (!cancelled && cachedSnap.docs.length > 0) {
+          const rows = shape(cachedSnap);
+          setDeepNotifs(rows);
+          setDeepCapped(cachedSnap.docs.length >= DEEP_LIMIT);
+        }
+      } catch {
+        /* niente in cache: si aspetta la rete */
+      }
+
+      // 3) Poi allinea col server, in sottofondo. Se la cache aveva già
+      //    dipinto, l'utente non vede nessuna attesa.
       setDeepLoading(true);
       try {
-        // Il "Da" scelto guida la lettura sul server; se manca si
-        // legge comunque fino al tetto, ordinando dal più recente.
-        const since = dateRange.from ? new Date(dateRange.from) : null;
-        if (since) since.setHours(0, 0, 0, 0);
-        const base = isAdmin
-          ? [where("recipientRole", "in", ["ADMIN", "ALL"])]
-          : [where("recipientId", "==", user?.id || "__none__")];
-        const clauses: any[] = [...base];
-        if (since) clauses.push(where("createdAt", ">=", Timestamp.fromDate(since)));
-        const snap = await getDocs(
-          query(collection(db, "notifications"), ...clauses, orderBy("createdAt", "desc"), limit(DEEP_LIMIT)),
-        );
+        const snap = await getDocs(q);
         if (cancelled) return;
-        let rows = snap.docs.map(d => ({ id: d.id, ...(d.data() as Record<string, any>) }));
-        // Stesso de-duplicatore del listener: con più admin ogni notifica
-        // esiste in copia per ciascuno; si tengono broadcast + le proprie.
-        if (isAdmin && user?.id) {
-          rows = rows.filter(n => !n.recipientId || n.recipientId === user.id);
-        }
+        const rows = shape(snap);
+        deepCache.set(cacheKey, rows);
         setDeepNotifs(rows);
         setDeepCapped(snap.docs.length >= DEEP_LIMIT);
-      } catch (e) {
-        if (!cancelled) { setDeepNotifs(null); setDeepCapped(false); }
+      } catch {
+        /* offline o errore: restano i dati della cache */
       } finally {
         if (!cancelled) setDeepLoading(false);
       }
     })();
+
     return () => { cancelled = true; };
-  }, [isOpen, tab, dateRange.from, dateRange.to, isAdmin, user?.id]);
+  }, [isOpen, tab, dateRange.from, isAdmin, user?.id]);
 
   const totalBadge = unreadCount;
 
@@ -280,21 +336,59 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
   // Periodo: helper condiviso (senza data non si esclude nulla)
   const inRange = (x: any): boolean => isInDateRange(x?.createdAt || x?.reportedAt, dateRange);
 
-  const filteredNotifs = notifSource
-    .filter(n => n.status !== "ARCHIVED")
-    .filter(inRange)
-    .filter(n => matchesPropertyQuery(notifHaystack(n), notifSearch, notifProperty?.name));
-  // Cercando si mostra di più: con un appartamento agganciato serve vedere
-  // tutto lo storico trovato, non i primi 30.
+  // ⚡ MEMOIZZATO: senza, l'intero elenco veniva rifiltrato a ogni render
+  // del componente — non solo quando cambiavano ricerca o dati.
+  const filteredNotifs = useMemo(
+    () =>
+      notifSource
+        .filter(n => n.status !== "ARCHIVED")
+        .filter(n => isInDateRange(n?.createdAt, dateRange))
+        .filter(n => matchesPropertyQuery(notifHaystack(n), notifSearch, notifProperty?.name)),
+    [notifSource, dateRange.from, dateRange.to, notifSearch, notifProperty?.name],
+  );
+
   const notifFilterActive = !!(notifSearch || notifProperty || hasDateRange(dateRange));
-  const visibleNotifs = filteredNotifs.slice(0, notifFilterActive ? 200 : 30);
+
+  const filteredIssues = useMemo(
+    () =>
+      issues
+        .filter(i => isInDateRange((i as any).reportedAt || (i as any).createdAt, dateRange))
+        .filter(i => matchesPropertyQuery([i.propertyName, i.title, i.description], issueSearch, issueProperty?.name)),
+    [issues, dateRange.from, dateRange.to, issueSearch, issueProperty?.name],
+  );
 
   const openIssues = issues.filter(i => !(i.resolved === true || i.status === "resolved"));
-  const filteredIssues = issues
-    .filter(inRange)
-    .filter(i => matchesPropertyQuery([i.propertyName, i.title, i.description], issueSearch, issueProperty?.name));
   const issueFilterActive = !!(issueSearch || issueProperty || hasDateRange(dateRange));
-  const visibleIssues = filteredIssues.slice(0, issueFilterActive ? 200 : 15);
+
+  // ⚡ QUANTE RIGHE DISEGNARE
+  // Prima, cercando, se ne disegnavano fino a 200: ridisegnare 200 righe a
+  // ogni lettera digitata è il motivo per cui la ricerca sembrava lenta
+  // anche quando i dati erano già in memoria. Ora si parte da 40 e si
+  // aggiungono su richiesta — il conteggio totale resta comunque visibile
+  // sotto la barra, quindi non si perde il senso di quanti risultati ci sono.
+  const PAGE = 40;
+  const [notifShown, setNotifShown] = useState(PAGE);
+  const [issueShown, setIssueShown] = useState(PAGE);
+
+  // Cambiando ricerca si riparte dall'inizio della lista.
+  useEffect(() => { setNotifShown(PAGE); }, [notifSearch, notifProperty?.name, dateRange.from, dateRange.to]);
+  useEffect(() => { setIssueShown(PAGE); }, [issueSearch, issueProperty?.name, dateRange.from, dateRange.to]);
+
+  const visibleNotifs = filteredNotifs.slice(0, notifFilterActive ? notifShown : 30);
+  const visibleIssues = filteredIssues.slice(0, issueFilterActive ? issueShown : 15);
+
+  const moreNotifs = notifFilterActive && filteredNotifs.length > visibleNotifs.length;
+  const moreIssues = issueFilterActive && filteredIssues.length > visibleIssues.length;
+
+  const renderShowMore = (onClick: () => void, remaining: number) => (
+    <button
+      type="button"
+      onClick={onClick}
+      className="w-full py-3 text-[12px] font-semibold text-sky-600 hover:bg-slate-50 active:bg-slate-100 transition-colors border-t border-slate-100"
+    >
+      Mostra altri {Math.min(PAGE, remaining)} di {remaining}
+    </button>
+  );
 
   // ⚠️ NON trasformare questo in un componente (`const SearchBar = () => ...`).
   // Definito dentro il render, ogni battuta di tasto creava una NUOVA identità
@@ -582,6 +676,7 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
           </div>
         );
       })}
+      {moreNotifs && renderShowMore(() => setNotifShown(n => n + PAGE), filteredNotifs.length - visibleNotifs.length)}
     </div>
   );
 
@@ -606,6 +701,7 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
           </div>
         );
       })}
+      {moreIssues && renderShowMore(() => setIssueShown(n => n + PAGE), filteredIssues.length - visibleIssues.length)}
     </div>
   );
 
@@ -701,7 +797,7 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
               <div className="p-8 text-center"><div className="w-8 h-8 border-2 border-slate-200 border-t-sky-500 rounded-full animate-spin mx-auto" /><p className="text-xs text-slate-400 mt-2">Caricamento...</p></div>
             ) : visibleNotifs.length === 0 ? (
               <div className="p-8 text-center"><Ic d={ic.bell} className="w-10 h-10 text-slate-300 mx-auto mb-2" /><p className="text-xs text-slate-400">{notifFilterActive ? "Nessuna notifica per questa ricerca" : "Nessuna notifica"}</p></div>
-            ) : visibleNotifs.slice(0, notifFilterActive ? 200 : 10).map(n => {
+            ) : visibleNotifs.slice(0, notifFilterActive ? notifShown : 10).map(n => {
               const ur = n.status === "UNREAD"; const ca = n.createdAt?.toDate?.() || new Date(); const { d, color } = getNotifIconData(n.type);
               return (
                 <div key={n.id} onClick={() => handleNotifClick(n)} className={`px-3 py-2.5 flex gap-2.5 cursor-pointer transition-all border-b border-slate-50 last:border-b-0 ${ur ? "bg-sky-50/40" : "bg-white"} hover:bg-slate-50 active:bg-slate-100`}>
@@ -722,6 +818,7 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
                 </div>
               );
             })}
+            {moreNotifs && renderShowMore(() => setNotifShown(n => n + PAGE), filteredNotifs.length - visibleNotifs.length)}
           </div>
         )}
 
@@ -730,7 +827,7 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
           <div className="max-h-[360px] overflow-y-auto">
             {visibleIssues.length === 0 ? (
               <div className="p-8 text-center"><Ic d={ic.check} className="w-10 h-10 text-slate-300 mx-auto mb-2" /><p className="text-xs text-slate-400">{issueFilterActive ? "Nessuna segnalazione per questa ricerca" : "Nessuna segnalazione"}</p></div>
-            ) : visibleIssues.slice(0, issueFilterActive ? 200 : 8).map(issue => {
+            ) : visibleIssues.slice(0, issueFilterActive ? issueShown : 8).map(issue => {
               const isRes = issue.resolved === true || issue.status === "resolved"; const { d, bg } = getIssueIconData(issue.type, issue.isUrgent);
               return (
                 <div key={issue.id} onClick={() => { if (hasNotifPage) { setIsOpen(false); router.push(isAdmin ? "/dashboard/notifiche?tab=segnalazioni&id=" + issue.id : "/proprietario/notifiche?id=" + issue.id); } }} className={`px-3 py-2.5 flex gap-2.5 ${hasNotifPage ? "cursor-pointer" : ""} transition-all border-b border-slate-50 last:border-b-0 hover:bg-slate-50 active:bg-slate-100 border-l-[3px] ${issue.isUrgent ? "border-l-red-500 bg-red-50/20" : isRes ? "border-l-emerald-500 opacity-60" : "border-l-amber-500"}`}>
@@ -747,6 +844,7 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
                 </div>
               );
             })}
+            {moreIssues && renderShowMore(() => setIssueShown(n => n + PAGE), filteredIssues.length - visibleIssues.length)}
           </div>
         )}
 

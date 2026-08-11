@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNotifications } from "~/hooks/useNotifications";
 import type { FirebaseNotification } from "~/lib/firebase/types";
 import Link from "next/link";
@@ -407,7 +407,7 @@ export function NotificheAdminContent({
   // Il nome dell'appartamento nelle notifiche non ha un campo dedicato:
   // sta dentro titolo/messaggio/relatedEntityName/turnoverAction, quindi
   // si cerca su tutti insieme (stessa regola della campanella).
-  const filteredNotifications = notifications
+  const filteredNotifications = useMemo(() => notifications
     .filter(n => {
       switch (activeTab) {
         case "pending":
@@ -429,7 +429,9 @@ export function NotificheAdminContent({
         searchTerm,
         searchProperty,
       ),
-    );
+    ),
+    [notifications, activeTab, dateRange.from, dateRange.to, searchTerm, searchProperty],
+  );
 
   const searchActive = !!(searchTerm || searchProperty || dateRange.from || dateRange.to);
 
