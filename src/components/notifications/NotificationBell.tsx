@@ -3,11 +3,12 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import { collection, query, where, onSnapshot, getDocs, getDocsFromCache, orderBy, limit, Timestamp } from "firebase/firestore";
+import { collection, query, where, onSnapshot } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 import { useAuth } from "~/lib/firebase/AuthContext";
 import { useNotifications } from "~/hooks/useNotifications";
 import { resolveNotificationLink } from "~/lib/notifications/linkGenerator";
+import { useDeepNotifications, DEEP_LIMIT } from "~/hooks/useDeepNotifications";
 import type { FirebaseNotification } from "~/lib/firebase/types";
 import {
   PropertySearchBar, DateRangeButton, matchesPropertyQuery, isInDateRange,
@@ -83,21 +84,8 @@ const SEV_L: Record<string, string> = { low: "Bassa", medium: "Media", high: "Al
 
 type BellTab = "notifiche" | "segnalazioni";
 
-/**
- * Tetto sulla lettura mirata. Abbassato da 800: 800 documenti su rete
- * mobile erano il grosso dei 3 secondi di attesa, e oltre i 300 risultati
- * nessuno scorre più — si restringe il periodo.
- */
-const DEEP_LIMIT = 300;
-
-/**
- * Cache di modulo delle letture mirate, per chiave (ruolo + data "Da").
- * Riselezionare lo stesso periodo — o riaprire la campanella — è
- * istantaneo invece di rifare il giro sul server.
- * Vive quanto la pagina: nessuna scadenza da gestire, e il listener
- * realtime resta comunque la fonte per le notifiche nuove.
- */
-const deepCache = new Map<string, any[]>();
+// La lettura mirata vive in ~/hooks/useDeepNotifications (condivisa con
+// la pagina Centro Messaggi, per non averne due versioni).
 
 
 interface NotificationBellProps { isAdmin?: boolean; }
@@ -146,16 +134,8 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
   // ⏱️ Periodo: stesso calendario della pagina Pulizie (Da → A)
   const [dateRange, setDateRange] = useState<DateRange>(EMPTY_RANGE);
 
-  // 🔍 RICERCA PROFONDA
-  // Il feed realtime carica solo le ultime 100 notifiche di TUTTA la flotta:
-  // con ~80 appartamenti attivi coprono pochi giorni, ed è il motivo per cui
-  // di un singolo appartamento se ne vedevano 2. Quando si cerca (testo,
-  // appartamento o periodo diverso da "recenti") si fa una query mirata sul
-  // periodo scelto, invece di gonfiare il listener sempre attivo — che è già
-  // stato una fonte di lentezza in passato e resta leggero.
-  const [deepNotifs, setDeepNotifs] = useState<any[] | null>(null);
-  const [deepLoading, setDeepLoading] = useState(false);
-  const [deepCapped, setDeepCapped] = useState(false);
+  // 🔍 Lettura mirata oltre le ultime 100 notifiche del feed realtime.
+  // Hook condiviso con la pagina Centro Messaggi.
 
   useEffect(() => {
     if (!user?.id) return;
@@ -228,88 +208,15 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
   // testo digitato e l'appartamento filtrano poi in memoria, quindi
   // scrivere non genera traffico.
   // ═══════════════════════════════════════════════════════════════
-  useEffect(() => {
-    if (!isOpen || tab !== "notifiche" || !hasDateRange(dateRange)) {
-      setDeepNotifs(null);
-      setDeepCapped(false);
-      return;
-    }
-
-    // ⚡ Solo il "Da" determina cosa si legge dal server: il "A" è un
-    // filtro in memoria. Dipendere anche da lui rifaceva la lettura per
-    // nulla ogni volta che stringevi la fine del periodo.
-    const fromKey = dateRange.from || "__all__";
-    const cacheKey = `${isAdmin ? "admin" : user?.id || "?"}:${fromKey}`;
-
-    // 1) Già letto in questa sessione → istantaneo, niente attesa.
-    const cached = deepCache.get(cacheKey);
-    if (cached) {
-      setDeepNotifs(cached);
-      setDeepCapped(cached.length >= DEEP_LIMIT);
-      setDeepLoading(false);
-      return;
-    }
-
-    let cancelled = false;
-
-    const buildQuery = () => {
-      const since = dateRange.from ? new Date(dateRange.from) : null;
-      if (since) since.setHours(0, 0, 0, 0);
-      const clauses: any[] = isAdmin
-        ? [where("recipientRole", "in", ["ADMIN", "ALL"])]
-        : [where("recipientId", "==", user?.id || "__none__")];
-      if (since) clauses.push(where("createdAt", ">=", Timestamp.fromDate(since)));
-      return query(collection(db, "notifications"), ...clauses, orderBy("createdAt", "desc"), limit(DEEP_LIMIT));
-    };
-
-    const shape = (snap: any) => {
-      let rows = snap.docs.map((d: any) => ({ id: d.id, ...(d.data() as Record<string, any>) }));
-      // Con più admin ogni notifica esiste in copia per ciascuno:
-      // si tengono le broadcast e le proprie.
-      if (isAdmin && user?.id) {
-        rows = rows.filter((n: any) => !n.recipientId || n.recipientId === user.id);
-      }
-      return rows;
-    };
-
-    (async () => {
-      const q = buildQuery();
-
-      // 2) DIPINGI SUBITO dalla cache locale di Firestore (IndexedDB).
-      //    L'app è già configurata con persistentLocalCache, ma la
-      //    lettura andava sempre e solo in rete: da lì i ~3 secondi.
-      //    Quasi tutte le notifiche del periodo sono già su disco,
-      //    perché i listener le hanno scaricate.
-      try {
-        const cachedSnap = await getDocsFromCache(q);
-        if (!cancelled && cachedSnap.docs.length > 0) {
-          const rows = shape(cachedSnap);
-          setDeepNotifs(rows);
-          setDeepCapped(cachedSnap.docs.length >= DEEP_LIMIT);
-        }
-      } catch {
-        /* niente in cache: si aspetta la rete */
-      }
-
-      // 3) Poi allinea col server, in sottofondo. Se la cache aveva già
-      //    dipinto, l'utente non vede nessuna attesa.
-      setDeepLoading(true);
-      try {
-        const snap = await getDocs(q);
-        if (cancelled) return;
-        const rows = shape(snap);
-        deepCache.set(cacheKey, rows);
-        setDeepNotifs(rows);
-        setDeepCapped(snap.docs.length >= DEEP_LIMIT);
-      } catch {
-        /* offline o errore: restano i dati della cache */
-      } finally {
-        if (!cancelled) setDeepLoading(false);
-      }
-    })();
-
-    return () => { cancelled = true; };
-  }, [isOpen, tab, dateRange.from, isAdmin, user?.id]);
+  const deep = useDeepNotifications({
+    enabled: isOpen && tab === "notifiche",
+    from: dateRange.from,
+    isAdmin,
+    userId: user?.id,
+  });
+  const deepNotifs = deep.rows;
+  const deepLoading = deep.loading;
+  const deepCapped = deep.capped;
 
   const totalBadge = unreadCount;
 

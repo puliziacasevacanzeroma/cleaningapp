@@ -23,7 +23,7 @@
  * per non riscrivere la stessa normalizzazione in ogni pagina.
  */
 
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useRef, useEffect, useMemo, memo } from "react";
 
 export interface PropertyOption {
   id: string;
@@ -120,7 +120,27 @@ function PropertyThumb({ property, size = 32 }: { property: PropertyOption; size
   );
 }
 
-export function PropertySearchBar({
+/**
+ * ⚠️ ISOLAMENTO DEL CAMPO DI TESTO
+ *
+ * Il testo digitato vive in stato LOCALE e viene propagato al genitore
+ * con un ritardo breve. Due motivi, entrambi concreti:
+ *
+ * 1. FUOCO. Il campo non dipende più dal ciclo di render del genitore.
+ *    Nella pagina Centro Messaggi ogni lettera faceva ricalcolare e
+ *    ridisegnare l'intera lista accanto, e il campo perdeva il fuoco a
+ *    ogni battuta. Con lo stato locale il campo è immune a qualunque
+ *    cosa succeda intorno.
+ *
+ * 2. VELOCITÀ. Il genitore (e la lista pesante) si aggiorna una volta a
+ *    fine digitazione, non a ogni tasto.
+ *
+ * Il `memo` sotto completa l'isolamento: la barra non si ridisegna
+ * quando cambiano solo i dati della lista.
+ */
+const TYPING_DEBOUNCE_MS = 180;
+
+function PropertySearchBarInner({
   value,
   onChange,
   selected = null,
@@ -135,10 +155,37 @@ export function PropertySearchBar({
   const [open, setOpen] = useState(false);
   const boxRef = useRef<HTMLDivElement>(null);
 
+  // Testo mostrato nel campo: locale, quindi indipendente dal genitore.
+  const [text, setText] = useState(value);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Ultimo valore propagato: serve a distinguere "il genitore ha
+  // cambiato il valore da fuori" (es. Reset) da "sta arrivando il mio
+  // stesso testo di ritorno", che non deve sovrascrivere la digitazione.
+  const lastPushed = useRef(value);
+
+  useEffect(() => {
+    if (value !== lastPushed.current) {
+      setText(value);
+      lastPushed.current = value;
+    }
+  }, [value]);
+
+  const pushText = (v: string) => {
+    setText(v);
+    setOpen(true);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      lastPushed.current = v;
+      onChange(v);
+    }, TYPING_DEBOUNCE_MS);
+  };
+
+  useEffect(() => () => { if (debounceRef.current) clearTimeout(debounceRef.current); }, []);
+
   // Suggerimenti: appartamenti che corrispondono al testo digitato.
   // A campo vuoto non si apre nulla, per non coprire la lista sotto.
   const suggestions = useMemo(() => {
-    const t = normalizeSearch(value);
+    const t = normalizeSearch(text);
     if (!t || selected) return [];
     return properties
       .filter(p => {
@@ -146,7 +193,7 @@ export function PropertySearchBar({
         return t.split(" ").every(w => hay.includes(w));
       })
       .slice(0, 8);
-  }, [value, properties, selected]);
+  }, [text, properties, selected]);
 
   useEffect(() => {
     if (!open) return;
@@ -162,12 +209,18 @@ export function PropertySearchBar({
   }, [open]);
 
   const clearAll = () => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    setText("");
+    lastPushed.current = "";
     onChange("");
     onSelect?.(null);
     setOpen(false);
   };
 
   const pick = (p: PropertyOption) => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    setText("");
+    lastPushed.current = "";
     onSelect?.(p);
     onChange("");
     setOpen(false);
@@ -200,14 +253,14 @@ export function PropertySearchBar({
             inputMode="search"
             autoFocus={autoFocus}
             placeholder={placeholder}
-            value={value}
-            onChange={e => { onChange(e.target.value); setOpen(true); }}
+            value={text}
+            onChange={e => pushText(e.target.value)}
             onFocus={() => setOpen(true)}
             className="w-full pl-10 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
           />
         )}
 
-        {(value || selected) && (
+        {(text || selected) && (
           <button
             type="button"
             onClick={clearAll}
@@ -247,7 +300,7 @@ export function PropertySearchBar({
         </div>
       )}
 
-      {typeof resultCount === "number" && (value || selected) && !showSuggestions && (
+      {typeof resultCount === "number" && (text || selected) && !showSuggestions && (
         <p className="mt-1.5 px-1 text-[11px] text-slate-400">
           {resultCount === 0 ? "Nessun risultato" : `${resultCount} risultat${resultCount === 1 ? "o" : "i"}`}
         </p>
@@ -255,6 +308,9 @@ export function PropertySearchBar({
     </div>
   );
 }
+
+/** Non si ridisegna quando intorno cambiano solo i dati della lista. */
+export const PropertySearchBar = memo(PropertySearchBarInner);
 
 // ══════════════════════════════════════════════════════════════════
 // PERIODO — bottone compatto + modale calendario

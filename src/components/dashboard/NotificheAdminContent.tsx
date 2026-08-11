@@ -5,6 +5,7 @@ import { useNotifications } from "~/hooks/useNotifications";
 import type { FirebaseNotification } from "~/lib/firebase/types";
 import Link from "next/link";
 import { matchesPropertyQuery, isInDateRange, EMPTY_RANGE, type DateRange } from "~/components/ui/PropertySearchBar";
+import { useDeepNotifications } from "~/hooks/useDeepNotifications";
 
 // ==================== ICONS ====================
 const BellIcon = () => (
@@ -407,7 +408,19 @@ export function NotificheAdminContent({
   // Il nome dell'appartamento nelle notifiche non ha un campo dedicato:
   // sta dentro titolo/messaggio/relatedEntityName/turnoverAction, quindi
   // si cerca su tutti insieme (stessa regola della campanella).
-  const filteredNotifications = useMemo(() => notifications
+  // 🔍 Con un periodo scelto si legge OLTRE le ultime 100 notifiche del
+  // feed realtime: senza, cercando un appartamento ne comparivano due o
+  // tre e mancavano le "Pulizia completata" di qualche giorno prima —
+  // non erano mai state caricate.
+  const deep = useDeepNotifications({
+    enabled: !!dateRange.from,
+    from: dateRange.from,
+    isAdmin: true,
+    userId: undefined,
+  });
+  const notifSource: any[] = deep.rows ?? notifications;
+
+  const filteredNotifications = useMemo(() => notifSource
     .filter(n => {
       switch (activeTab) {
         case "pending":
@@ -430,7 +443,7 @@ export function NotificheAdminContent({
         searchProperty,
       ),
     ),
-    [notifications, activeTab, dateRange.from, dateRange.to, searchTerm, searchProperty],
+    [notifSource, activeTab, dateRange.from, dateRange.to, searchTerm, searchProperty],
   );
 
   const searchActive = !!(searchTerm || searchProperty || dateRange.from || dateRange.to);
@@ -486,12 +499,30 @@ export function NotificheAdminContent({
     setRequestAction(null);
   };
 
+  // ⚠️ I conteggi delle schede devono riflettere la RICERCA in corso.
+  // Prima erano calcolati su tutte le notifiche: con "Campo De Fiori"
+  // agganciato la scheda diceva 97 mentre l'elenco ne mostrava 3, e
+  // sembrava che la pagina ne nascondesse 94.
+  const searchScoped = useMemo(
+    () =>
+      notifSource
+        .filter(n => isInDateRange((n as any).createdAt, dateRange))
+        .filter(n =>
+          matchesPropertyQuery(
+            [n.title, n.message, (n as any).relatedEntityName, (n as any).turnoverAction?.propertyName, (n as any).data?.propertyName],
+            searchTerm,
+            searchProperty,
+          ),
+        ),
+    [notifSource, dateRange.from, dateRange.to, searchTerm, searchProperty],
+  );
+
   const tabs: { id: TabType; label: string; count?: number; icon?: string }[] = [
-    { id: "all", label: "Tutte", count: notifications.filter(n => n.status !== "ARCHIVED").length },
-    { id: "pending", label: "In Attesa", count: pendingActionsCount },
+    { id: "all", label: "Tutte", count: searchScoped.filter(n => n.status !== "ARCHIVED").length },
+    { id: "pending", label: "In Attesa", count: searchScoped.filter(n => n.actionRequired && n.actionStatus === "PENDING").length },
     { id: "modifications", label: "Richieste Modifica", count: pendingChangeRequests.length, icon: "📝" },
-    { id: "read", label: "Lette", count: notifications.filter(n => n.status === "READ").length },
-    { id: "archived", label: "Archiviate", count: notifications.filter(n => n.status === "ARCHIVED").length },
+    { id: "read", label: "Lette", count: searchScoped.filter(n => n.status === "READ").length },
+    { id: "archived", label: "Archiviate", count: searchScoped.filter(n => n.status === "ARCHIVED").length },
   ];
 
   const formatRequestDate = (timestamp: any) => {
@@ -593,6 +624,21 @@ export function NotificheAdminContent({
           </button>
         ))}
       </div>
+
+      {/* Avvisi sull'ampiezza della ricerca */}
+      {searchActive && !dateRange.from && (
+        <p className="text-[11px] text-amber-600 mb-3 leading-snug">
+          Stai cercando solo fra le notifiche recenti. Usa «Date» per cercare più indietro nel tempo.
+        </p>
+      )}
+      {deep.loading && (
+        <p className="text-[11px] text-slate-400 mb-3">Carico il periodo…</p>
+      )}
+      {deep.capped && (
+        <p className="text-[11px] text-amber-600 mb-3 leading-snug">
+          Periodo molto ampio: caricate le più recenti. Restringi il periodo per vedere il resto.
+        </p>
+      )}
 
       {/* Content */}
       {activeTab === "modifications" ? (
@@ -790,7 +836,9 @@ export function NotificheAdminContent({
               <h3 className="text-lg font-semibold text-slate-700 mb-2">Nessuna notifica</h3>
               <p className="text-slate-500">
                 {searchActive
-                  ? "Nessuna notifica per questa ricerca"
+                  ? (!dateRange.from
+                      ? "Nessuna notifica recente per questa ricerca. Scegli un periodo con «Date» per cercare più indietro."
+                      : "Nessuna notifica per questa ricerca")
                   : activeTab === "pending"
                     ? "Non ci sono richieste in attesa di approvazione"
                     : "Non hai notifiche in questa sezione"
