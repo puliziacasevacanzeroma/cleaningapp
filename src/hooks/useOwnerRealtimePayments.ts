@@ -19,6 +19,19 @@ import {
   type DebtCalcOverride,
   type DebtCalcInventoryItem,
 } from "~/lib/payments/debtCalculator";
+import {
+  classifyItemGroup,
+  resolveItemUnitPrice,
+  resolveItemTotal,
+  pickMainCategory,
+  categoryLabel,
+  splitOrderByCategory,
+  isCleaningBillable,
+  isOrderBillable,
+  type OrderSubtotals,
+  type CategorySplit,
+  type ServiceCategory,
+} from "~/lib/payments/paymentsCore";
 import { SYSTEM_ITEMS, OPTIONAL_ITEMS } from "~/lib/inventory/systemItems";
 
 // ══════════════════════════════════════════════════════════════════
@@ -101,6 +114,12 @@ export interface ServiceDetail {
   laundryOrderId?: string;
   holidayFee?: number;
   holidayName?: string | null;
+  /** Esclusione manuale dalla fatturazione. */
+  excludedFromBilling?: boolean;
+  /** Ripartizione del prezzo effettivo sulle categorie a schermo (paymentsCore). */
+  catSplit?: CategorySplit;
+  /** Il servizio concorre ai totali fatturati (regola canonica). */
+  billable?: boolean;
 }
 
 export interface OwnerStats {
@@ -232,57 +251,7 @@ const SYSTEM_ITEMS_BY_KEY: Record<string, { name: string; categoryId: string }> 
  *      → cleaning_product (per items legacy senza flag)
  *   6. fallback "altro"
  */
-function classifyItem(item: any, invItem: InventoryFullEntry | undefined): ItemCategoryGroup {
-  // 1. Tipo esplicito sull'item
-  if (item.type === "cleaning_product") return "cleaning_product";
-  if (item.type === "linen") {
-    // Anche con type=linen possiamo essere kit_cortesia/extra in base a categoryId
-  }
-
-  // 2. categoryId/category sull'item (priorità più alta dell'inventario)
-  const itemCat = (item.categoryId || item.category || "").toLowerCase();
-  if (itemCat) {
-    if (itemCat === "prodotti_pulizia" || itemCat === "cleaning_products") return "cleaning_product";
-    if (itemCat === "kit_cortesia") return "kit_cortesia";
-    if (itemCat === "servizi_extra") return "servizi_extra";
-    if (itemCat === "biancheria_letto" || itemCat === "biancheria_bagno") return "linen";
-  }
-
-  // 3. Inventario cache
-  const invCat = (invItem?.categoryId || invItem?.categoryName || "").toLowerCase();
-  if (invCat) {
-    if (invCat === "prodotti_pulizia" || invCat === "cleaning_products") return "cleaning_product";
-    if (invCat === "kit_cortesia") return "kit_cortesia";
-    if (invCat === "servizi_extra") return "servizi_extra";
-    if (invCat === "biancheria_letto" || invCat === "biancheria_bagno") return "linen";
-    // Fallback string-include per legacy
-    if (invCat.includes("cortesia") || invCat.includes("kit")) return "kit_cortesia";
-    if (invCat.includes("extra")) return "servizi_extra";
-    if (invCat.includes("biancheria") || invCat.includes("linen")) return "linen";
-  }
-
-  // 4. SYSTEM_ITEMS lookup
-  const itemKey = item.itemId || item.id;
-  const sysItem = itemKey ? SYSTEM_ITEMS_BY_KEY[itemKey] : undefined;
-  if (sysItem) {
-    if (sysItem.categoryId === "biancheria_letto" || sysItem.categoryId === "biancheria_bagno") return "linen";
-    if (sysItem.categoryId === "kit_cortesia") return "kit_cortesia";
-    if (sysItem.categoryId === "servizi_extra") return "servizi_extra";
-    if (sysItem.categoryId === "prodotti_pulizia") return "cleaning_product";
-  }
-
-  // 5. Fallback name-based per cleaning_product (items legacy senza flag)
-  // Es. "Detergente Multiuso", "Anticalcare Bagno" creati prima che il
-  // sistema introducesse type/categoryId.
-  const itemName = (item.name || invItem?.name || sysItem?.name || "").toString();
-  if (itemName) {
-    if (CLEANING_PRODUCT_NAME_PATTERNS.some(re => re.test(itemName))) {
-      return "cleaning_product";
-    }
-  }
-
-  return "altro";
-}
+// ⚠️ Rimossa: sostituita dalle funzioni condivise di paymentsCore.
 
 /**
  * Risolve nome leggibile e prezzo unitario dell'item, con cascade:
@@ -379,18 +348,16 @@ function resolveItemMeta(item: any): {
     }
   }
 
-  const basePrice = item.unitPrice ?? item.price ?? invItem?.sellPrice ?? 0;
-  const unitPrice = item.priceOverride ?? basePrice;
+  // 🎯 Cascata prezzi CANONICA (paymentsCore): uno 0 salvato non è un
+  // prezzo valido ma dato sporco, quindi si scende sul listino. Prima qui
+  // si usava `??`, che teneva lo 0 → l'area proprietario mostrava importi
+  // più bassi dell'admin sugli stessi articoli.
+  const unitPrice = resolveItemUnitPrice(item, invItem as any);
 
   return { name, unitPrice, invItem };
 }
 
-function mapCategoryToServiceType(category: string): ServiceType {
-  const cat = category?.toLowerCase() || "";
-  if (cat.includes("cortesia") || cat.includes("kit")) return "KIT_CORTESIA";
-  if (cat.includes("extra") || cat.includes("serviz")) return "SERVIZI_EXTRA";
-  return "BIANCHERIA";
-}
+// ⚠️ Rimossa: sostituita dalle funzioni condivise di paymentsCore.
 
 function isInMonth(date: any, month: number, year: number): boolean {
   const d = date?.toDate?.() || (date instanceof Date ? date : null);
@@ -431,11 +398,14 @@ function buildOrderItemDetails(order: any): {
   linenItems: OrderItemDetail[];
   kitItems: OrderItemDetail[];
   mainCategory: string;
+  mainCategoryEnum: ServiceCategory;
   rawTotal: number;
   linenSubtotal: number;
   kitSubtotal: number;
   extraSubtotal: number;
+  altroSubtotal: number;
   othersSubtotal: number;
+  subtotals: OrderSubtotals;
   deliveryFee: number;
   bedMakingFee: number;
 } {
@@ -444,34 +414,41 @@ function buildOrderItemDetails(order: any): {
   let calculatedTotal = 0;
   let linenSubtotal = 0;
   let kitSubtotal = 0;
+  let extraSubtotalRaw = 0;
+  let altroSubtotal = 0;
 
   if (order.items && Array.isArray(order.items)) {
     for (const item of order.items) {
-      // 🔒 SKIP cleaning_product / prodotti_pulizia — non addebitati al proprietario
-      if (isCleaningProductItem(item as any)) continue;
+      const { name: resolvedName, unitPrice, invItem } = resolveItemMeta(item);
+      const itemKeyRaw = item.itemId || item.id;
+      const sysItem = itemKeyRaw ? SYSTEM_ITEMS_BY_KEY[itemKeyRaw] : undefined;
 
-      const { name, unitPrice, invItem } = resolveItemMeta(item);
-
-      // 🔒 SKIP items orfani senza nome risolvibile
-      if (!name) continue;
-
-      const group = classifyItem(item, invItem);
-
-      // Doppia sicurezza: classifyItem può rilevare cleaning_product anche senza type esplicito
+      // 🎯 Classificazione CANONICA condivisa (include il riconoscimento
+      // dei prodotti pulizia anche per nome, sui dati legacy senza flag).
+      const group = classifyItemGroup(item, invItem as any, sysItem);
       if (group === "cleaning_product") continue;
 
-      const itemKey = item.itemId || item.id || name;
+      // ⚠️ Gli item ORFANI (nessun nome risolvibile) prima venivano scartati
+      // dal totale, ma la formula canonica li fattura: creavano uno scarto
+      // invisibile fra area proprietario ed estratto conto. Ora entrano con
+      // un nome segnaposto, così sono visibili e bonificabili.
+      const isOrphan = !resolvedName;
+      const name = resolvedName || `⚠️ Articolo non riconosciuto (${itemKeyRaw || "senza id"})`;
+
+      const itemKey = itemKeyRaw || name;
       const quantity = item.quantity || 1;
-      const itemTotal = item.totalPrice ?? (unitPrice * quantity);
+      // 🎯 Totale riga CANONICO (era `??`, ora allineato a `||`)
+      const itemTotal = resolveItemTotal(item, invItem as any);
 
       // Categoria leggibile per la UI
       const categoryName =
         item.categoryName ||
         invItem?.categoryName ||
-        SYSTEM_ITEMS_BY_KEY[itemKey]?.categoryId ||
+        sysItem?.categoryId ||
         "Altro";
 
-      const dedupKey = normName(name);
+      const effectiveGroup: ItemCategoryGroup = isOrphan ? "altro" : group;
+      const dedupKey = isOrphan ? `__orphan__${itemKey}` : normName(name);
       const existing = dedupMap.get(dedupKey);
 
       if (existing) {
@@ -486,13 +463,15 @@ function buildOrderItemDetails(order: any): {
           unitPrice,
           totalPrice: itemTotal,
           categoryName,
-          categoryGroup: group,
+          categoryGroup: effectiveGroup,
         });
       }
 
       calculatedTotal += itemTotal;
-      if (group === "linen") linenSubtotal += itemTotal;
-      else if (group === "kit_cortesia") kitSubtotal += itemTotal;
+      if (effectiveGroup === "linen") linenSubtotal += itemTotal;
+      else if (effectiveGroup === "kit_cortesia") kitSubtotal += itemTotal;
+      else if (effectiveGroup === "servizi_extra") extraSubtotalRaw += itemTotal;
+      else altroSubtotal += itemTotal;
     }
   }
 
@@ -500,19 +479,13 @@ function buildOrderItemDetails(order: any): {
   const linenItems = itemDetails.filter(i => i.categoryGroup === "linen");
   const kitItems = itemDetails.filter(i => i.categoryGroup === "kit_cortesia");
 
-  // 🔢 Subtotale "servizi extra" (sempre calcolato, serve per lo split categoria)
-  const extraSubtotal = itemDetails
-    .filter(i => i.categoryGroup === "servizi_extra")
-    .reduce((s, i) => s + i.totalPrice, 0);
+  // 🔢 Subtotale "servizi extra": accumulato nel loop, così i cinque bucket
+  // sono per costruzione una partizione esatta del totale.
+  const extraSubtotal = extraSubtotalRaw;
 
-  // Determina mainCategory per il tipo dell'ordine (BIANCHERIA / KIT_CORTESIA / SERVIZI_EXTRA)
-  // basato sul gruppo con totale più alto
-  let mainCategory = "Biancheria";
-  if (kitSubtotal > linenSubtotal && kitSubtotal > extraSubtotal) {
-    mainCategory = "Kit Cortesia";
-  } else if (extraSubtotal > linenSubtotal && extraSubtotal > kitSubtotal) {
-    mainCategory = "Servizi Extra";
-  }
+  // Categoria dominante — regola canonica condivisa
+  const mainCategoryEnum = pickMainCategory(linenSubtotal, kitSubtotal, extraSubtotal);
+  const mainCategory = categoryLabel(mainCategoryEnum);
 
   // Delivery fee — incluso solo se abilitato
   const deliveryFee = (order.deliveryFee && order.deliveryFeeEnabled !== false) ? order.deliveryFee : 0;
@@ -553,13 +526,21 @@ function buildOrderItemDetails(order: any): {
     linenItems,
     kitItems,
     mainCategory,
+    mainCategoryEnum,
     rawTotal: calculatedTotal,
     linenSubtotal,
     kitSubtotal,
-    // 🆕 Subtotale "servizi extra" (per split corretto nel riepilogo categoria)
     extraSubtotal,
-    // 🆕 Subtotale "altro" (delivery + preparazione letti) — segue la mainCategory
+    altroSubtotal,
     othersSubtotal: deliveryFee + bedMakingFee,
+    subtotals: {
+      linen: linenSubtotal,
+      kit: kitSubtotal,
+      extra: extraSubtotal,
+      altro: altroSubtotal,
+      others: deliveryFee + bedMakingFee,
+      total: calculatedTotal,
+    } as OrderSubtotals,
     deliveryFee,
     bedMakingFee,
   };
@@ -788,7 +769,9 @@ export function useOwnerRealtimePayments(ownerId: string | undefined, month: num
     const monthCleanings = allCleanings
       .filter((c: any) => c.status === "COMPLETED")
       .filter((c: any) => isInMonth(c.scheduledDate, month, year));
-    const completedCleaningIds = new Set(monthCleanings.map((c: any) => c.id));
+    const completedCleaningIds = new Set<string>(
+      monthCleanings.filter((c: any) => isCleaningBillable(c)).map((c: any) => String(c.id)),
+    );
 
     const monthOrders = allOrders
       .filter((o: any) => isInMonth(o.deliveredAt || o.scheduledDate, month, year))
@@ -812,8 +795,14 @@ export function useOwnerRealtimePayments(ownerId: string | undefined, month: num
       const basePrice = cleaning.price || prop.cleaningPrice || 0;
       const hFee = cleaning.holidayFee ?? 0;
       const effectivePrice = (cleaning.priceOverride ?? basePrice) + hFee;
-      cleaningsCount++;
-      cleaningsTotal += effectivePrice;
+      // 🎯 Le pulizie escluse dalla fatturazione NON entrano nei totali:
+      // prima venivano contate qui ma non da computeMonthDebt, quindi i
+      // riquadri per categoria superavano il totale del mese.
+      const isBillable = isCleaningBillable(cleaning);
+      if (isBillable) {
+        cleaningsCount++;
+        cleaningsTotal += effectivePrice;
+      }
 
       services.push({
         id: cleaning.id, type: "PULIZIA",
@@ -828,7 +817,10 @@ export function useOwnerRealtimePayments(ownerId: string | undefined, month: num
         laundryOrderId: cleaning.laundryOrderId,
         holidayFee: hFee,
         holidayName: cleaning.holidayName || null,
-      });
+        excludedFromBilling: cleaning.excludedFromBilling === true,
+        catSplit: { linen: 0, kit: 0, extra: 0 },
+        billable: isBillable,
+      } as any);
     });
 
     monthOrders.forEach((order: any) => {
@@ -839,45 +831,32 @@ export function useOwnerRealtimePayments(ownerId: string | undefined, month: num
         linenItems: orderLinenItems,
         kitItems: orderKitItems,
         mainCategory,
+        mainCategoryEnum,
         rawTotal,
         linenSubtotal,
         kitSubtotal,
-        extraSubtotal,
-        othersSubtotal,
+        subtotals,
       } = buildOrderItemDetails(order);
       const effectivePrice = order.totalPriceOverride ?? rawTotal;
-      const serviceType = mapCategoryToServiceType(mainCategory);
+      const serviceType = mainCategoryEnum as ServiceType;
 
-      // 🔒 Skip ordini "vuoti" per il proprietario: se rawTotal è 0 e non
-      // c'è override, significa che l'ordine conteneva SOLO cleaning_product
-      // (nascosti) o items orfani. Non lo mostriamo.
+      // 🔒 Skip ordini "vuoti": nessun articolo e nessun valore.
       if (effectivePrice === 0 && itemDetails.length === 0) return;
 
-      // 🔄 SPLIT PER CATEGORIA: un singolo ordine può contenere
-      // biancheria + kit + servizi extra + delivery/bedmaking.
-      // Lo scorporo per categoria così il riepilogo mostra correttamente
-      // ogni voce, anche quando l'ordine ha mainCategory=BIANCHERIA ma
-      // contiene anche kit cortesia (caso più frequente).
-      const linenPart = linenSubtotal + (serviceType === "BIANCHERIA"     ? othersSubtotal : 0);
-      const kitPart   = kitSubtotal   + (serviceType === "KIT_CORTESIA"   ? othersSubtotal : 0);
-      const extraPart = extraSubtotal + (serviceType === "SERVIZI_EXTRA"  ? othersSubtotal : 0);
-      const partsRaw  = linenPart + kitPart + extraPart;
-      // Scaling proporzionale per riflettere eventuale totalPriceOverride
-      const ratio = partsRaw > 0 ? effectivePrice / partsRaw : 1;
-      const linenScaled = linenPart * ratio;
-      const kitScaled   = kitPart   * ratio;
-      const extraScaled = extraPart * ratio;
+      // 🎯 Fatturabilità CANONICA: esclude CANCELLED e ordini esclusi a mano,
+      // esattamente come computeMonthDebt. Prima i riquadri per categoria li
+      // contavano mentre il totale del mese no.
+      const isBillable = isOrderBillable(order, completedCleaningIds);
 
-      if (linenScaled > 0.001) { ordersCount++;       ordersTotal       += linenScaled; }
-      if (kitScaled   > 0.001) { kitCortesiaCount++;  kitCortesiaTotal  += kitScaled; }
-      if (extraScaled > 0.001) { serviziExtraCount++; serviziExtraTotal += extraScaled; }
+      // 🎯 SPLIT unico e condiviso (paymentsCore). `subtotals` è una
+      // partizione esatta del totale, quindi senza totalPriceOverride il
+      // rapporto è 1: niente redistribuzione silenziosa.
+      const catSplit = splitOrderByCategory(subtotals, mainCategoryEnum, effectivePrice);
 
-      // Edge case: ordine con partsRaw=0 ma effectivePrice>0 (override su ordine vuoto):
-      // ricado sulla categoria nominale per non perdere il valore
-      if (partsRaw <= 0.001 && effectivePrice > 0.001) {
-        if (serviceType === "KIT_CORTESIA")      { kitCortesiaCount++;  kitCortesiaTotal  += effectivePrice; }
-        else if (serviceType === "SERVIZI_EXTRA"){ serviziExtraCount++; serviziExtraTotal += effectivePrice; }
-        else                                     { ordersCount++;       ordersTotal       += effectivePrice; }
+      if (isBillable) {
+        if (catSplit.linen > 0.001) { ordersCount++;       ordersTotal       += catSplit.linen; }
+        if (catSplit.kit   > 0.001) { kitCortesiaCount++;  kitCortesiaTotal  += catSplit.kit; }
+        if (catSplit.extra > 0.001) { serviziExtraCount++; serviziExtraTotal += catSplit.extra; }
       }
 
       // Descrizione: conta solo articoli "veri" (no fee delivery/bedmaking)
@@ -899,7 +878,9 @@ export function useOwnerRealtimePayments(ownerId: string | undefined, month: num
         linenSubtotal,
         kitSubtotal,
         cleaningId: order.cleaningId,
-      });
+        catSplit,
+        billable: isBillable,
+      } as any);
     });
 
     services.sort((a, b) => a.date.getTime() - b.date.getTime());
@@ -921,7 +902,9 @@ export function useOwnerRealtimePayments(ownerId: string | undefined, month: num
     // Stats per proprietà
     const statsByProperty = ownerProperties.map(prop => {
       const propServices = services.filter(s => s.propertyId === prop.id);
-      const propTotal = propServices.reduce((sum, s) => sum + s.effectivePrice, 0);
+      const propTotal = propServices
+        .filter(s => (s as any).billable !== false)
+        .reduce((sum, s) => sum + s.effectivePrice, 0);
       const cleanings = propServices.filter(s => s.type === "PULIZIA");
       const linkedOrderIds = new Set(cleanings.map(c => c.laundryOrderId).filter(Boolean));
       const standaloneOrders = propServices.filter(s => s.type !== "PULIZIA" && !linkedOrderIds.has(s.id) && !cleanings.some(c => c.id === s.cleaningId));

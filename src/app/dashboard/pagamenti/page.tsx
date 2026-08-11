@@ -283,22 +283,26 @@ function CategorySummary({
     },
   } as Record<string, { name: string; short: string; total: number; bg: string; label: string; num: string; ic: string; path: string }>), [totPulizie, totBiancheria, totKit, totExtra]);
 
-  const normalize = (arr: string[][]) =>
-    [...arr].sort((a, b) => b.length - a.length);
+  const normalize = (arr: string[][]) => [...arr].sort((a, b) => b.length - a.length);
 
   const [groups, setGroups] = useState<string[][]>(() => CAT_ORDER.map(k => [k]));
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [overIdx, setOverIdx] = useState<number | null>(null);
-  const [armedIdx, setArmedIdx] = useState<number | null>(null); // tessera "pronta" al trascinamento (dopo tieni-premuto)
-  const [isDragging, setIsDragging] = useState(false); // drag touch attivo → blocca scroll a livello pagina
+  const [armedIdx, setArmedIdx] = useState<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const touchIdx = useRef<number | null>(null);
-  const touchDragging = useRef(false); // true solo quando il long-press ha attivato il drag
-  const movedRef = useRef(false); // true se il dito si è mosso (= scroll, non tap)
-  const overIdxRef = useRef<number | null>(null); // bersaglio corrente (per i listener nativi)
-  const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const startPos = useRef<{ x: number; y: number } | null>(null);
 
+  // Stato del gesto touch/penna/mouse unificato (Pointer Events).
+  const gesture = useRef<{
+    pointerId: number | null;
+    fromIdx: number | null;
+    overIdx: number | null;
+    armed: boolean;
+    startX: number;
+    startY: number;
+    el: HTMLElement | null;
+  }>({ pointerId: null, fromIdx: null, overIdx: null, armed: false, startX: 0, startY: 0, el: null });
+
+  const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const clearPress = () => {
     if (pressTimer.current) { clearTimeout(pressTimer.current); pressTimer.current = null; }
   };
@@ -326,89 +330,119 @@ function CategorySummary({
     });
   }, []);
 
-  // 🆕 Durante il trascinamento touch: blocca lo scroll della pagina a livello
-  // globale (listener NON passivo → preventDefault funziona davvero) e rileva la
-  // tessera più VICINA al dito. Lo sblocco è A PROVA DI ERRORE: il body viene
-  // SEMPRE riportato allo stato libero (non si ripristina uno stato salvato che
-  // poteva essere già bloccato), si sblocca subito alla fine del tocco, e c'è un
-  // timer di sicurezza che sblocca comunque se il drag non si chiude.
-  useEffect(() => {
-    if (!isDragging) return;
+  // ════════════════════════════════════════════════════════════════
+  // 🔧 INTERAZIONE RISCRITTA CON POINTER EVENTS
+  //
+  // La versione precedente registrava un listener `touchmove` non-passivo
+  // solo DOPO il re-render innescato da setIsDragging(true). In quella
+  // finestra di uno o più frame nessuno chiamava preventDefault: se il
+  // browser decideva che il gesto era uno scroll, da lì in poi ignorava
+  // ogni preventDefault successivo. Risultato: la tessera si armava e
+  // vibrava, ma poi la pagina scorreva sotto il dito e l'unione falliva.
+  //
+  // Inoltre:
+  //   - un timer di sicurezza a 5s chiamava finish(), che PRIMA unisce:
+  //     tenendo premuto più di 5 secondi si otteneva un'unione a caso;
+  //   - `touch-action:none` veniva applicato solo a gesto già iniziato,
+  //     quando il browser l'ha già valutato → non aveva alcun effetto;
+  //   - `document.body.style.overflow = hidden` a metà gesto poteva
+  //     generare un touchcancel e uccidere il drag in silenzio.
+  //
+  // Ora: `touch-action: none` è SEMPRE sulle tessere (il contenitore è
+  // alto poche decine di px, lo scroll resta possibile ovunque intorno),
+  // il puntatore viene catturato con setPointerCapture — quindi tutti gli
+  // eventi arrivano all'elemento anche fuori dai suoi bordi — e non serve
+  // né bloccare il body né alcun timer di sicurezza.
+  // ════════════════════════════════════════════════════════════════
 
-    const unlock = () => {
-      document.body.style.overflow = "";
-      document.body.style.touchAction = "";
-    };
-    document.body.style.overflow = "hidden";
-    document.body.style.touchAction = "none";
-
-    const findNearest = (x: number, y: number): number | null => {
-      const cont = containerRef.current;
-      if (!cont) return null;
-      const tiles = Array.from(cont.querySelectorAll("[data-idx]")) as HTMLElement[];
-      let nearest: number | null = null;
-      let nd = Infinity;
-      for (const tile of tiles) {
-        const i = Number(tile.getAttribute("data-idx"));
-        if (Number.isNaN(i)) continue;
-        const r = tile.getBoundingClientRect();
-        if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) return i; // dentro: vince subito
-        const cx = r.left + r.width / 2;
-        const cy = r.top + r.height / 2;
-        const d = (x - cx) * (x - cx) + (y - cy) * (y - cy);
-        if (d < nd) { nd = d; nearest = i; }
-      }
-      return nearest; // altrimenti la più vicina
-    };
-
-    const onMove = (ev: TouchEvent) => {
-      ev.preventDefault(); // non-passivo: blocca lo scroll durante il drag
-      const t = ev.touches[0];
-      if (!t) return;
-      const target = findNearest(t.clientX, t.clientY);
-      const val = (target !== null && target !== touchIdx.current) ? target : null;
-      if (overIdxRef.current !== val) { overIdxRef.current = val; setOverIdx(val); }
-    };
-
-    const finish = () => {
-      if (touchIdx.current !== null && overIdxRef.current !== null && overIdxRef.current !== touchIdx.current) {
-        mergeGroups(touchIdx.current, overIdxRef.current);
-      }
-      unlock(); // 🔓 sblocco immediato: non dipende dal cleanup di React
-      touchIdx.current = null;
-      touchDragging.current = false;
-      movedRef.current = false;
-      startPos.current = null;
-      overIdxRef.current = null;
-      setArmedIdx(null);
-      setDragIdx(null);
-      setOverIdx(null);
-      setIsDragging(false);
-    };
-
-    // 🛟 rete di sicurezza: se il drag non si chiude per qualche motivo, sblocca
-    const safety = window.setTimeout(finish, 5000);
-
-    document.addEventListener("touchmove", onMove, { passive: false });
-    document.addEventListener("touchend", finish);
-    document.addEventListener("touchcancel", finish);
-    return () => {
-      window.clearTimeout(safety);
-      unlock(); // sblocco SEMPRE allo stato libero (mai ripristina "bloccato")
-      document.removeEventListener("touchmove", onMove);
-      document.removeEventListener("touchend", finish);
-      document.removeEventListener("touchcancel", finish);
-    };
-  }, [isDragging, mergeGroups]);
-
-  // 🛟 Sicurezza extra: se il componente viene smontato (card chiusa) durante un
-  // drag rimasto appeso, sblocca comunque lo scroll della pagina.
-  useEffect(() => {
-    return () => {
-      document.body.style.overflow = "";
-      document.body.style.touchAction = "";
-    };
+  const findNearest = useCallback((x: number, y: number): number | null => {
+    const cont = containerRef.current;
+    if (!cont) return null;
+    const tiles = Array.from(cont.querySelectorAll("[data-idx]")) as HTMLElement[];
+    let nearest: number | null = null;
+    let nd = Infinity;
+    for (const tile of tiles) {
+      const i = Number(tile.getAttribute("data-idx"));
+      if (Number.isNaN(i)) continue;
+      const r = tile.getBoundingClientRect();
+      if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) return i;
+      const cx = r.left + r.width / 2;
+      const cy = r.top + r.height / 2;
+      const d = (x - cx) * (x - cx) + (y - cy) * (y - cy);
+      if (d < nd) { nd = d; nearest = i; }
+    }
+    return nearest;
   }, []);
+
+  const resetGesture = useCallback(() => {
+    const g = gesture.current;
+    if (g.el && g.pointerId !== null) {
+      try { g.el.releasePointerCapture(g.pointerId); } catch { /* noop */ }
+    }
+    gesture.current = { pointerId: null, fromIdx: null, overIdx: null, armed: false, startX: 0, startY: 0, el: null };
+    clearPress();
+    setArmedIdx(null);
+    setDragIdx(null);
+    setOverIdx(null);
+  }, []);
+
+  const onPointerDown = (idx: number) => (e: React.PointerEvent<HTMLDivElement>) => {
+    if (gesture.current.pointerId !== null) return; // gesto già in corso
+    const el = e.currentTarget;
+    gesture.current = {
+      pointerId: e.pointerId, fromIdx: idx, overIdx: null,
+      armed: false, startX: e.clientX, startY: e.clientY, el,
+    };
+    // Il mouse arma subito (c'è già il feedback del cursore),
+    // il tocco richiede il tieni-premuto per non confondersi con lo scroll.
+    const armDelay = e.pointerType === "mouse" ? 0 : 300;
+    clearPress();
+    pressTimer.current = setTimeout(() => {
+      const g = gesture.current;
+      if (g.pointerId !== e.pointerId) return;
+      g.armed = true;
+      try { el.setPointerCapture(e.pointerId); } catch { /* noop */ }
+      setArmedIdx(idx);
+      setDragIdx(idx);
+      if (e.pointerType !== "mouse" && typeof navigator !== "undefined" && navigator.vibrate) {
+        try { navigator.vibrate(15); } catch { /* noop */ }
+      }
+    }, armDelay);
+  };
+
+  const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const g = gesture.current;
+    if (g.pointerId !== e.pointerId) return;
+    if (!g.armed) {
+      // Prima dell'arming: se il dito si sposta è uno scroll → annulla.
+      if (Math.abs(e.clientX - g.startX) > 8 || Math.abs(e.clientY - g.startY) > 8) {
+        resetGesture();
+      }
+      return;
+    }
+    const target = findNearest(e.clientX, e.clientY);
+    const val = (target !== null && target !== g.fromIdx) ? target : null;
+    if (g.overIdx !== val) { g.overIdx = val; setOverIdx(val); }
+  };
+
+  const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    const g = gesture.current;
+    if (g.pointerId !== e.pointerId) return;
+    // L'unione avviene SOLO su rilascio reale, mai su timeout.
+    if (g.armed && g.fromIdx !== null && g.overIdx !== null && g.overIdx !== g.fromIdx) {
+      mergeGroups(g.fromIdx, g.overIdx);
+    }
+    resetGesture();
+  };
+
+  const onPointerCancel = (e: React.PointerEvent<HTMLDivElement>) => {
+    const g = gesture.current;
+    if (g.pointerId !== e.pointerId) return;
+    resetGesture();
+  };
+
+  // Se il componente si smonta a gesto aperto, non lascia nulla appeso.
+  useEffect(() => () => { clearPress(); }, []);
 
   const grip = (
     <svg viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3 flex-shrink-0 opacity-50">
@@ -436,58 +470,15 @@ function CategorySummary({
             <div
               key={sorted.join("-")}
               data-idx={idx}
-              draggable
-              onDragStart={(e) => { setDragIdx(idx); e.dataTransfer.effectAllowed = "move"; try { e.dataTransfer.setData("text/plain", String(idx)); } catch { /* noop */ } }}
-              onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; if (overIdx !== idx) setOverIdx(idx); }}
-              onDragLeave={() => { if (overIdx === idx) setOverIdx(null); }}
-              onDrop={(e) => { e.preventDefault(); if (dragIdx !== null) mergeGroups(dragIdx, idx); setDragIdx(null); setOverIdx(null); }}
-              onDragEnd={() => { setDragIdx(null); setOverIdx(null); }}
-              onTouchStart={(e) => {
-                // Se un drag è già in corso, ignora tocchi secondari (niente accavallamenti)
-                if (touchDragging.current) return;
-                // NON blocchiamo lo scroll qui: parte un timer. Solo se l'utente
-                // tiene premuto ~350ms senza muovere, "armiamo" il trascinamento
-                // (da lì i listener globali bloccano lo scroll e gestiscono il drag).
-                const t = e.touches[0];
-                startPos.current = t ? { x: t.clientX, y: t.clientY } : null;
-                touchDragging.current = false;
-                movedRef.current = false;
-                clearPress();
-                pressTimer.current = setTimeout(() => {
-                  touchIdx.current = idx;
-                  touchDragging.current = true;
-                  overIdxRef.current = null;
-                  setArmedIdx(idx);
-                  setDragIdx(idx);
-                  setIsDragging(true); // attiva i listener globali (blocco scroll + rilevamento)
-                  if (typeof navigator !== "undefined" && navigator.vibrate) { try { navigator.vibrate(15); } catch { /* noop */ } }
-                }, 350);
-              }}
-              onTouchMove={(e) => {
-                // Prima che il drag sia attivo: se il dito si muove, è uno scroll
-                // → annulliamo il long-press e lasciamo scorrere liberamente.
-                if (touchDragging.current) return; // drag attivo: gestito dai listener globali
-                const t = e.touches[0];
-                if (t && startPos.current) {
-                  const dx = Math.abs(t.clientX - startPos.current.x);
-                  const dy = Math.abs(t.clientY - startPos.current.y);
-                  if (dx > 8 || dy > 8) { movedRef.current = true; clearPress(); }
-                }
-              }}
-              onTouchEnd={() => {
-                // Se il drag NON era attivo (tap o pressione breve): puliamo il timer.
-                // Se era attivo, ci pensa il listener globale (touchend) a unire e pulire.
-                if (!touchDragging.current) {
-                  clearPress();
-                  movedRef.current = false;
-                  startPos.current = null;
-                }
-              }}
-              onTouchCancel={() => {
-                if (!touchDragging.current) { clearPress(); movedRef.current = false; startPos.current = null; }
-              }}
+              onPointerDown={onPointerDown(idx)}
+              onPointerMove={onPointerMove}
+              onPointerUp={onPointerUp}
+              onPointerCancel={onPointerCancel}
+              onContextMenu={(e) => e.preventDefault()}
+              // `touch-action: none` è SEMPRE attivo: il browser lo valuta
+              // all'inizio del gesto, applicarlo dopo non avrebbe effetto.
+              style={{ touchAction: "none", ...(isArmed ? { position: "relative", zIndex: 20 } : null) }}
               className={`${lead.bg} rounded-lg px-3 py-2.5 select-none cursor-grab active:cursor-grabbing transition-all ${isCombined ? "col-span-2" : ""} ${dragIdx === idx ? "opacity-50 scale-[0.97]" : ""} ${isArmed ? "ring-2 ring-violet-400 shadow-lg scale-[1.03] -rotate-1 z-10" : ""} ${isOver ? "ring-2 ring-blue-400 ring-offset-1" : ""}`}
-              style={isArmed ? { touchAction: "none", position: "relative", zIndex: 20 } : undefined}
             >
               {isOver ? (
                 <div className="flex items-center gap-1.5 mb-1">
@@ -506,8 +497,7 @@ function CategorySummary({
                       type="button"
                       aria-label="Separa"
                       onClick={(e) => { e.stopPropagation(); splitGroup(idx); }}
-                      onMouseDown={(e) => e.stopPropagation()}
-                      onTouchStart={(e) => { e.stopPropagation(); clearPress(); }}
+                      onPointerDown={(e) => { e.stopPropagation(); clearPress(); }}
                       className={`flex-shrink-0 ml-1 ${lead.label} hover:opacity-70`}
                     >
                       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
@@ -2896,7 +2886,13 @@ export default function PagamentiPage() {
             {/* Proprietà COLLASSABILI */}
             {propertyNames.map((propName, propIdx) => {
               const propServices = groupedServices[propName];
-              const propTotal = propServices.reduce((sum, s) => sum + s.effectivePrice, 0);
+              // ⚠️ Solo i servizi FATTURABILI concorrono al totale: le pulizie
+              // escluse a mano e gli ordini annullati restano visibili in
+              // elenco (barrati) ma non devono gonfiare il totale mese, che
+              // altrimenti non quadra col totale del cliente.
+              const propTotal = propServices
+                .filter(s => (s as any).billable !== false)
+                .reduce((sum, s) => sum + s.effectivePrice, 0);
               const isPropExpanded = isPropertyExpanded(propName);
               // Prendi l'immagine e l'indirizzo dalla prima proprietà
               const propImage = propServices[0]?.propertyImage;
@@ -2992,10 +2988,19 @@ export default function PagamentiPage() {
                     <div className="px-4 py-3 space-y-3 bg-white">
                       {/* 🆕 RIEPILOGO TOTALE PER CATEGORIA (tessere trascinabili per combinarle) */}
                       {(() => {
-                        const totPulizie = propServices.filter(s => s.type === "PULIZIA").reduce((sum, s) => sum + s.effectivePrice, 0);
-                        const totBiancheria = propServices.filter(s => s.type === "BIANCHERIA").reduce((sum, s) => sum + s.effectivePrice, 0);
-                        const totKit = propServices.filter(s => s.type === "KIT_CORTESIA").reduce((sum, s) => sum + s.effectivePrice, 0);
-                        const totExtra = propServices.filter(s => s.type === "SERVIZI_EXTRA").reduce((sum, s) => sum + s.effectivePrice, 0);
+                        // ⚠️ NON filtrare per `s.type`: un ordine con
+                        // mainCategory=BIANCHERIA può contenere anche kit cortesia,
+                        // e filtrando per tipo quei soldi finivano tutti su
+                        // Biancheria (era la differenza 526,90 vs 540,40 fra il
+                        // riepilogo del cliente e quello della proprietà).
+                        // Si somma `catSplit`, calcolato una volta sola nel hook.
+                        const billable = propServices.filter(s => (s as any).billable !== false);
+                        const totPulizie = billable
+                          .filter(s => s.type === "PULIZIA")
+                          .reduce((sum, s) => sum + s.effectivePrice, 0);
+                        const totBiancheria = billable.reduce((sum, s) => sum + ((s as any).catSplit?.linen ?? 0), 0);
+                        const totKit = billable.reduce((sum, s) => sum + ((s as any).catSplit?.kit ?? 0), 0);
+                        const totExtra = billable.reduce((sum, s) => sum + ((s as any).catSplit?.extra ?? 0), 0);
                         return <CategorySummary totPulizie={totPulizie} totBiancheria={totBiancheria} totKit={totKit} totExtra={totExtra} />;
                       })()}
                       {(() => {
