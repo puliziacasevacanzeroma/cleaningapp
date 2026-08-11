@@ -9,6 +9,7 @@ import { useAuth } from "~/lib/firebase/AuthContext";
 import { useNotifications } from "~/hooks/useNotifications";
 import { resolveNotificationLink } from "~/lib/notifications/linkGenerator";
 import type { FirebaseNotification } from "~/lib/firebase/types";
+import { PropertySearchBar, matchesPropertyQuery, type PropertyOption } from "~/components/ui/PropertySearchBar";
 
 interface Issue {
   id: string; propertyId: string; propertyName: string; type: string;
@@ -107,11 +108,33 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
   const [issues, setIssues] = useState<Issue[]>([]);
   const [props, setProps] = useState<string[]>([]);
 
+  // 🔎 RICERCA PER APPARTAMENTO (stessa barra della pagina Pulizie)
+  // Stato separato per scheda: cercare fra le notifiche e cercare fra le
+  // segnalazioni sono due gesti diversi, non devono darsi fastidio.
+  const [notifSearch, setNotifSearch] = useState("");
+  const [notifProperty, setNotifProperty] = useState<PropertyOption | null>(null);
+  const [issueSearch, setIssueSearch] = useState("");
+  const [issueProperty, setIssueProperty] = useState<PropertyOption | null>(null);
+  // Elenco appartamenti per i suggerimenti (id + nome + indirizzo)
+  const [propertyOptions, setPropertyOptions] = useState<PropertyOption[]>([]);
+
   useEffect(() => {
     if (!user?.id) return;
-    if (isAdmin) { setProps(["__admin__"]); return; }
-    const q = query(collection(db, "properties"), where("ownerId", "==", user.id));
-    const unsub = onSnapshot(q, snap => setProps(snap.docs.map(d => d.id)));
+    // L'admin vede tutti gli appartamenti, il proprietario solo i suoi.
+    const q = isAdmin
+      ? query(collection(db, "properties"))
+      : query(collection(db, "properties"), where("ownerId", "==", user.id));
+    const unsub = onSnapshot(q, snap => {
+      const opts: PropertyOption[] = snap.docs.map(d => {
+        const data = d.data() as Record<string, any>;
+        return { id: d.id, name: data.name || "Senza nome", subtitle: data.address || undefined };
+      });
+      opts.sort((a, b) => a.name.localeCompare(b.name, "it"));
+      setPropertyOptions(opts);
+      // `props` alimenta la query delle segnalazioni: per l'admin resta
+      // il sentinella, per il proprietario sono gli id delle sue proprietà.
+      setProps(isAdmin ? ["__admin__"] : snap.docs.map(d => d.id));
+    });
     return () => unsub();
   }, [user?.id, isAdmin]);
 
@@ -155,9 +178,68 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
   }, [isMobile, isOpen]);
 
   const totalBadge = unreadCount;
-  const visibleNotifs = notifications.filter(n => n.status !== "ARCHIVED").slice(0, 30);
+
+  // ═══════════════════════════════════════════════════════════════
+  // 🔎 FILTRO PER APPARTAMENTO
+  //
+  // Le notifiche non hanno un campo `propertyName`: il nome dell'immobile
+  // compare dentro titolo/messaggio, o in `relatedEntityName`, o nella
+  // `turnoverAction`. Si cerca quindi su TUTTI questi campi insieme.
+  // Con un appartamento agganciato il filtro è stretto sul suo nome;
+  // col solo testo libero bastano tutte le parole digitate, in qualunque
+  // punto ("campo fiori" trova "Campo De Fiori Home").
+  //
+  // ⚠️ Il filtro si applica PRIMA del taglio a 30/15 elementi: cercando
+  // si guarda in tutto l'elenco caricato, non solo nella prima pagina.
+  // ═══════════════════════════════════════════════════════════════
+  const notifHaystack = (n: any): Array<string | undefined> => [
+    n.title,
+    n.message,
+    n.relatedEntityName,
+    n.turnoverAction?.propertyName,
+    n.data?.propertyName,
+  ];
+
+  const filteredNotifs = notifications
+    .filter(n => n.status !== "ARCHIVED")
+    .filter(n => matchesPropertyQuery(notifHaystack(n), notifSearch, notifProperty?.name));
+  const visibleNotifs = filteredNotifs.slice(0, 30);
+
   const openIssues = issues.filter(i => !(i.resolved === true || i.status === "resolved"));
-  const visibleIssues = issues.slice(0, 15);
+  const filteredIssues = issues.filter(i =>
+    matchesPropertyQuery([i.propertyName, i.title, i.description], issueSearch, issueProperty?.name),
+  );
+  const visibleIssues = filteredIssues.slice(0, 15);
+
+  const notifFilterActive = !!(notifSearch || notifProperty);
+  const issueFilterActive = !!(issueSearch || issueProperty);
+
+  /** Barra di ricerca della scheda attiva. */
+  const SearchBar = () => (
+    <div className="px-4 pb-2">
+      {tab === "notifiche" ? (
+        <PropertySearchBar
+          value={notifSearch}
+          onChange={setNotifSearch}
+          selected={notifProperty}
+          onSelect={setNotifProperty}
+          properties={propertyOptions}
+          placeholder="Cerca notifica o appartamento..."
+          resultCount={filteredNotifs.length}
+        />
+      ) : (
+        <PropertySearchBar
+          value={issueSearch}
+          onChange={setIssueSearch}
+          selected={issueProperty}
+          onSelect={setIssueProperty}
+          properties={propertyOptions}
+          placeholder="Cerca segnalazione o appartamento..."
+          resultCount={filteredIssues.length}
+        />
+      )}
+    </div>
+  );
 
   const handleNotifClick = (n: FirebaseNotification) => {
     if (n.status === "UNREAD") markAsRead(n.id);
@@ -369,7 +451,7 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
       {nLoad ? (
         <div className="p-8 text-center"><div className="w-8 h-8 border-2 border-slate-200 border-t-sky-500 rounded-full animate-spin mx-auto" /><p className="text-xs text-slate-400 mt-2">Caricamento...</p></div>
       ) : visibleNotifs.length === 0 ? (
-        <div className="p-8 text-center"><Ic d={ic.bell} className="w-10 h-10 text-slate-300 mx-auto mb-2" /><p className="text-xs text-slate-400">Nessuna notifica</p></div>
+        <div className="p-8 text-center"><Ic d={ic.bell} className="w-10 h-10 text-slate-300 mx-auto mb-2" /><p className="text-xs text-slate-400">{notifFilterActive ? "Nessuna notifica per questa ricerca" : "Nessuna notifica"}</p></div>
       ) : visibleNotifs.map(n => {
         const ur = n.status === "UNREAD"; const ca = n.createdAt?.toDate?.() || new Date(); const { d, color } = getNotifIconData(n.type);
         return (
@@ -400,7 +482,7 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
   const IssueList = ({ maxH }: { maxH?: string }) => (
     <div className={maxH ? `max-h-[${maxH}] overflow-y-auto` : "flex-1 overflow-y-auto"} style={maxH ? undefined : { WebkitOverflowScrolling: "touch" }}>
       {visibleIssues.length === 0 ? (
-        <div className="p-8 text-center"><Ic d={ic.check} className="w-10 h-10 text-slate-300 mx-auto mb-2" /><p className="text-xs text-slate-400">Nessuna segnalazione</p></div>
+        <div className="p-8 text-center"><Ic d={ic.check} className="w-10 h-10 text-slate-300 mx-auto mb-2" /><p className="text-xs text-slate-400">{issueFilterActive ? "Nessuna segnalazione per questa ricerca" : "Nessuna segnalazione"}</p></div>
       ) : visibleIssues.map(issue => {
         const isRes = issue.resolved === true || issue.status === "resolved"; const { d, bg } = getIssueIconData(issue.type, issue.isUrgent);
         return (
@@ -448,6 +530,11 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
         {/* Tabs */}
         <div className="flex-shrink-0 bg-white px-4 pt-3 pb-2">
           <TabSlider />
+        </div>
+
+        {/* 🔎 Ricerca per appartamento */}
+        <div className="flex-shrink-0 bg-white">
+          <SearchBar />
         </div>
 
         {/* Content */}
@@ -498,13 +585,16 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
           <TabSlider />
         </div>
 
+        {/* 🔎 Ricerca per appartamento */}
+        <SearchBar />
+
         {/* NOTIFICHE LIST */}
         {tab === "notifiche" && (
           <div className="max-h-[360px] overflow-y-auto">
             {nLoad ? (
               <div className="p-8 text-center"><div className="w-8 h-8 border-2 border-slate-200 border-t-sky-500 rounded-full animate-spin mx-auto" /><p className="text-xs text-slate-400 mt-2">Caricamento...</p></div>
             ) : visibleNotifs.length === 0 ? (
-              <div className="p-8 text-center"><Ic d={ic.bell} className="w-10 h-10 text-slate-300 mx-auto mb-2" /><p className="text-xs text-slate-400">Nessuna notifica</p></div>
+              <div className="p-8 text-center"><Ic d={ic.bell} className="w-10 h-10 text-slate-300 mx-auto mb-2" /><p className="text-xs text-slate-400">{notifFilterActive ? "Nessuna notifica per questa ricerca" : "Nessuna notifica"}</p></div>
             ) : visibleNotifs.slice(0, 10).map(n => {
               const ur = n.status === "UNREAD"; const ca = n.createdAt?.toDate?.() || new Date(); const { d, color } = getNotifIconData(n.type);
               return (
@@ -533,7 +623,7 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
         {tab === "segnalazioni" && (
           <div className="max-h-[360px] overflow-y-auto">
             {visibleIssues.length === 0 ? (
-              <div className="p-8 text-center"><Ic d={ic.check} className="w-10 h-10 text-slate-300 mx-auto mb-2" /><p className="text-xs text-slate-400">Nessuna segnalazione</p></div>
+              <div className="p-8 text-center"><Ic d={ic.check} className="w-10 h-10 text-slate-300 mx-auto mb-2" /><p className="text-xs text-slate-400">{issueFilterActive ? "Nessuna segnalazione per questa ricerca" : "Nessuna segnalazione"}</p></div>
             ) : visibleIssues.slice(0, 8).map(issue => {
               const isRes = issue.resolved === true || issue.status === "resolved"; const { d, bg } = getIssueIconData(issue.type, issue.isUrgent);
               return (

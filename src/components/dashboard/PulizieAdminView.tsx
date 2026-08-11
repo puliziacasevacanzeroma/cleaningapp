@@ -7,6 +7,7 @@ import NewCleaningModal from "~/components/NewCleaningModal";
 import EditCleaningModal from "~/components/proprietario/EditCleaningModal";
 import CleaningCardAdmin from "~/components/cleaning/CleaningCardAdmin";
 import { calculateDotazioni } from "~/lib/calculateDotazioni";
+import { PropertySearchBar, matchesPropertyQuery, type PropertyOption } from "~/components/ui/PropertySearchBar";
 
 /**
  * 🎯 PASSO FINALE — Deriva le dotazioni (letto/bagno/kit/extra) da un ORDINE.
@@ -273,6 +274,8 @@ export function PulizieAdminView({ properties, cleanings, operators = [] }: Puli
   const [currentDate, setCurrentDate] = useState(new Date());
   const [showNewCleaningModal, setShowNewCleaningModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  // 🔎 Appartamento agganciato dalla barra di ricerca condivisa
+  const [searchProperty, setSearchProperty] = useState<PropertyOption | null>(null);
   
   // Stato per card espanse
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
@@ -347,18 +350,32 @@ export function PulizieAdminView({ properties, cleanings, operators = [] }: Puli
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
+  // Opzioni per il selettore appartamento della barra di ricerca
+  const propertySearchOptions: PropertyOption[] = useMemo(
+    () =>
+      [...properties]
+        .map(p => ({ id: p.id, name: p.name, subtitle: (p as any).address || p.ownerName }))
+        .sort((a, b) => a.name.localeCompare(b.name, "it")),
+    [properties],
+  );
+
   const filteredCleanings = useMemo(() => {
     let filtered = [...cleanings];
     const propertyIds = properties.map(p => p.id);
     filtered = filtered.filter(c => propertyIds.includes(c.propertyId));
 
-    if (searchTerm) {
-      const search = searchTerm.toLowerCase();
+    // 🔎 Appartamento agganciato: filtro netto per id (nessuna ambiguità
+    // su nomi simili). Altrimenti testo libero sulla stessa regola
+    // condivisa con la campanella notifiche.
+    if (searchProperty) {
+      filtered = filtered.filter(c => c.propertyId === searchProperty.id);
+    } else if (searchTerm) {
       filtered = filtered.filter(c => {
         const prop = properties.find(p => p.id === c.propertyId);
-        return prop?.name.toLowerCase().includes(search) || 
-               prop?.ownerName?.toLowerCase().includes(search) ||
-               c.operator?.name?.toLowerCase().includes(search);
+        return matchesPropertyQuery(
+          [prop?.name, prop?.ownerName, (prop as any)?.address, c.operator?.name],
+          searchTerm,
+        );
       });
     }
 
@@ -405,18 +422,16 @@ export function PulizieAdminView({ properties, cleanings, operators = [] }: Puli
       // Infine per data
       return new Date(a.date).getTime() - new Date(b.date).getTime();
     });
-  }, [cleanings, properties, timeFilter, searchTerm]);
+  }, [cleanings, properties, timeFilter, searchTerm, searchProperty]);
 
   // Proprietà filtrate per il calendario
   const filteredProperties = useMemo(() => {
+    if (searchProperty) return properties.filter(p => p.id === searchProperty.id);
     if (!searchTerm) return properties;
-    const search = searchTerm.toLowerCase();
-    return properties.filter(p => 
-      p.name.toLowerCase().includes(search) || 
-      p.address?.toLowerCase().includes(search) ||
-      p.ownerName?.toLowerCase().includes(search)
+    return properties.filter(p =>
+      matchesPropertyQuery([p.name, p.address, p.ownerName], searchTerm),
     );
-  }, [properties, searchTerm]);
+  }, [properties, searchTerm, searchProperty]);
 
   const groupedByDate = useMemo(() => {
     const groups: { [key: string]: Cleaning[] } = {};
@@ -909,18 +924,15 @@ export function PulizieAdminView({ properties, cleanings, operators = [] }: Puli
             </div>
           )}
           
-          <div className="relative">
-            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-            <input
-              type="text"
-              placeholder="Cerca proprietà o proprietario..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
-            />
-          </div>
+          {/* 🔎 Barra condivisa con la campanella notifiche/segnalazioni */}
+          <PropertySearchBar
+            value={searchTerm}
+            onChange={setSearchTerm}
+            selected={searchProperty}
+            onSelect={setSearchProperty}
+            properties={propertySearchOptions}
+            placeholder="Cerca proprietà, proprietario o operatore..."
+          />
         </div>
       </div>
 
