@@ -17,19 +17,31 @@ import ts from "typescript";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SRC = join(__dirname, "..", "src", "components", "ui", "PropertySearchBar.tsx");
 
-// Isoliamo le funzioni pure dal componente React (che qui non serve e
-// trascinerebbe dentro tutto il DOM). Compiliamo il file VERO e teniamo
-// solo le due funzioni esportate.
+// Isoliamo le REGIONI PURE del file di produzione (i componenti React
+// qui non servono e trascinerebbero dentro il DOM). Vengono estratte le
+// due zone senza JSX, così i test girano sulle funzioni VERE e non su
+// una replica che potrebbe divergere in silenzio.
 const source = readFileSync(SRC, "utf8");
-const pureOnly = source
-  .split("export function PropertySearchBar")[0]
-  .replace(/^import .*$/gm, "");
+const slice = (from, to) => {
+  const a = source.indexOf(from);
+  if (a < 0) throw new Error(`Regione non trovata nel sorgente: ${from}`);
+  const b = to ? source.indexOf(to, a) : source.length;
+  if (to && b < 0) throw new Error(`Fine regione non trovata: ${to}`);
+  return source.slice(a, b);
+};
+
+const pureOnly = [
+  // ricerca: normalizeSearch + matchesPropertyQuery
+  slice("export interface PropertyOption", "function PropertyThumb"),
+  // date: DateRange + docDate + isInDateRange + hasDateRange
+  slice("export interface DateRange", "function fmtShort"),
+].join("\n").replace(/^import .*$/gm, "");
+
 const js = ts.transpileModule(pureOnly, {
   compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
 }).outputText;
-const { normalizeSearch, matchesPropertyQuery } = await import(
-  "data:text/javascript;base64," + Buffer.from(js).toString("base64")
-);
+const { normalizeSearch, matchesPropertyQuery, isInDateRange, hasDateRange, EMPTY_RANGE, docDate } =
+  await import("data:text/javascript;base64," + Buffer.from(js).toString("base64"));
 
 let passed = 0;
 const failures = [];
@@ -129,6 +141,63 @@ check("trova per nome appartamento", matchesPropertyQuery([REGINA, issue[0], iss
 check("trova per parola del titolo", matchesPropertyQuery([REGINA, issue[0], issue[1]], "acqua"));
 check("trova per parola della descrizione", matchesPropertyQuery([REGINA, issue[0], issue[1]], "rubinetto"));
 check("non trova parole assenti", !matchesPropertyQuery([REGINA, issue[0], issue[1]], "riscaldamento"));
+
+
+// ══════════════════════════════════════════════════════════════════
+// 9 · Intervallo di date (modale calendario)
+// ══════════════════════════════════════════════════════════════════
+// isInDateRange è quella VERA, importata dal sorgente di produzione.
+const EMPTY = EMPTY_RANGE;
+const D = (y, m, day, h = 12) => new Date(y, m - 1, day, h);
+
+group("9 · Intervallo di date");
+check("intervallo vuoto non filtra", isInDateRange(D(2020,1,1), EMPTY));
+check("dentro l'intervallo", isInDateRange(D(2026,8,10), { from: "2026-08-01", to: "2026-08-31" }));
+check("prima del 'Da' escluso", !isInDateRange(D(2026,7,31), { from: "2026-08-01", to: "2026-08-31" }));
+check("dopo l'A' escluso", !isInDateRange(D(2026,9,1), { from: "2026-08-01", to: "2026-08-31" }));
+check("il giorno 'Da' è incluso (mezzanotte)", isInDateRange(D(2026,8,1,0), { from: "2026-08-01", to: "2026-08-31" }));
+check("il giorno 'A' è incluso fino a fine giornata", isInDateRange(D(2026,8,31,23), { from: "2026-08-01", to: "2026-08-31" }));
+check("solo 'Da': tutto ciò che segue passa", isInDateRange(D(2030,1,1), { from: "2026-08-01", to: "" }));
+check("solo 'Da': ciò che precede è escluso", !isInDateRange(D(2026,7,1), { from: "2026-08-01", to: "" }));
+check("solo 'A': ciò che precede passa", isInDateRange(D(2020,1,1), { from: "", to: "2026-08-31" }));
+check("solo 'A': ciò che segue è escluso", !isInDateRange(D(2026,9,5), { from: "", to: "2026-08-31" }));
+check("un solo giorno: quel giorno passa", isInDateRange(D(2026,8,11), { from: "2026-08-11", to: "2026-08-11" }));
+check("un solo giorno: il giorno dopo no", !isInDateRange(D(2026,8,12), { from: "2026-08-11", to: "2026-08-11" }));
+check("data mancante non viene esclusa", isInDateRange(null, { from: "2026-08-01", to: "2026-08-31" }));
+
+// ══════════════════════════════════════════════════════════════════
+group("10 · Date + ricerca insieme");
+// ══════════════════════════════════════════════════════════════════
+const items = [
+  { name: CAMPO,  date: D(2026,8,10) },
+  { name: CAMPO,  date: D(2026,6,15) },
+  { name: REGINA, date: D(2026,8,11) },
+];
+const combo = (range, term, sel) =>
+  items.filter(i => isInDateRange(i.date, range) && matchesPropertyQuery([i.name], term, sel));
+
+const AGO = { from: "2026-08-01", to: "2026-08-31" };
+check("agosto + 'campo' → 1", combo(AGO, "campo").length === 1);
+check("nessun filtro data + 'campo' → 2", combo(EMPTY, "campo").length === 2);
+check("agosto senza testo → 2", combo(AGO, "").length === 2);
+check("agosto agganciato a Campo → 1", combo(AGO, "", CAMPO).length === 1);
+check("giugno agganciato a Campo → 1", combo({ from: "2026-06-01", to: "2026-06-30" }, "", CAMPO).length === 1);
+check("giugno + 'regina' → 0", combo({ from: "2026-06-01", to: "2026-06-30" }, "regina").length === 0);
+
+
+// ══════════════════════════════════════════════════════════════════
+group("11 · hasDateRange e docDate (funzioni vere)");
+check("intervallo vuoto → nessun filtro attivo", !hasDateRange(EMPTY_RANGE));
+check("solo 'Da' → filtro attivo", hasDateRange({ from: "2026-08-01", to: "" }));
+check("solo 'A' → filtro attivo", hasDateRange({ from: "", to: "2026-08-31" }));
+check("null → nessun filtro", !hasDateRange(null));
+check("docDate legge un Timestamp Firestore",
+  docDate({ toDate: () => new Date(2026, 7, 11) })?.getFullYear() === 2026);
+check("docDate legge {seconds}",
+  docDate({ seconds: Math.floor(D(2026,8,11).getTime() / 1000) })?.getMonth() === 7);
+check("docDate legge una Date", docDate(D(2026,8,11))?.getDate() === 11);
+check("docDate su null → null", docDate(null) === null);
+check("docDate su oggetto strano → null", docDate({ pippo: 1 }) === null);
 
 console.log(`\n${"═".repeat(56)}`);
 if (failures.length === 0) {

@@ -5,8 +5,8 @@ import { useSearchParams } from "next/navigation";
 import { collection, onSnapshot, query } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 import {
-  PropertySearchBar, TimeRangeChips,
-  type PropertyOption, type RangeKey,
+  PropertySearchBar, DateRangeButton, EMPTY_RANGE,
+  type PropertyOption, type DateRange,
 } from "~/components/ui/PropertySearchBar";
 import { NotificheAdminContent } from "~/components/dashboard/NotificheAdminContent";
 import { SegnalazioniAdminContent } from "~/components/dashboard/SegnalazioniAdminContent";
@@ -38,14 +38,19 @@ export default function CentroMessaggiPage() {
   // ═══════════════════════════════════════════════════════════════
   const [search, setSearch] = useState("");
   const [property, setProperty] = useState<PropertyOption | null>(null);
-  const [range, setRange] = useState<RangeKey>("recenti");
+  const [dateRange, setDateRange] = useState<DateRange>(EMPTY_RANGE);
   const [propertyOptions, setPropertyOptions] = useState<PropertyOption[]>([]);
 
   useEffect(() => {
     const unsub = onSnapshot(query(collection(db, "properties")), snap => {
       const opts: PropertyOption[] = snap.docs.map(d => {
         const data = d.data() as Record<string, any>;
-        return { id: d.id, name: data.name || "Senza nome", subtitle: data.address || undefined };
+        return {
+          id: d.id,
+          name: data.name || "Senza nome",
+          subtitle: data.address || undefined,
+          image: data.images?.door || data.imageUrl || undefined,
+        };
       });
       opts.sort((a, b) => a.name.localeCompare(b.name, "it"));
       setPropertyOptions(opts);
@@ -71,8 +76,7 @@ export default function CentroMessaggiPage() {
         </div>
       </div>
       {/* 🔎 Ricerca condivisa: sta fra le schede e il contenuto */}
-      <div className="mx-4 mt-3 space-y-2">
-        <TimeRangeChips value={range} onChange={setRange} />
+      <div className="mx-4 mt-3">
         <PropertySearchBar
           value={search}
           onChange={setSearch}
@@ -80,6 +84,7 @@ export default function CentroMessaggiPage() {
           onSelect={setProperty}
           properties={propertyOptions}
           placeholder={tab === "notifiche" ? "Cerca notifica o appartamento..." : "Cerca segnalazione o appartamento..."}
+          trailing={<DateRangeButton value={dateRange} onChange={setDateRange} />}
         />
       </div>
 
@@ -90,7 +95,7 @@ export default function CentroMessaggiPage() {
             initialTab={initialInternalTab}
             searchTerm={search}
             searchProperty={property?.name || null}
-            range={range}
+            dateRange={dateRange}
           />
         ) : (
           <SegnalazioniAdminContent
@@ -98,7 +103,7 @@ export default function CentroMessaggiPage() {
             initialIssueId={initialIssueId}
             searchTerm={search}
             searchProperty={property?.name || null}
-            range={range}
+            dateRange={dateRange}
           />
         )}
       </div>

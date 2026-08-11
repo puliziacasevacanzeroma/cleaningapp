@@ -10,8 +10,9 @@ import { useNotifications } from "~/hooks/useNotifications";
 import { resolveNotificationLink } from "~/lib/notifications/linkGenerator";
 import type { FirebaseNotification } from "~/lib/firebase/types";
 import {
-  PropertySearchBar, TimeRangeChips, matchesPropertyQuery, rangeStart, isInRange,
-  type PropertyOption, type RangeKey,
+  PropertySearchBar, DateRangeButton, matchesPropertyQuery, isInDateRange,
+  EMPTY_RANGE, hasDateRange,
+  type PropertyOption, type DateRange,
 } from "~/components/ui/PropertySearchBar";
 
 interface Issue {
@@ -125,8 +126,8 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
   // Elenco appartamenti per i suggerimenti (id + nome + indirizzo)
   const [propertyOptions, setPropertyOptions] = useState<PropertyOption[]>([]);
 
-  // ⏱️ Periodo (come i filtri della pagina Pulizie)
-  const [range, setRange] = useState<RangeKey>("recenti");
+  // ⏱️ Periodo: stesso calendario della pagina Pulizie (Da → A)
+  const [dateRange, setDateRange] = useState<DateRange>(EMPTY_RANGE);
 
   // 🔍 RICERCA PROFONDA
   // Il feed realtime carica solo le ultime 100 notifiche di TUTTA la flotta:
@@ -148,7 +149,12 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
     const unsub = onSnapshot(q, snap => {
       const opts: PropertyOption[] = snap.docs.map(d => {
         const data = d.data() as Record<string, any>;
-        return { id: d.id, name: data.name || "Senza nome", subtitle: data.address || undefined };
+        return {
+          id: d.id,
+          name: data.name || "Senza nome",
+          subtitle: data.address || undefined,
+          image: data.images?.door || data.imageUrl || undefined,
+        };
       });
       opts.sort((a, b) => a.name.localeCompare(b.name, "it"));
       setPropertyOptions(opts);
@@ -206,7 +212,7 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
   // scrivere non genera traffico.
   // ═══════════════════════════════════════════════════════════════
   useEffect(() => {
-    if (!isOpen || tab !== "notifiche" || range === "recenti") {
+    if (!isOpen || tab !== "notifiche" || !hasDateRange(dateRange)) {
       setDeepNotifs(null);
       setDeepCapped(false);
       return;
@@ -215,7 +221,10 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
     (async () => {
       setDeepLoading(true);
       try {
-        const since = rangeStart(range);
+        // Il "Da" scelto guida la lettura sul server; se manca si
+        // legge comunque fino al tetto, ordinando dal più recente.
+        const since = dateRange.from ? new Date(dateRange.from) : null;
+        if (since) since.setHours(0, 0, 0, 0);
         const base = isAdmin
           ? [where("recipientRole", "in", ["ADMIN", "ALL"])]
           : [where("recipientId", "==", user?.id || "__none__")];
@@ -240,7 +249,7 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
       }
     })();
     return () => { cancelled = true; };
-  }, [isOpen, tab, range, isAdmin, user?.id]);
+  }, [isOpen, tab, dateRange.from, dateRange.to, isAdmin, user?.id]);
 
   const totalBadge = unreadCount;
 
@@ -269,7 +278,7 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
   const notifSource: any[] = deepNotifs ?? notifications;
 
   // Periodo: helper condiviso (senza data non si esclude nulla)
-  const inRange = (x: any): boolean => isInRange(x?.createdAt || x?.reportedAt, range);
+  const inRange = (x: any): boolean => isInDateRange(x?.createdAt || x?.reportedAt, dateRange);
 
   const filteredNotifs = notifSource
     .filter(n => n.status !== "ARCHIVED")
@@ -277,14 +286,14 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
     .filter(n => matchesPropertyQuery(notifHaystack(n), notifSearch, notifProperty?.name));
   // Cercando si mostra di più: con un appartamento agganciato serve vedere
   // tutto lo storico trovato, non i primi 30.
-  const notifFilterActive = !!(notifSearch || notifProperty || range !== "recenti");
+  const notifFilterActive = !!(notifSearch || notifProperty || hasDateRange(dateRange));
   const visibleNotifs = filteredNotifs.slice(0, notifFilterActive ? 200 : 30);
 
   const openIssues = issues.filter(i => !(i.resolved === true || i.status === "resolved"));
   const filteredIssues = issues
     .filter(inRange)
     .filter(i => matchesPropertyQuery([i.propertyName, i.title, i.description], issueSearch, issueProperty?.name));
-  const issueFilterActive = !!(issueSearch || issueProperty || range !== "recenti");
+  const issueFilterActive = !!(issueSearch || issueProperty || hasDateRange(dateRange));
   const visibleIssues = filteredIssues.slice(0, issueFilterActive ? 200 : 15);
 
   // ⚠️ NON trasformare questo in un componente (`const SearchBar = () => ...`).
@@ -294,10 +303,7 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
   // `{renderSearchBar()}`: gli elementi vengono inseriti nell'albero del
   // genitore e l'input mantiene il fuoco.
   const renderSearchBar = () => (
-    <div className="px-4 pb-2 space-y-2">
-      {/* ⏱️ Periodo — componente condiviso */}
-      <TimeRangeChips value={range} onChange={setRange} loading={deepLoading} />
-
+    <div className="px-4 pb-2 space-y-1.5">
       {tab === "notifiche" ? (
         <PropertySearchBar
           value={notifSearch}
@@ -307,6 +313,7 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
           properties={propertyOptions}
           placeholder="Cerca notifica o appartamento..."
           resultCount={filteredNotifs.length}
+          trailing={<DateRangeButton value={dateRange} onChange={setDateRange} />}
         />
       ) : (
         <PropertySearchBar
@@ -317,13 +324,17 @@ export function NotificationBell({ isAdmin = false }: NotificationBellProps) {
           properties={propertyOptions}
           placeholder="Cerca segnalazione o appartamento..."
           resultCount={filteredIssues.length}
+          trailing={<DateRangeButton value={dateRange} onChange={setDateRange} />}
         />
       )}
 
-      {tab === "notifiche" && range === "recenti" && (notifSearch || notifProperty) && (
+      {tab === "notifiche" && !hasDateRange(dateRange) && (notifSearch || notifProperty) && (
         <p className="text-[10px] text-amber-600 px-1 leading-snug">
-          Stai cercando solo fra le notifiche recenti. Scegli un periodo per cercare più indietro.
+          Stai cercando solo fra le notifiche recenti. Scegli un periodo con «Date» per cercare più indietro.
         </p>
+      )}
+      {tab === "notifiche" && deepLoading && (
+        <p className="text-[10px] text-slate-400 px-1">Carico il periodo…</p>
       )}
       {tab === "notifiche" && deepCapped && (
         <p className="text-[10px] text-amber-600 px-1 leading-snug">

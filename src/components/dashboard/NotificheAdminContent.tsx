@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useNotifications } from "~/hooks/useNotifications";
 import type { FirebaseNotification } from "~/lib/firebase/types";
 import Link from "next/link";
-import { matchesPropertyQuery, isInRange, type RangeKey } from "~/components/ui/PropertySearchBar";
+import { matchesPropertyQuery, isInDateRange, EMPTY_RANGE, type DateRange } from "~/components/ui/PropertySearchBar";
 
 // ==================== ICONS ====================
 const BellIcon = () => (
@@ -350,10 +350,10 @@ export function NotificheAdminContent({
   embedded = false, initialTab,
   // 🔎 Filtri passati dal guscio della pagina Centro Messaggi.
   // Opzionali: se il componente è usato altrove si comporta come prima.
-  searchTerm = "", searchProperty = null, range = "recenti",
+  searchTerm = "", searchProperty = null, dateRange = EMPTY_RANGE,
 }: {
   embedded?: boolean; initialTab?: string;
-  searchTerm?: string; searchProperty?: string | null; range?: RangeKey;
+  searchTerm?: string; searchProperty?: string | null; dateRange?: DateRange;
 }) {
   const [activeTab, setActiveTab] = useState<TabType>((initialTab as TabType) || "all");
   const [selectedNotification, setSelectedNotification] = useState<FirebaseNotification | null>(null);
@@ -422,7 +422,7 @@ export function NotificheAdminContent({
           return n.status !== "ARCHIVED";
       }
     })
-    .filter(n => isInRange((n as any).createdAt, range))
+    .filter(n => isInDateRange((n as any).createdAt, dateRange))
     .filter(n =>
       matchesPropertyQuery(
         [n.title, n.message, (n as any).relatedEntityName, (n as any).turnoverAction?.propertyName, (n as any).data?.propertyName],
@@ -431,7 +431,7 @@ export function NotificheAdminContent({
       ),
     );
 
-  const searchActive = !!(searchTerm || searchProperty || range !== "recenti");
+  const searchActive = !!(searchTerm || searchProperty || dateRange.from || dateRange.to);
 
   const handleOpenAction = (notification: FirebaseNotification, action: "approve" | "reject") => {
     setSelectedNotification(notification);

@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { collection, query, onSnapshot, doc, updateDoc, Timestamp } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 import { useSearchParams } from "next/navigation";
-import { matchesPropertyQuery, isInRange, type RangeKey } from "~/components/ui/PropertySearchBar";
+import { matchesPropertyQuery, isInDateRange, EMPTY_RANGE, type DateRange } from "~/components/ui/PropertySearchBar";
 
 interface Issue {
   id: string;
@@ -55,10 +55,10 @@ export function SegnalazioniAdminContent({
   embedded = false, initialIssueId,
   // 🔎 Filtri passati dal guscio della pagina Centro Messaggi.
   // Opzionali: senza, il componente si comporta esattamente come prima.
-  searchTerm = "", searchProperty = null, range = "recenti",
+  searchTerm = "", searchProperty = null, dateRange = EMPTY_RANGE,
 }: {
   embedded?: boolean; initialIssueId?: string;
-  searchTerm?: string; searchProperty?: string | null; range?: RangeKey;
+  searchTerm?: string; searchProperty?: string | null; dateRange?: DateRange;
 }) {
   const searchParams = useSearchParams();
   const highlightId = initialIssueId || searchParams.get('id');
@@ -112,7 +112,7 @@ export function SegnalazioniAdminContent({
       if (filter === 'resolved') return isResolved;
       return true;
     })
-    .filter(issue => isInRange((issue as any).reportedAt || (issue as any).createdAt, range))
+    .filter(issue => isInDateRange((issue as any).reportedAt || (issue as any).createdAt, dateRange))
     .filter(issue =>
       matchesPropertyQuery(
         [issue.propertyName, issue.title, (issue as any).description],
@@ -121,7 +121,7 @@ export function SegnalazioniAdminContent({
       ),
     );
 
-  const searchActive = !!(searchTerm || searchProperty || range !== "recenti");
+  const searchActive = !!(searchTerm || searchProperty || dateRange.from || dateRange.to);
 
   // Counts
   const openCount = issues.filter(i => !(i.resolved === true || i.status === 'resolved')).length;

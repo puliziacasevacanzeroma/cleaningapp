@@ -30,6 +30,8 @@ export interface PropertyOption {
   name: string;
   /** Riga secondaria opzionale (indirizzo, proprietario…). */
   subtitle?: string;
+  /** Foto della proprietà (di norma `images.door` o `imageUrl`). */
+  image?: string;
 }
 
 interface Props {
@@ -45,6 +47,8 @@ interface Props {
   resultCount?: number;
   autoFocus?: boolean;
   className?: string;
+  /** Elemento affiancato sulla STESSA riga (es. il bottone Date). */
+  trailing?: React.ReactNode;
 }
 
 /** Minuscole, senza accenti, spazi normalizzati: confronti indulgenti. */
@@ -84,6 +88,38 @@ export function matchesPropertyQuery(
   return t.split(" ").every(word => hay.includes(word));
 }
 
+/**
+ * Miniatura della proprietà: la foto se c'è, altrimenti l'iniziale su
+ * fondo colorato — mai un quadrato grigio anonimo.
+ * Se l'immagine non carica (URL morto) si ricade sull'iniziale invece di
+ * lasciare il riquadro rotto.
+ */
+function PropertyThumb({ property, size = 32 }: { property: PropertyOption; size?: number }) {
+  const [failed, setFailed] = useState(false);
+  const px = { width: size, height: size };
+  const radius = Math.round(size / 4);
+
+  if (property.image && !failed) {
+    return (
+      <img
+        src={property.image}
+        alt={property.name}
+        onError={() => setFailed(true)}
+        style={{ ...px, borderRadius: radius }}
+        className="object-cover flex-shrink-0 block bg-slate-100"
+      />
+    );
+  }
+  return (
+    <div
+      style={{ ...px, borderRadius: radius, fontSize: Math.max(10, Math.round(size / 2.4)) }}
+      className="flex-shrink-0 bg-gradient-to-br from-violet-500 to-purple-600 text-white font-bold flex items-center justify-center"
+    >
+      {(property.name || "?").charAt(0).toUpperCase()}
+    </div>
+  );
+}
+
 export function PropertySearchBar({
   value,
   onChange,
@@ -94,6 +130,7 @@ export function PropertySearchBar({
   resultCount,
   autoFocus = false,
   className = "",
+  trailing,
 }: Props) {
   const [open, setOpen] = useState(false);
   const boxRef = useRef<HTMLDivElement>(null);
@@ -140,7 +177,8 @@ export function PropertySearchBar({
 
   return (
     <div ref={boxRef} className={`relative ${className}`}>
-      <div className="relative">
+      <div className="flex items-center gap-2">
+      <div className="relative flex-1 min-w-0">
         <svg
           className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none"
           fill="none" stroke="currentColor" viewBox="0 0 24 24"
@@ -151,10 +189,8 @@ export function PropertySearchBar({
         {selected ? (
           // Appartamento agganciato: pillola al posto del testo libero
           <div className="w-full pl-10 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl flex items-center gap-2 min-h-[42px]">
-            <span className="inline-flex items-center gap-1.5 max-w-full bg-violet-100 text-violet-700 text-[12px] font-semibold px-2.5 py-1 rounded-lg">
-              <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-              </svg>
+            <span className="inline-flex items-center gap-1.5 max-w-full bg-violet-100 text-violet-700 text-[12px] font-semibold pl-1 pr-2.5 py-1 rounded-lg">
+              <PropertyThumb property={selected} size={22} />
               <span className="truncate">{selected.name}</span>
             </span>
           </div>
@@ -184,6 +220,9 @@ export function PropertySearchBar({
           </button>
         )}
       </div>
+        {/* Slot sulla STESSA riga: qui vive il bottone Date */}
+        {trailing}
+      </div>
 
       {/* Suggerimenti appartamenti */}
       {showSuggestions && (
@@ -198,11 +237,7 @@ export function PropertySearchBar({
               onClick={() => pick(p)}
               className="w-full text-left px-3 py-2.5 hover:bg-slate-50 active:bg-slate-100 transition-colors border-t border-slate-50 flex items-center gap-2.5"
             >
-              <div className="w-7 h-7 rounded-lg bg-violet-50 text-violet-500 flex items-center justify-center flex-shrink-0">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-                </svg>
-              </div>
+              <PropertyThumb property={p} size={34} />
               <div className="min-w-0">
                 <p className="text-[13px] font-semibold text-slate-800 truncate">{p.name}</p>
                 {p.subtitle && <p className="text-[11px] text-slate-400 truncate">{p.subtitle}</p>}
@@ -222,34 +257,29 @@ export function PropertySearchBar({
 }
 
 // ══════════════════════════════════════════════════════════════════
-// PERIODO — chip piccoli, stesso stile della pagina Pulizie
+// PERIODO — bottone compatto + modale calendario
 // ══════════════════════════════════════════════════════════════════
+//
+// Stesso identico calendario della pagina Pulizie (Da → A, intervallo
+// evidenziato, Reset + Conferma), qui però estratto come componente
+// riusabile invece di restare incastrato dentro una pagina.
+//
+// Il bottone sta SULLA STESSA RIGA della barra di ricerca: mostra "Date"
+// quando non c'è filtro, e l'intervallo scelto quando c'è.
 
-/**
- * "recenti" = ciò che è già caricato in pagina, nessuna lettura extra.
- * È il default e non cambia il comportamento preesistente.
- */
-export type RangeKey = "recenti" | "7g" | "30g" | "90g" | "tutte";
-
-export const RANGES: Array<{ key: RangeKey; label: string; days: number | null }> = [
-  { key: "recenti", label: "Recenti", days: null },
-  { key: "7g", label: "7g", days: 7 },
-  { key: "30g", label: "30g", days: 30 },
-  { key: "90g", label: "90g", days: 90 },
-  { key: "tutte", label: "Tutte", days: 0 },
-];
-
-/** Inizio del periodo, o null se il periodo non filtra ("recenti"/"tutte"). */
-export function rangeStart(key: RangeKey): Date | null {
-  const r = RANGES.find(x => x.key === key);
-  if (!r || r.days === null || r.days === 0) return null;
-  const d = new Date();
-  d.setDate(d.getDate() - r.days);
-  d.setHours(0, 0, 0, 0);
-  return d;
+export interface DateRange {
+  /** "YYYY-MM-DD" oppure "" */
+  from: string;
+  to: string;
 }
 
-/** Data di un documento Firestore (Timestamp, Date o null). */
+export const EMPTY_RANGE: DateRange = { from: "", to: "" };
+
+export function hasDateRange(r: DateRange | null | undefined): boolean {
+  return !!(r && (r.from || r.to));
+}
+
+/** Data di un documento Firestore (Timestamp, Date, o null). */
 export function docDate(v: any): Date | null {
   try {
     if (!v) return null;
@@ -262,32 +292,213 @@ export function docDate(v: any): Date | null {
   return null;
 }
 
-/** Un elemento rientra nel periodo? Senza data NON viene escluso. */
-export function isInRange(v: any, key: RangeKey): boolean {
-  const since = rangeStart(key);
-  if (!since) return true;
+/**
+ * L'elemento rientra nell'intervallo?
+ * Estremi INCLUSI (il giorno "A" conta per intero, fino a 23:59).
+ * Senza data l'elemento NON viene escluso: meglio mostrarlo che perderlo.
+ */
+export function isInDateRange(v: any, range: DateRange | null | undefined): boolean {
+  if (!hasDateRange(range)) return true;
   const d = docDate(v);
-  return d ? d >= since : true;
+  if (!d) return true;
+  if (range!.from) {
+    const from = new Date(range!.from);
+    from.setHours(0, 0, 0, 0);
+    if (d < from) return false;
+  }
+  if (range!.to) {
+    const to = new Date(range!.to);
+    to.setHours(23, 59, 59, 999);
+    if (d > to) return false;
+  }
+  return true;
 }
 
-export function TimeRangeChips({
-  value, onChange, loading = false, className = "",
-}: { value: RangeKey; onChange: (k: RangeKey) => void; loading?: boolean; className?: string }) {
+function fmtShort(s: string): string {
+  if (!s) return "—";
+  return new Date(s).toLocaleDateString("it-IT", { day: "numeric", month: "short" });
+}
+
+const MONTH_NAMES = ["Gennaio","Febbraio","Marzo","Aprile","Maggio","Giugno","Luglio","Agosto","Settembre","Ottobre","Novembre","Dicembre"];
+
+export function DateRangeButton({
+  value, onChange, className = "",
+}: { value: DateRange; onChange: (r: DateRange) => void; className?: string }) {
+  const [open, setOpen] = useState(false);
+  const [tempFrom, setTempFrom] = useState(value.from);
+  const [tempTo, setTempTo] = useState(value.to);
+  const [mode, setMode] = useState<"from" | "to">("from");
+  const [month, setMonth] = useState(() => (value.from ? new Date(value.from) : new Date()));
+
+  // All'apertura si riparte SEMPRE dal valore confermato: se chiudi senza
+  // confermare, le scelte a metà non restano appese.
+  const openPicker = () => {
+    setTempFrom(value.from);
+    setTempTo(value.to);
+    setMode("from");
+    setMonth(value.from ? new Date(value.from) : new Date());
+    setOpen(true);
+  };
+
+  const active = hasDateRange(value);
+  const label = active ? `${fmtShort(value.from)} → ${fmtShort(value.to)}` : "Date";
+
+  const y = month.getFullYear();
+  const m = month.getMonth();
+  const startDow = (new Date(y, m, 1).getDay() + 6) % 7;
+  const daysInMonth = new Date(y, m + 1, 0).getDate();
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const fromDate = tempFrom ? new Date(tempFrom) : null;
+  const toDate = tempTo ? new Date(tempTo) : null;
+  if (fromDate) fromDate.setHours(0, 0, 0, 0);
+  if (toDate) toDate.setHours(0, 0, 0, 0);
+
+  const dayStr = (d: number) => `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+
+  const clickDay = (day: number) => {
+    const clicked = new Date(y, m, day);
+    const str = dayStr(day);
+    if (mode === "from") {
+      setTempFrom(str);
+      if (toDate && clicked > toDate) setTempTo("");
+      setMode("to");
+    } else {
+      // Cliccando una data precedente al "Da" i due estremi si scambiano,
+      // invece di rifiutare il clic senza spiegazioni.
+      if (fromDate && clicked < fromDate) { setTempTo(tempFrom); setTempFrom(str); }
+      else setTempTo(str);
+      setMode("from");
+    }
+  };
+
+  const isFrom = (d: number) => !!fromDate && new Date(y, m, d).setHours(0,0,0,0) === fromDate.getTime();
+  const isTo = (d: number) => !!toDate && new Date(y, m, d).setHours(0,0,0,0) === toDate.getTime();
+  const inBetween = (d: number) => {
+    if (!fromDate || !toDate) return false;
+    const x = new Date(y, m, d); x.setHours(0, 0, 0, 0);
+    return x > fromDate && x < toDate;
+  };
+  const isToday = (d: number) => new Date(y, m, d).setHours(0,0,0,0) === today.getTime();
+
   return (
-    <div className={`flex items-center gap-1.5 overflow-x-auto pb-0.5 ${className}`} style={{ scrollbarWidth: "none" }}>
-      {RANGES.map(r => (
-        <button
-          key={r.key}
-          type="button"
-          onClick={() => onChange(r.key)}
-          className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold whitespace-nowrap transition-colors flex-shrink-0 ${
-            value === r.key ? "bg-violet-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-          }`}
-        >
-          {r.label}
-        </button>
-      ))}
-      {loading && <span className="text-[10px] text-slate-400 flex-shrink-0 pl-1">carico…</span>}
-    </div>
+    <>
+      <button
+        type="button"
+        onClick={openPicker}
+        className={`flex items-center gap-1.5 px-3 py-2.5 rounded-xl border text-[12px] font-semibold whitespace-nowrap transition-colors flex-shrink-0 ${
+          active
+            ? "bg-violet-50 border-violet-200 text-violet-700"
+            : "bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100"
+        } ${className}`}
+      >
+        <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+        </svg>
+        <span className="max-w-[130px] truncate">{label}</span>
+        {active && (
+          <span
+            role="button"
+            aria-label="Rimuovi filtro date"
+            onClick={e => { e.stopPropagation(); onChange(EMPTY_RANGE); }}
+            className="ml-0.5 w-4 h-4 rounded-md bg-violet-200 flex items-center justify-center flex-shrink-0"
+          >
+            <svg className="w-2.5 h-2.5 text-violet-700" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <div className="fixed inset-0 z-[10050] flex items-center justify-center px-5" style={{ background: "rgba(0,0,0,0.45)" }}>
+          <div className="absolute inset-0" onClick={() => setOpen(false)} />
+          <div className="relative w-full max-w-[360px] bg-white rounded-[20px] px-5 pt-5 pb-4 shadow-2xl">
+            <div className="flex items-center justify-between mb-4">
+              <span className="text-[14px] font-bold text-slate-800">Seleziona periodo</span>
+              <button onClick={() => setOpen(false)} className="flex items-center justify-center w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 transition-colors">
+                <svg className="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2 mb-4">
+              <button
+                onClick={() => setMode("from")}
+                className="flex-1 px-3 py-[8px] rounded-[10px] text-[11px] font-bold transition-all"
+                style={{ background: mode === "from" ? "#6366f1" : "#f1f5f9", color: mode === "from" ? "#fff" : "#64748b" }}
+              >
+                Da: {fmtShort(tempFrom)}
+              </button>
+              <svg className="w-3 h-3 text-slate-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+              <button
+                onClick={() => setMode("to")}
+                className="flex-1 px-3 py-[8px] rounded-[10px] text-[11px] font-bold transition-all"
+                style={{ background: mode === "to" ? "#6366f1" : "#f1f5f9", color: mode === "to" ? "#fff" : "#64748b" }}
+              >
+                A: {fmtShort(tempTo)}
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between mb-2">
+              <button onClick={() => setMonth(new Date(y, m - 1, 1))} className="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-slate-100 transition-colors">
+                <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+              </button>
+              <span className="text-[13px] font-bold text-slate-800">{MONTH_NAMES[m]} {y}</span>
+              <button onClick={() => setMonth(new Date(y, m + 1, 1))} className="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-slate-100 transition-colors">
+                <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-7 gap-0 mb-1">
+              {["Lu","Ma","Me","Gi","Ve","Sa","Do"].map(d => (
+                <div key={d} className="text-center text-[9px] font-bold text-slate-400 uppercase py-1">{d}</div>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-7 gap-0 mb-4">
+              {Array.from({ length: startDow }, (_, i) => <div key={`e-${i}`} className="h-[38px]" />)}
+              {Array.from({ length: daysInMonth }, (_, i) => {
+                const day = i + 1;
+                const f = isFrom(day), t = isTo(day), mid = inBetween(day), tod = isToday(day);
+                return (
+                  <button
+                    key={day}
+                    onClick={() => clickDay(day)}
+                    className="h-[38px] flex items-center justify-center text-[12px] font-semibold transition-all relative"
+                    style={{
+                      background: f || t ? "#6366f1" : mid ? "rgba(99,102,241,0.08)" : "transparent",
+                      color: f || t ? "#fff" : mid ? "#6366f1" : tod ? "#6366f1" : "#334155",
+                      borderRadius: f && t ? "8px" : f ? "8px 0 0 8px" : t ? "0 8px 8px 0" : "0",
+                    }}
+                  >
+                    {tod && !f && !t && <div className="absolute bottom-[3px] left-1/2 -translate-x-1/2 w-[4px] h-[4px] rounded-full bg-violet-500" />}
+                    {day}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="flex items-center gap-2">
+              {(tempFrom || tempTo) && (
+                <button
+                  onClick={() => { setTempFrom(""); setTempTo(""); setMode("from"); onChange(EMPTY_RANGE); setOpen(false); }}
+                  className="flex-1 flex items-center justify-center gap-1 py-[10px] rounded-[10px] bg-slate-100 hover:bg-slate-200 text-[11px] font-bold text-slate-500 transition-colors"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                  Reset
+                </button>
+              )}
+              <button
+                onClick={() => { onChange({ from: tempFrom, to: tempTo }); setOpen(false); }}
+                className="flex-1 flex items-center justify-center gap-1 py-[10px] rounded-[10px] text-[11px] font-bold text-white transition-colors"
+                style={{ background: tempFrom ? "#6366f1" : "#94a3b8" }}
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+                Conferma
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

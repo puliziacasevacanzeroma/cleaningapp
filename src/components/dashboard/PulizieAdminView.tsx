@@ -354,7 +354,12 @@ export function PulizieAdminView({ properties, cleanings, operators = [] }: Puli
   const propertySearchOptions: PropertyOption[] = useMemo(
     () =>
       [...properties]
-        .map(p => ({ id: p.id, name: p.name, subtitle: (p as any).address || p.ownerName }))
+        .map(p => ({
+          id: p.id,
+          name: p.name,
+          subtitle: (p as any).address || p.ownerName,
+          image: (p as any).images?.door || (p as any).imageUrl || undefined,
+        }))
         .sort((a, b) => a.name.localeCompare(b.name, "it")),
     [properties],
   );
