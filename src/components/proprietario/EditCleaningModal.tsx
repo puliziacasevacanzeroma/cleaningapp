@@ -1976,7 +1976,36 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
                 orderUpdateData.deliveredAt = Timestamp.now();
               }
               
+              // 📋 AUDIT v1 — fotografia PRIMA della scrittura.
+              // Questo e' l'unico percorso che scrive ordini dal client senza
+              // passare da una route API: senza questo log resta invisibile.
+              const _itemsPrima = (() => {
+                try { return (orderDoc as any).data?.()?.items ?? null; } catch { return null; }
+              })();
+
               await updateDoc(doc(db, "orders", orderDoc.id), orderUpdateData);
+
+              // 📋 AUDIT v1 — fire-and-forget: non blocca e non fa mai fallire il salvataggio.
+              try {
+                void fetch("/api/linen/write-log", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    operazione: "update",
+                    orderId: orderDoc.id,
+                    cleaningId: cleaning.id,
+                    propertyId: property?.id ?? null,
+                    propertyName: property?.name ?? null,
+                    guestsCount: g,
+                    linenEnabled,
+                    linenConfigModified: isReallyModified,
+                    rawConfig: _rawCurrentConfig ?? null,
+                    usedConfig: currentConfig ?? null,
+                    itemsBefore: _itemsPrima,
+                    itemsAfter: orderItems,
+                  }),
+                }).catch(() => {});
+              } catch { /* il log non deve mai rompere il salvataggio */ }
             } else if (orderItems.length > 0) {
               // Crea nuovo ordine se non esiste e ci sono items
               
