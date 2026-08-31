@@ -1796,8 +1796,19 @@ export default function EditCleaningModal({ isOpen, onClose, cleaning, property,
         } else {
           // 🔥 Se biancheria ABILITATA → aggiorna/crea ordine
           // 🔧 FIX: Prova sia con numero che con stringa (Firestore salva chiavi come stringhe)
+          // 🛡️ v4 — SIMMETRIA DELLA GUARDIA (caso Trastevere 31/08/2026).
+          // Prima qui si usava cfgs[g] RAW mentre updateData.customLinenConfig
+          // veniva guarito con healCustomConfig: risultato, documento pulizia
+          // sano ma ordine rigenerato SENZA lenzuola (solo kit cortesia).
+          // Ora entrambi i rami partono dalla stessa config guarita.
           // @ts-expect-error TODO-FIX: TS7015 Element implicitly has an 'any' type because index expression is not of type 'nu...
-          const currentConfig = cfgs[g] || cfgs[String(g)];
+          const _rawCurrentConfig = cfgs[g] || cfgs[String(g)];
+          const _stdCfgForOrder = property?.serviceConfigs
+            ? ((property.serviceConfigs as any)[g] ?? (property.serviceConfigs as any)[String(g)] ?? null)
+            : null;
+          const currentConfig = (linenEnabled && _stdCfgForOrder)
+            ? healCustomConfig(_rawCurrentConfig, _stdCfgForOrder)
+            : _rawCurrentConfig;
           
           // 🔥 Calcola pickupItems da ordini precedenti (usato sia per create che update)
           let pickupData: { pickupItems: any[], pickupFromOrders: string[] } = { pickupItems: [], pickupFromOrders: [] };
