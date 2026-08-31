@@ -128,6 +128,31 @@ export async function GET(req: NextRequest) {
       return ms >= oggi.getTime() && ms <= limite.getTime();
     });
 
+    // ── Pre-caricamento pulizie in BLOCCHI ─────────────────────────────────
+    // v2: prima si leggeva una pulizia per ordine (486 round-trip sequenziali,
+    // ~82 secondi → oltre il timeout di CRON-JOB.ORG). Con getAll a blocchi di
+    // 300 diventano 2 chiamate.
+    const idPulizie = Array.from(
+      new Set(
+        ordini
+          .map((d) => (d.data() as any).cleaningId)
+          .filter((v: any) => typeof v === "string" && v.length > 0)
+          .map((v: any) => String(v))
+      )
+    );
+    const pulizie = new Map<string, any>();
+    const BLOCCO = 300;
+    for (let i = 0; i < idPulizie.length; i += BLOCCO) {
+      const refs = idPulizie
+        .slice(i, i + BLOCCO)
+        .map((id) => adminDb.collection("cleanings").doc(id));
+      if (refs.length === 0) continue;
+      const snaps = await adminDb.getAll(...refs);
+      snaps.forEach((s) => {
+        if (s.exists) pulizie.set(s.id, s.data());
+      });
+    }
+
     // ── Confronto ──────────────────────────────────────────────────────────
     const divergenze: Divergenza[] = [];
     let esaminati = 0;
@@ -145,12 +170,11 @@ export async function GET(req: NextRequest) {
         continue;
       }
 
-      const cSnap = await adminDb.collection("cleanings").doc(String(o.cleaningId)).get();
-      if (!cSnap.exists) {
+      const c = pulizie.get(String(o.cleaningId));
+      if (!c) {
         salta("pulizia collegata inesistente");
         continue;
       }
-      const c = cSnap.data() as any;
       const p = props.get(String(o.propertyId));
       if (!p) {
         salta("proprieta' non trovata");
