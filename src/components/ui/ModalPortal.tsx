@@ -1,44 +1,66 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 /**
- * ModalPortal — monta i figli su document.body invece che dove sta il componente.
+ * ModalPortal v2 — monta i figli su document.body, MA solo dall'istanza visibile.
  *
- * PERCHE' ESISTE (bug iPhone 31/08/2026, pagina Pagamenti)
+ * PROBLEMA 1 (iPhone, 02/09/2026)
  * Il <main> di DashboardLayoutClient ha `overflow-y-auto` +
- * `WebkitOverflowScrolling: "touch"` + `overscroll-none`. Su iOS/WebKit un
- * contenitore cosi' diventa BLOCCO CONTENITORE per i figli `position: fixed`:
- * la modale non si ancora piu' al viewport ma al <main>, e il suo z-index
- * vale solo DENTRO quel contesto di impilamento. La bottom-nav (z-50), che
- * sta fuori nel contesto radice, finisce sopra la modale (z-[100]) e ne
- * nasconde il footer con il bottone di conferma.
- * Su Android/Chrome il contenimento non scatta, per questo li' funzionava.
+ * `WebkitOverflowScrolling: "touch"`. Su iOS/WebKit un contenitore cosi' diventa
+ * BLOCCO CONTENITORE per i figli `position: fixed`: la modale si ancora al <main>
+ * invece che al viewport e il suo z-index vale solo dentro quel contesto. La
+ * bottom-nav (z-50) finiva sopra la modale (z-[100]) nascondendone il footer.
+ * Rimedio: portale su document.body.
  *
- * Alzare lo z-index NON risolve: dentro un contesto figlio qualunque valore
- * resta sotto. L'unica correzione e' tirare la modale fuori dal <main>.
+ * PROBLEMA 2, causato dal rimedio al primo (stesso giorno)
+ * DashboardLayoutClient renderizza `{children}` DUE VOLTE: una nel layout desktop
+ * e una in quello mobile, alternate via CSS. Ogni pagina e' quindi montata due
+ * volte. Finche' la modale restava dentro il suo contenitore, quella dell'istanza
+ * nascosta era invisibile. Portandola su document.body diventavano DUE modali
+ * identiche impilate: chiudendo quella sopra ricompariva quella sotto, e il
+ * salvataggio sembrava non funzionare (in realta' partivano due richieste).
  *
- * SSR-safe: al primo render (server e idratazione) non monta nulla, cosi'
- * non si rompe la corrispondenza fra HTML del server e client.
+ * SOLUZIONE
+ * Un ancoraggio invisibile resta nel punto in cui la modale e' dichiarata.
+ * `offsetParent` e' null quando un antenato ha `display: none`: in quel caso
+ * l'istanza e' quella nascosta e il portale non monta nulla. Il controllo viene
+ * rifatto al cambio di dimensioni della finestra, perche' passando fra le
+ * larghezze desktop e mobile cambia quale delle due istanze e' visibile.
  *
- * USO
- *   return (
- *     <ModalPortal>
- *       <div className="fixed inset-0 ... z-[100]" onClick={close} />
- *       <div className="fixed ... z-[100]">…</div>
- *     </ModalPortal>
- *   );
+ * SSR-safe: al primo render non monta, cosi' non rompe l'idratazione.
  */
 export default function ModalPortal({ children }: { children: React.ReactNode }) {
-  const [montato, setMontato] = useState(false);
+  const ancoraRef = useRef<HTMLSpanElement>(null);
+  const [visibile, setVisibile] = useState(false);
 
   useEffect(() => {
-    setMontato(true);
+    const verifica = () => {
+      const el = ancoraRef.current;
+      // offsetParent === null → un antenato ha display:none → istanza nascosta.
+      setVisibile(!!el && el.offsetParent !== null);
+    };
+
+    verifica();
+
+    // Il breakpoint puo' cambiare: ricontrolla al resize e al cambio orientamento.
+    window.addEventListener("resize", verifica);
+    window.addEventListener("orientationchange", verifica);
+    return () => {
+      window.removeEventListener("resize", verifica);
+      window.removeEventListener("orientationchange", verifica);
+    };
   }, []);
 
-  if (!montato) return null;
-  if (typeof document === "undefined") return null;
-
-  return createPortal(<>{children}</>, document.body);
+  return (
+    <>
+      {/* Ancoraggio: resta nell'albero originale e dice se questa istanza e' visibile.
+          Niente display:none, altrimenti offsetParent sarebbe sempre null. */}
+      <span ref={ancoraRef} aria-hidden="true" style={{ width: 0, height: 0, overflow: "hidden" }} />
+      {visibile && typeof document !== "undefined"
+        ? createPortal(<>{children}</>, document.body)
+        : null}
+    </>
+  );
 }
