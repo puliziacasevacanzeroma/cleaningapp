@@ -5,6 +5,7 @@ import Link from "next/link";
 import { collection, query, where, onSnapshot, doc, getDoc } from "firebase/firestore";
 import { db } from "~/lib/firebase/config";
 import { useRealtimePayments, useRealtimePaymentsTimeline } from "~/hooks/useRealtimePayments";
+import ModalPortal from "~/components/ui/ModalPortal";
 
 // ==================== LUCIDE ICONS (SVG) ====================
 const Icons = {
@@ -2329,7 +2330,7 @@ export default function PagamentiPage() {
       : null;
 
     return (
-      <>
+      <ModalPortal>
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100]" onClick={close} />
         <div
           className={`fixed z-[100] bg-white shadow-2xl flex flex-col ${
@@ -2430,7 +2431,7 @@ export default function PagamentiPage() {
             )}
           </div>
         </div>
-      </>
+      </ModalPortal>
     );
   };
 
@@ -2451,7 +2452,7 @@ export default function PagamentiPage() {
     const finalAmount = paymentMode === "totale" ? quickPayClient.saldo : parseFloat(customAmount) || 0;
     
     return (
-      <>
+      <ModalPortal>
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100]" onClick={() => setQuickPayClient(null)} />
         <div 
           className={`fixed z-[100] bg-white shadow-2xl flex flex-col ${
@@ -2623,7 +2624,7 @@ export default function PagamentiPage() {
             </button>
           </div>
         </div>
-      </>
+      </ModalPortal>
     );
   };
 
@@ -2631,7 +2632,7 @@ export default function PagamentiPage() {
   const ConfirmSaldoModal = () => {
     if (!confirmSaldoModal) return null;
     return (
-      <>
+      <ModalPortal>
         <div className="fixed inset-0 bg-black/70 z-[110]" onClick={() => setConfirmSaldoModal(null)} />
         <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
           <div className="bg-white max-w-sm w-full rounded-2xl shadow-2xl p-6">
@@ -2648,7 +2649,7 @@ export default function PagamentiPage() {
             </div>
           </div>
         </div>
-      </>
+      </ModalPortal>
     );
   };
 
@@ -2664,7 +2665,7 @@ export default function PagamentiPage() {
       ? <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
       : <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />;
     return (
-      <>
+      <ModalPortal>
         <div className="fixed inset-0 bg-black/70 z-[120]" onClick={() => setConfirmModal(null)} />
         <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
           <div className="bg-white max-w-sm w-full rounded-2xl shadow-2xl p-6">
@@ -2681,7 +2682,7 @@ export default function PagamentiPage() {
             </div>
           </div>
         </div>
-      </>
+      </ModalPortal>
     );
   };
 
@@ -3652,7 +3653,7 @@ export default function PagamentiPage() {
     const isExcluded = (editingService as any).excludedFromBilling === true;
 
     return (
-      <>
+      <ModalPortal>
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100]" onClick={() => { if (!serviceActionLoading) { setEditingService(null); setServiceActionMode("edit"); } }} />
         <div className={`fixed z-[100] bg-white shadow-2xl flex flex-col ${
           isDesktop 
@@ -3866,7 +3867,7 @@ export default function PagamentiPage() {
             </div>
           </div>
         </div>
-      </>
+      </ModalPortal>
     );
   };
 
@@ -3878,7 +3879,7 @@ export default function PagamentiPage() {
     if (!pendingDangerousAction) return null;
     const { type, service, clientName, impactEur, monthLabel, isPaid } = pendingDangerousAction;
     return (
-      <>
+      <ModalPortal>
         {/* z-[200] sopra ServiceEditModal (z-[100]) per essere visibile su mobile */}
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[200]" />
         <div className="fixed z-[200] bg-white shadow-2xl rounded-2xl inset-x-4 top-1/2 -translate-y-1/2 max-w-md mx-auto p-5">
@@ -3945,7 +3946,7 @@ export default function PagamentiPage() {
             </button>
           </div>
         </div>
-      </>
+      </ModalPortal>
     );
   };
 
@@ -3975,7 +3976,7 @@ export default function PagamentiPage() {
     const willResetOverride = editingBiancheria.service.hasOverride === true;
     
     return (
-      <>
+      <ModalPortal>
         {/* Backdrop con blur */}
         <div 
           className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[100] animate-in fade-in duration-200" 
@@ -4364,7 +4365,7 @@ export default function PagamentiPage() {
             </div>
           </div>
         </div>
-      </>
+      </ModalPortal>
     );
   };
 
@@ -4706,7 +4707,7 @@ export default function PagamentiPage() {
 
       {/* NEW PAYMENT MODAL - Con ricerca cliente/proprietà */}
       {showNewPaymentModal && (
-        <>
+        <ModalPortal>
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100]" onClick={() => setShowNewPaymentModal(false)} />
           <div 
             className={`fixed z-[100] bg-white shadow-2xl flex flex-col ${
@@ -4818,7 +4819,7 @@ export default function PagamentiPage() {
               )}
             </div>
           </div>
-        </>
+        </ModalPortal>
       )}
 
       {/* Modals - solo dopo mount per evitare hydration mismatch */}
