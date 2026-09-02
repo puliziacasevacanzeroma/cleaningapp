@@ -947,18 +947,30 @@ export default function PagamentiPage() {
     if (!editingService) return;
     const newPrice = parseFloat(serviceEditForm.newPrice);
     if (isNaN(newPrice) || newPrice < 0) { setLocalError("Inserisci un importo valido"); return; }
+    // Le pulizie e gli ordini hanno due route distinte, esattamente come fa gia'
+    // "Escludi dai pagamenti" qui sotto. La vecchia chiamata a
+    // /api/payments/service-override rispondeva 404: quella route non esiste.
+    const endpoint = editingService.type === "PULIZIA"
+      ? `/api/cleanings/${editingService.id}/price`
+      : `/api/orders/${editingService.id}/price`;
     try {
-      const res = await fetch("/api/payments/service-override", {
-        method: "POST",
+      const res = await fetch(endpoint, {
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orderId: editingService.id, orderType: editingService.type, newPrice, reason: serviceEditForm.reason || "Modifica manuale" }),
+        body: JSON.stringify({ newPrice, reason: serviceEditForm.reason || "Modifica manuale" }),
       });
-      if (!res.ok) throw new Error((await res.json()).error);
+      if (!res.ok) {
+        // Mostra l'errore VERO invece di un generico "Errore": un 404 muto
+        // ha nascosto questo bug fino a oggi.
+        let msg = `Errore ${res.status}`;
+        try { const j = await res.json(); if (j?.error) msg = j.error; } catch { /* risposta non JSON */ }
+        throw new Error(msg);
+      }
       showSuccess("Servizio modificato");
       setEditingService(null);
       setServiceEditForm({ newPrice: "", reason: "" });
       fetchData();
-    } catch { setLocalError("Errore"); }
+    } catch (e: any) { setLocalError(e?.message || "Errore durante il salvataggio"); }
   };
 
   // ============================================================
