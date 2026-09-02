@@ -613,6 +613,60 @@ export default function PagamentiPage() {
     propertiesWithoutPrice,
     refresh: refreshPayments
   } = useRealtimePayments(selectedMonth, selectedYear);
+
+  // ─── PREZZI OTTIMISTICI ─────────────────────────────────────────────────
+  // Il front-end non aspetta il database. Al salvataggio il nuovo prezzo entra
+  // subito qui e la lista si aggiorna nello stesso istante; la PATCH parte in
+  // background. Quando il listener onSnapshot consegna il valore vero, la voce
+  // ottimistica viene rimossa (pulizia in useEffect piu' sotto). Se la scrittura
+  // fallisce, la voce viene tolta e il prezzo torna quello di prima.
+  const [prezziOttimistici, setPrezziOttimistici] = useState<Record<string, number>>({});
+
+  // Applica i prezzi ottimistici sopra i dati realtime, ricalcolando i totali
+  // del cliente cosi' che riga, totale proprieta' e saldo restino coerenti.
+  const clientsConOttimistici = useMemo(() => {
+    if (Object.keys(prezziOttimistici).length === 0) return clients;
+    return clients.map(c => {
+      if (!c.services.some(s => prezziOttimistici[s.id] !== undefined)) return c;
+      let delta = 0;
+      const services = c.services.map(s => {
+        const nuovo = prezziOttimistici[s.id];
+        if (nuovo === undefined) return s;
+        delta += nuovo - s.effectivePrice;
+        return { ...s, effectivePrice: nuovo, hasOverride: true };
+      });
+      const totaleEffettivo = c.totaleEffettivo + delta;
+      const saldo = totaleEffettivo - c.totalePagato;
+      return {
+        ...c,
+        services,
+        totaleEffettivo,
+        saldo,
+        saldoConCredito: Math.max(0, saldo - c.creditoPrecedente),
+        stato: (saldo <= 0 ? "SALDATO" : c.totalePagato > 0 ? "PARZIALE" : "DA_PAGARE") as ClientStats["stato"],
+      };
+    });
+  }, [clients, prezziOttimistici]);
+
+  // Quando il dato vero arriva e coincide, la voce ottimistica non serve piu'.
+  useEffect(() => {
+    const chiavi = Object.keys(prezziOttimistici);
+    if (chiavi.length === 0) return;
+    const daTogliere = chiavi.filter(id => {
+      for (const c of clients) {
+        const s = c.services.find(x => x.id === id);
+        if (s) return Math.abs(s.effectivePrice - prezziOttimistici[id]) < 0.005;
+      }
+      return false;
+    });
+    if (daTogliere.length > 0) {
+      setPrezziOttimistici(prev => {
+        const next = { ...prev };
+        daTogliere.forEach(id => delete next[id]);
+        return next;
+      });
+    }
+  }, [clients, prezziOttimistici]);
   
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
@@ -967,11 +1021,20 @@ export default function PagamentiPage() {
     const endpoint = editingService.type === "PULIZIA"
       ? `/api/cleanings/${editingService.id}/price`
       : `/api/orders/${editingService.id}/price`;
+    // UI ISTANTANEA: prezzo applicato e modale chiusa PRIMA della scrittura.
+    const servizioId = editingService.id;
+    const prezzoPrecedente = editingService.effectivePrice;
+    const motivo = serviceEditForm.reason || "Modifica manuale";
+    setPrezziOttimistici(prev => ({ ...prev, [servizioId]: newPrice }));
+    setEditingService(null);
+    setServiceEditForm({ newPrice: "", reason: "" });
+    showSuccess("Servizio modificato");
+
     try {
       const res = await fetch(endpoint, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ newPrice, reason: serviceEditForm.reason || "Modifica manuale" }),
+        body: JSON.stringify({ newPrice, reason: motivo }),
       });
       if (!res.ok) {
         // Mostra l'errore VERO invece di un generico "Errore": un 404 muto
@@ -980,16 +1043,20 @@ export default function PagamentiPage() {
         try { const j = await res.json(); if (j?.error) msg = j.error; } catch { /* risposta non JSON */ }
         throw new Error(msg);
       }
-      showSuccess("Servizio modificato");
-      setEditingService(null);
-      setServiceEditForm({ newPrice: "", reason: "" });
       // fetchData() RIMOSSA: i listener onSnapshot (cleanings, orders, payments,
       // overrides) consegnano gia' la modifica in tempo reale. Chiamarla qui
       // incrementava refreshTrigger, che sta nelle deps dell'effetto del hook:
       // smontava e rimontava TUTTI i listener ricaricando ~7600 documenti.
       // Era la causa dei ~145s di attesa dopo ogni salvataggio.
     } catch (e: any) {
-      setLocalError(e?.message || "Errore durante il salvataggio");
+      // Scrittura fallita: si torna al prezzo di prima e si dice cosa e' successo.
+      setPrezziOttimistici(prev => {
+        const next = { ...prev };
+        delete next[servizioId];
+        return next;
+      });
+      setSuccessMessage(null);
+      setLocalError(`Prezzo NON salvato (${prezzoPrecedente.toFixed(2)} € invariato): ${e?.message || "errore di rete"}`);
     } finally {
       setServiceActionLoading(false);
     }
@@ -1315,7 +1382,7 @@ export default function PagamentiPage() {
     return Array.from(props).sort();
   }, [clients]);
 
-  const filteredClients = clients.filter(c => {
+  const filteredClients = clientsConOttimistici.filter(c => {
     if (activeTab === "da_pagare" && c.saldo <= 0) return false;
     if (activeTab === "saldati" && c.saldo > 0) return false;
     if (searchTerm) {
@@ -4664,9 +4731,9 @@ export default function PagamentiPage() {
                 {/* Status Tabs */}
                 <div className="flex bg-slate-100 rounded-xl p-1 w-full sm:w-auto">
                   {[
-                    { key: "tutti", label: "Tutti", count: clients.length, color: "slate" },
-                    { key: "da_pagare", label: "Da pagare", count: clients.filter(c => c.saldo > 0).length, color: "red" },
-                    { key: "saldati", label: "Saldati", count: clients.filter(c => c.saldo <= 0).length, color: "emerald" }
+                    { key: "tutti", label: "Tutti", count: clientsConOttimistici.length, color: "slate" },
+                    { key: "da_pagare", label: "Da pagare", count: clientsConOttimistici.filter(c => c.saldo > 0).length, color: "red" },
+                    { key: "saldati", label: "Saldati", count: clientsConOttimistici.filter(c => c.saldo <= 0).length, color: "emerald" }
                   ].map((tab) => (
                     <button 
                       key={tab.key} 
@@ -4769,7 +4836,7 @@ export default function PagamentiPage() {
       </div>
 
       {/* FAB - Nuovo Pagamento — DISATTIVATO (cambiare `false` in `true` per riattivare) */}
-      {false && mainTab === "lista" && clients.filter(c => c.saldo > 0).length > 0 && (
+      {false && mainTab === "lista" && clientsConOttimistici.filter(c => c.saldo > 0).length > 0 && (
         <div className="fixed bottom-24 lg:bottom-8 right-4 lg:right-8 z-40">
           <button
             onClick={() => { setShowNewPaymentModal(true); setNewPaymentSearch(""); }}
@@ -4880,7 +4947,7 @@ export default function PagamentiPage() {
                   );
                 })}
               
-              {clients.filter(c => c.saldo > 0).filter(c => {
+              {clientsConOttimistici.filter(c => c.saldo > 0).filter(c => {
                 if (!newPaymentSearch) return true;
                 const search = newPaymentSearch.toLowerCase();
                 return c.proprietarioName.toLowerCase().includes(search) ||
