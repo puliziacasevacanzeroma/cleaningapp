@@ -864,6 +864,9 @@ export default function PagamentiPage() {
   }, []);
 
   // 🔥 REAL-TIME: Non serve più fetchData - i dati si aggiornano automaticamente!
+  // Mantenuta per un eventuale refresh manuale, ma NON va chiamata dopo una
+  // mutazione: vedi commenti sotto. Ricarica l'intero dataset.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const fetchData = useCallback(async () => {
     // Forza il ricaricamento dei dati
     refreshPayments();
@@ -920,7 +923,11 @@ export default function PagamentiPage() {
       showSuccess(`Pagamento di ${formatCurrency(amount)} registrato`);
       setQuickPayClient(null);
       setPaymentForm({ type: "ACCONTO", amount: "", method: "", note: "" });
-      fetchData();
+      // fetchData() RIMOSSA: i listener onSnapshot (cleanings, orders, payments,
+      // overrides) consegnano gia' la modifica in tempo reale. Chiamarla qui
+      // incrementava refreshTrigger, che sta nelle deps dell'effetto del hook:
+      // smontava e rimontava TUTTI i listener ricaricando ~7600 documenti.
+      // Era la causa dei ~145s di attesa dopo ogni salvataggio.
       // 🚀 Timeline si aggiorna automaticamente in real-time!
     } catch (err: any) { setLocalError(err.message); }
   };
@@ -931,7 +938,11 @@ export default function PagamentiPage() {
       const res = await fetch(`/api/payments?id=${paymentId}`, { method: "DELETE" });
       if (!res.ok) throw new Error((await res.json()).error);
       showSuccess("Pagamento eliminato");
-      fetchData();
+      // fetchData() RIMOSSA: i listener onSnapshot (cleanings, orders, payments,
+      // overrides) consegnano gia' la modifica in tempo reale. Chiamarla qui
+      // incrementava refreshTrigger, che sta nelle deps dell'effetto del hook:
+      // smontava e rimontava TUTTI i listener ricaricando ~7600 documenti.
+      // Era la causa dei ~145s di attesa dopo ogni salvataggio.
     } catch (err: any) { setLocalError(err.message); }
   };
 
@@ -945,6 +956,9 @@ export default function PagamentiPage() {
 
   const handleSubmitServiceEdit = async () => {
     if (!editingService) return;
+    if (serviceActionLoading) return; // evita il doppio invio
+    setLocalError(null);
+    setServiceActionLoading(true);
     const newPrice = parseFloat(serviceEditForm.newPrice);
     if (isNaN(newPrice) || newPrice < 0) { setLocalError("Inserisci un importo valido"); return; }
     // Le pulizie e gli ordini hanno due route distinte, esattamente come fa gia'
@@ -969,8 +983,16 @@ export default function PagamentiPage() {
       showSuccess("Servizio modificato");
       setEditingService(null);
       setServiceEditForm({ newPrice: "", reason: "" });
-      fetchData();
-    } catch (e: any) { setLocalError(e?.message || "Errore durante il salvataggio"); }
+      // fetchData() RIMOSSA: i listener onSnapshot (cleanings, orders, payments,
+      // overrides) consegnano gia' la modifica in tempo reale. Chiamarla qui
+      // incrementava refreshTrigger, che sta nelle deps dell'effetto del hook:
+      // smontava e rimontava TUTTI i listener ricaricando ~7600 documenti.
+      // Era la causa dei ~145s di attesa dopo ogni salvataggio.
+    } catch (e: any) {
+      setLocalError(e?.message || "Errore durante il salvataggio");
+    } finally {
+      setServiceActionLoading(false);
+    }
   };
 
   // ============================================================
@@ -1046,7 +1068,11 @@ export default function PagamentiPage() {
       setExcludeForm({ reason: "" });
       setPendingDangerousAction(null);
       setServiceActionMode("edit");
-      fetchData();
+      // fetchData() RIMOSSA: i listener onSnapshot (cleanings, orders, payments,
+      // overrides) consegnano gia' la modifica in tempo reale. Chiamarla qui
+      // incrementava refreshTrigger, che sta nelle deps dell'effetto del hook:
+      // smontava e rimontava TUTTI i listener ricaricando ~7600 documenti.
+      // Era la causa dei ~145s di attesa dopo ogni salvataggio.
     } catch (err: any) {
       setLocalError(err.message || "Errore esclusione");
     } finally {
@@ -1081,7 +1107,11 @@ export default function PagamentiPage() {
       setEditingService(null);
       setPendingDangerousAction(null);
       setServiceActionMode("edit");
-      fetchData();
+      // fetchData() RIMOSSA: i listener onSnapshot (cleanings, orders, payments,
+      // overrides) consegnano gia' la modifica in tempo reale. Chiamarla qui
+      // incrementava refreshTrigger, che sta nelle deps dell'effetto del hook:
+      // smontava e rimontava TUTTI i listener ricaricando ~7600 documenti.
+      // Era la causa dei ~145s di attesa dopo ogni salvataggio.
     } catch (err: any) {
       setLocalError(err.message || "Errore eliminazione");
     } finally {
@@ -1187,7 +1217,11 @@ export default function PagamentiPage() {
       setEditingBiancheria(null);
       setShowAddFromInventory(false);
       setInventorySearch("");
-      fetchData();
+      // fetchData() RIMOSSA: i listener onSnapshot (cleanings, orders, payments,
+      // overrides) consegnano gia' la modifica in tempo reale. Chiamarla qui
+      // incrementava refreshTrigger, che sta nelle deps dell'effetto del hook:
+      // smontava e rimontava TUTTI i listener ricaricando ~7600 documenti.
+      // Era la causa dei ~145s di attesa dopo ogni salvataggio.
     } catch (err: any) {
       console.error("Errore salvataggio biancheria:", err);
       setLocalError(err.message || "Errore salvataggio");
@@ -3781,7 +3815,11 @@ export default function PagamentiPage() {
                             if (!res.ok) throw new Error((await res.json()).error || "Errore");
                             showSuccess("Servizio riincluso nei pagamenti");
                             setEditingService(null);
-                            fetchData();
+                            // fetchData() RIMOSSA: i listener onSnapshot (cleanings, orders, payments,
+                            // overrides) consegnano gia' la modifica in tempo reale. Chiamarla qui
+                            // incrementava refreshTrigger, che sta nelle deps dell'effetto del hook:
+                            // smontava e rimontava TUTTI i listener ricaricando ~7600 documenti.
+                            // Era la causa dei ~145s di attesa dopo ogni salvataggio.
                           } catch (err: any) {
                             setLocalError(err.message || "Errore");
                           } finally {
@@ -3871,11 +3909,21 @@ export default function PagamentiPage() {
           
           {/* Footer fisso con bottoni */}
           <div className="flex-shrink-0 p-4 border-t border-slate-100 bg-white rounded-b-2xl">
+            {/* Errore MOSTRATO QUI DENTRO: il banner globale di localError sta nel
+                corpo della pagina, quindi finisce DIETRO la modale e non si vede.
+                Risultato: un salvataggio fallito sembrava "non fa nulla". */}
+            {localError && (
+              <div className="mb-3 flex items-start gap-2 text-[13px] text-red-700 bg-red-50 border border-red-200 rounded-xl px-3 py-2">
+                <svg className="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                <span className="flex-1">{localError}</span>
+                <button onClick={() => setLocalError(null)} className="text-red-400 hover:text-red-600 font-bold px-1">×</button>
+              </div>
+            )}
             <div className="flex gap-3">
               {mode === "edit" && (
                 <>
                   <button onClick={() => setEditingService(null)} disabled={serviceActionLoading} className="flex-1 py-3 border-2 border-slate-200 rounded-xl font-semibold text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50">Annulla</button>
-                  <button onClick={handleSubmitServiceEdit} disabled={serviceActionLoading} className="flex-1 py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl font-semibold hover:from-emerald-600 hover:to-emerald-700 flex items-center justify-center gap-2 shadow-lg disabled:opacity-50">{Icons.check} Salva</button>
+                  <button onClick={handleSubmitServiceEdit} disabled={serviceActionLoading} className="flex-1 py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl font-semibold hover:from-emerald-600 hover:to-emerald-700 flex items-center justify-center gap-2 shadow-lg disabled:opacity-50">{serviceActionLoading ? "Salvataggio..." : <>{Icons.check} Salva</>}</button>
                 </>
               )}
               {mode === "exclude" && (
