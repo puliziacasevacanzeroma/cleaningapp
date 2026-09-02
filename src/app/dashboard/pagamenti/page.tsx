@@ -628,6 +628,13 @@ export default function PagamentiPage() {
   const [mainTab, setMainTab] = useState<"lista" | "timeline">("lista"); // Default lista
   
   const [quickPayClient, setQuickPayClient] = useState<ClientStats | null>(null);
+  // Stato di QuickPayModal SOLLEVATO nel genitore (fix tastiera iPhone 02/09/2026).
+  // Prima viveva dentro QuickPayModal, dopo un `if (!quickPayClient) return null`:
+  // hook condizionali, funzionanti solo perche' il rimontaggio continuo li
+  // reinizializzava. Sollevandoli qui la modale diventa pura e puo' essere
+  // renderizzata come chiamata di funzione, senza rimontaggi.
+  const [quickPayMode, setQuickPayMode] = useState<"totale" | "acconto">("totale");
+  const [quickPayAmount, setQuickPayAmount] = useState("");
   // 🧾 DATI FATTURAZIONE: modal info cliente (users/{id}.billingInfo, scritto dall'onboarding)
   const [billingClient, setBillingClient] = useState<{ proprietarioId: string; proprietarioName: string } | null>(null);
   const [billingData, setBillingData] = useState<any | null>(null);
@@ -927,6 +934,14 @@ export default function PagamentiPage() {
       fetchData();
     } catch (err: any) { setLocalError(err.message); }
   };
+
+  // Reinizializza i campi ogni volta che si apre QuickPayModal su un cliente.
+  useEffect(() => {
+    if (quickPayClient) {
+      setQuickPayMode("totale");
+      setQuickPayAmount(String(quickPayClient.saldo));
+    }
+  }, [quickPayClient]);
 
   const handleSubmitServiceEdit = async () => {
     if (!editingService) return;
@@ -2437,8 +2452,11 @@ export default function PagamentiPage() {
 
   const QuickPayModal = () => {
     if (!quickPayClient) return null;
-    const [paymentMode, setPaymentMode] = useState<"totale" | "acconto">("totale");
-    const [customAmount, setCustomAmount] = useState(String(quickPayClient.saldo));
+    // Stato sollevato nel genitore: qui nessun hook.
+    const paymentMode = quickPayMode;
+    const setPaymentMode = setQuickPayMode;
+    const customAmount = quickPayAmount;
+    const setCustomAmount = setQuickPayAmount;
     
     const handleModeChange = (mode: "totale" | "acconto") => {
       setPaymentMode(mode);
@@ -4823,12 +4841,12 @@ export default function PagamentiPage() {
       )}
 
       {/* Modals - solo dopo mount per evitare hydration mismatch */}
-      {mounted && <QuickPayModal />}
-      {mounted && <BillingInfoModal />}
-      {mounted && <ConfirmSaldoModal />}
-      {mounted && <ConfirmModal />}
-      {mounted && <ServiceEditModal />}
-      {mounted && <DangerousActionConfirmModal />}
+      {mounted && QuickPayModal()}
+      {mounted && BillingInfoModal()}
+      {mounted && ConfirmSaldoModal()}
+      {mounted && ConfirmModal()}
+      {mounted && ServiceEditModal()}
+      {mounted && DangerousActionConfirmModal()}
       {/* ⚠️ Renderizzato come CHIAMATA di funzione (non <Component />) di proposito:
           essendo definito dentro PaymentsPage, come elemento JSX verrebbe RIMONTATO
           a ogni re-render (es. click +/-), azzerando lo scroll del modal. La chiamata
