@@ -622,6 +622,12 @@ export default function PagamentiPage() {
   // fallisce, la voce viene tolta e il prezzo torna quello di prima.
   const [prezziOttimistici, setPrezziOttimistici] = useState<Record<string, number>>({});
 
+  // Incassi ottimistici, per proprietario: importo appena registrato + quanto
+  // risultava pagato PRIMA. Serve a capire quando il dato vero e' arrivato dal
+  // listener: finche' totalePagato e' uguale a basePagato la scrittura non e'
+  // ancora atterrata e teniamo il valore provvisorio.
+  const [incassiOttimistici, setIncassiOttimistici] = useState<Record<string, { importo: number; basePagato: number }>>({});
+
   // Fase VISIBILE del salvataggio prezzo: il bottone mostra "Salvataggio...",
   // poi "Salvato", e solo dopo la modale si chiude. La scrittura vera parte
   // subito in parallelo: questa e' la parte percepita, non un'attesa reale.
@@ -631,9 +637,15 @@ export default function PagamentiPage() {
   // Applica i prezzi ottimistici sopra i dati realtime, ricalcolando i totali
   // del cliente cosi' che riga, totale proprieta' e saldo restino coerenti.
   const clientsConOttimistici = useMemo(() => {
-    if (Object.keys(prezziOttimistici).length === 0) return clients;
+    const nessunPrezzo = Object.keys(prezziOttimistici).length === 0;
+    const nessunIncasso = Object.keys(incassiOttimistici).length === 0;
+    if (nessunPrezzo && nessunIncasso) return clients;
     return clients.map(c => {
-      if (!c.services.some(s => prezziOttimistici[s.id] !== undefined)) return c;
+      const incasso = incassiOttimistici[c.proprietarioId];
+      // L'incasso provvisorio vale solo finche' il dato vero non e' arrivato.
+      const incassoDaApplicare = incasso && Math.abs(c.totalePagato - incasso.basePagato) < 0.005 ? incasso.importo : 0;
+      const haPrezzi = c.services.some(s => prezziOttimistici[s.id] !== undefined);
+      if (!haPrezzi && incassoDaApplicare === 0) return c;
       let delta = 0;
       const services = c.services.map(s => {
         const nuovo = prezziOttimistici[s.id];
@@ -642,17 +654,19 @@ export default function PagamentiPage() {
         return { ...s, effectivePrice: nuovo, hasOverride: true };
       });
       const totaleEffettivo = c.totaleEffettivo + delta;
-      const saldo = totaleEffettivo - c.totalePagato;
+      const totalePagato = c.totalePagato + incassoDaApplicare;
+      const saldo = totaleEffettivo - totalePagato;
       return {
         ...c,
         services,
         totaleEffettivo,
+        totalePagato,
         saldo,
         saldoConCredito: Math.max(0, saldo - c.creditoPrecedente),
-        stato: (saldo <= 0 ? "SALDATO" : c.totalePagato > 0 ? "PARZIALE" : "DA_PAGARE") as ClientStats["stato"],
+        stato: (Math.max(0, saldo - c.creditoPrecedente) <= 0.01 ? "SALDATO" : totalePagato > 0 ? "PARZIALE" : "DA_PAGARE") as ClientStats["stato"],
       };
     });
-  }, [clients, prezziOttimistici]);
+  }, [clients, prezziOttimistici, incassiOttimistici]);
 
   // Quando il dato vero arriva e coincide, la voce ottimistica non serve piu'.
   useEffect(() => {
@@ -673,6 +687,24 @@ export default function PagamentiPage() {
       });
     }
   }, [clients, prezziOttimistici]);
+
+  // Incassi provvisori: appena il listener consegna un totalePagato diverso da
+  // quello di partenza, il dato vero e' arrivato e la voce si toglie.
+  useEffect(() => {
+    const chiavi = Object.keys(incassiOttimistici);
+    if (chiavi.length === 0) return;
+    const daTogliere = chiavi.filter(ownerId => {
+      const c = clients.find(x => x.proprietarioId === ownerId);
+      return !c || Math.abs(c.totalePagato - incassiOttimistici[ownerId].basePagato) > 0.005;
+    });
+    if (daTogliere.length > 0) {
+      setIncassiOttimistici(prev => {
+        const next = { ...prev };
+        daTogliere.forEach(k => delete next[k]);
+        return next;
+      });
+    }
+  }, [clients, incassiOttimistici]);
   
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
@@ -990,17 +1022,30 @@ export default function PagamentiPage() {
     if (!paymentForm.method) { setMethodError(true); return; }
     invioPagamentoRef.current = true;
     setInvioPagamento(true);
+
+    // Incasso applicato SUBITO alla lista dietro la modale; la POST parte ora e
+    // viaggia in parallelo. La pagina non aspetta il server (che fra query di
+    // controllo, scrittura e ricalcolo del debito puo' impiegare ~10 secondi).
+    const basePagato = totalPaid || 0;
+    setIncassiOttimistici(prev => ({ ...prev, [proprietarioId]: { importo: amount, basePagato } }));
+
+    const scrittura = fetch("/api/payments", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ proprietarioId, proprietarioName, month: selectedMonth, year: selectedYear, amount, type: customAmount ? "SALDO" : paymentForm.type, method: paymentForm.method, note: paymentForm.note, totalDue: totalDue || 0, totalPaid: totalPaid || 0, clientRequestId: requestId || nuovaChiave() }),
+    });
+
     try {
-      const res = await fetch("/api/payments", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ proprietarioId, proprietarioName, month: selectedMonth, year: selectedYear, amount, type: customAmount ? "SALDO" : paymentForm.type, method: paymentForm.method, note: paymentForm.note, totalDue: totalDue || 0, totalPaid: totalPaid || 0, clientRequestId: requestId || nuovaChiave() }),
-      });
-      if (!res.ok) throw new Error((await res.json()).error);
-      showSuccess(`Pagamento di ${formatCurrency(amount)} registrato`);
+      // Un secondo di "Registrazione...", poi si chiude. Non e' un'attesa vera:
+      // la richiesta e' gia' partita e continua da sola.
+      await attendi(1000);
       setConfirmSaldoModal(null);
       setQuickPayClient(null);
       setPaymentForm({ type: "ACCONTO", amount: "", method: "", note: "" });
+      showSuccess(`Pagamento di ${formatCurrency(amount)} registrato`);
+
+      const res = await scrittura;
+      if (!res.ok) throw new Error((await res.json()).error);
       // fetchData() RIMOSSA: i listener onSnapshot (cleanings, orders, payments,
       // overrides) consegnano gia' la modifica in tempo reale. Chiamarla qui
       // incrementava refreshTrigger, che sta nelle deps dell'effetto del hook:
@@ -1008,7 +1053,14 @@ export default function PagamentiPage() {
       // Era la causa dei ~145s di attesa dopo ogni salvataggio.
       // 🚀 Timeline si aggiorna automaticamente in real-time!
     } catch (err: any) {
-      setLocalError(err.message);
+      // Scrittura fallita: si annulla l'incasso provvisorio e lo si dice.
+      setIncassiOttimistici(prev => {
+        const next = { ...prev };
+        delete next[proprietarioId];
+        return next;
+      });
+      setSuccessMessage(null);
+      setLocalError(`Incasso NON registrato: ${err?.message || "errore di rete"}`);
     } finally {
       invioPagamentoRef.current = false;
       setInvioPagamento(false);
