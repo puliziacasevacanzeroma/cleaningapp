@@ -622,6 +622,12 @@ export default function PagamentiPage() {
   // fallisce, la voce viene tolta e il prezzo torna quello di prima.
   const [prezziOttimistici, setPrezziOttimistici] = useState<Record<string, number>>({});
 
+  // Fase VISIBILE del salvataggio prezzo: il bottone mostra "Salvataggio...",
+  // poi "Salvato", e solo dopo la modale si chiude. La scrittura vera parte
+  // subito in parallelo: questa e' la parte percepita, non un'attesa reale.
+  const [faseSalvataggio, setFaseSalvataggio] = useState<"idle" | "salvataggio" | "fatto">("idle");
+  const attendi = (ms: number) => new Promise(r => setTimeout(r, ms));
+
   // Applica i prezzi ottimistici sopra i dati realtime, ricalcolando i totali
   // del cliente cosi' che riga, totale proprieta' e saldo restino coerenti.
   const clientsConOttimistici = useMemo(() => {
@@ -704,7 +710,19 @@ export default function PagamentiPage() {
   };
   useEffect(() => { setMethodError(false); }, [quickPayClient]); // 🆕 reset avviso metodo all'apertura del modal
   const [editingService, setEditingService] = useState<ServiceDetail | null>(null);
-  const [confirmSaldoModal, setConfirmSaldoModal] = useState<{ client: ClientStats; amount: number } | null>(null);
+  // requestId: generato quando si APRE la conferma, non al click. Due click
+  // sullo stesso pulsante mandano la STESSA chiave, e il server ne accetta una
+  // sola. Cosi' il doppio pagamento e' impossibile anche con doppio tocco,
+  // tocco fantasma su mobile o due schede aperte.
+  const [confirmSaldoModal, setConfirmSaldoModal] = useState<{ client: ClientStats; amount: number; requestId: string } | null>(null);
+
+  // Blocco invio: il ref ferma il secondo click nello STESSO ciclo di eventi
+  // (lo stato React arriverebbe troppo tardi); lo stato serve solo alla UI.
+  const invioPagamentoRef = useRef(false);
+  const [invioPagamento, setInvioPagamento] = useState(false);
+  const nuovaChiave = () => {
+    try { return crypto.randomUUID(); } catch { return `pay_${Date.now()}_${Math.random().toString(36).slice(2)}`; }
+  };
   // Modale di conferma generica (stile pagina) per azioni sì/no
   const [confirmModal, setConfirmModal] = useState<{
     title: string;
@@ -963,18 +981,24 @@ export default function PagamentiPage() {
 
   const showSuccess = (msg: string) => { setSuccessMessage(msg); setTimeout(() => setSuccessMessage(null), 3000); };
 
-  const handleSubmitPayment = async (proprietarioId: string, proprietarioName: string, customAmount?: number, totalDue?: number, totalPaid?: number) => {
+  const handleSubmitPayment = async (proprietarioId: string, proprietarioName: string, customAmount?: number, totalDue?: number, totalPaid?: number, requestId?: string) => {
+    // 🔒 Un solo invio alla volta. Il ref blocca subito, prima di qualsiasi
+    // re-render: due click ravvicinati non possono generare due richieste.
+    if (invioPagamentoRef.current) return;
     const amount = customAmount || parseFloat(paymentForm.amount);
     if (!amount || amount <= 0) { setLocalError("Inserisci un importo valido"); return; }
     if (!paymentForm.method) { setMethodError(true); return; }
+    invioPagamentoRef.current = true;
+    setInvioPagamento(true);
     try {
       const res = await fetch("/api/payments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ proprietarioId, proprietarioName, month: selectedMonth, year: selectedYear, amount, type: customAmount ? "SALDO" : paymentForm.type, method: paymentForm.method, note: paymentForm.note, totalDue: totalDue || 0, totalPaid: totalPaid || 0 }),
+        body: JSON.stringify({ proprietarioId, proprietarioName, month: selectedMonth, year: selectedYear, amount, type: customAmount ? "SALDO" : paymentForm.type, method: paymentForm.method, note: paymentForm.note, totalDue: totalDue || 0, totalPaid: totalPaid || 0, clientRequestId: requestId || nuovaChiave() }),
       });
       if (!res.ok) throw new Error((await res.json()).error);
       showSuccess(`Pagamento di ${formatCurrency(amount)} registrato`);
+      setConfirmSaldoModal(null);
       setQuickPayClient(null);
       setPaymentForm({ type: "ACCONTO", amount: "", method: "", note: "" });
       // fetchData() RIMOSSA: i listener onSnapshot (cleanings, orders, payments,
@@ -983,7 +1007,12 @@ export default function PagamentiPage() {
       // smontava e rimontava TUTTI i listener ricaricando ~7600 documenti.
       // Era la causa dei ~145s di attesa dopo ogni salvataggio.
       // 🚀 Timeline si aggiorna automaticamente in real-time!
-    } catch (err: any) { setLocalError(err.message); }
+    } catch (err: any) {
+      setLocalError(err.message);
+    } finally {
+      invioPagamentoRef.current = false;
+      setInvioPagamento(false);
+    }
   };
 
   const handleDeletePayment = async (paymentId: string) => {
@@ -1004,7 +1033,7 @@ export default function PagamentiPage() {
   useEffect(() => {
     if (quickPayClient) {
       setQuickPayMode("totale");
-      setQuickPayAmount(String(quickPayClient.saldo));
+      setQuickPayAmount(String(quickPayClient.saldoConCredito));
     }
   }, [quickPayClient]);
 
@@ -1012,30 +1041,36 @@ export default function PagamentiPage() {
     if (!editingService) return;
     if (serviceActionLoading) return; // evita il doppio invio
     setLocalError(null);
-    setServiceActionLoading(true);
     const newPrice = parseFloat(serviceEditForm.newPrice);
     if (isNaN(newPrice) || newPrice < 0) { setLocalError("Inserisci un importo valido"); return; }
+    setServiceActionLoading(true);
+    setFaseSalvataggio("salvataggio");
     // Le pulizie e gli ordini hanno due route distinte, esattamente come fa gia'
     // "Escludi dai pagamenti" qui sotto. La vecchia chiamata a
     // /api/payments/service-override rispondeva 404: quella route non esiste.
     const endpoint = editingService.type === "PULIZIA"
       ? `/api/cleanings/${editingService.id}/price`
       : `/api/orders/${editingService.id}/price`;
-    // UI ISTANTANEA: prezzo applicato e modale chiusa PRIMA della scrittura.
     const servizioId = editingService.id;
     const prezzoPrecedente = editingService.effectivePrice;
     const motivo = serviceEditForm.reason || "Modifica manuale";
+
+    // Il prezzo entra subito nella lista dietro la modale; la scrittura parte
+    // ora e viaggia in parallelo alla sequenza visiva qui sotto.
     setPrezziOttimistici(prev => ({ ...prev, [servizioId]: newPrice }));
-    setEditingService(null);
-    setServiceEditForm({ newPrice: "", reason: "" });
-    showSuccess("Servizio modificato");
+    const scrittura = fetch(endpoint, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ newPrice, reason: motivo }),
+    });
 
     try {
-      const res = await fetch(endpoint, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ newPrice, reason: motivo }),
-      });
+      // Sequenza percepita: "Salvataggio..." → "Salvato" → chiusura.
+      await attendi(750);
+      setFaseSalvataggio("fatto");
+      await attendi(550);
+
+      const res = await scrittura;
       if (!res.ok) {
         // Mostra l'errore VERO invece di un generico "Errore": un 404 muto
         // ha nascosto questo bug fino a oggi.
@@ -1043,6 +1078,10 @@ export default function PagamentiPage() {
         try { const j = await res.json(); if (j?.error) msg = j.error; } catch { /* risposta non JSON */ }
         throw new Error(msg);
       }
+
+      setEditingService(null);
+      setServiceEditForm({ newPrice: "", reason: "" });
+      showSuccess(`Prezzo aggiornato a ${formatCurrency(newPrice)}`);
       // fetchData() RIMOSSA: i listener onSnapshot (cleanings, orders, payments,
       // overrides) consegnano gia' la modifica in tempo reale. Chiamarla qui
       // incrementava refreshTrigger, che sta nelle deps dell'effetto del hook:
@@ -1059,6 +1098,7 @@ export default function PagamentiPage() {
       setLocalError(`Prezzo NON salvato (${prezzoPrecedente.toFixed(2)} € invariato): ${e?.message || "errore di rete"}`);
     } finally {
       setServiceActionLoading(false);
+      setFaseSalvataggio("idle");
     }
   };
 
@@ -2574,13 +2614,13 @@ export default function PagamentiPage() {
     const handleModeChange = (mode: "totale" | "acconto") => {
       setPaymentMode(mode);
       if (mode === "totale") {
-        setCustomAmount(String(quickPayClient.saldo));
+        setCustomAmount(String(quickPayClient.saldoConCredito));
       } else {
         setCustomAmount("");
       }
     };
     
-    const finalAmount = paymentMode === "totale" ? quickPayClient.saldo : parseFloat(customAmount) || 0;
+    const finalAmount = paymentMode === "totale" ? quickPayClient.saldoConCredito : parseFloat(customAmount) || 0;
     
     return (
       <ModalPortal>
@@ -2617,9 +2657,18 @@ export default function PagamentiPage() {
                 <span className="text-emerald-400 text-sm">Già pagato</span>
                 <span className="font-bold text-emerald-400">{formatCurrency(quickPayClient.totalePagato)}</span>
               </div>
+              {/* Credito dai mesi precedenti: se esiste va SOTTRATTO, altrimenti
+                  si incassa due volte lo stesso importo e l'eccedenza si riversa
+                  sui mesi successivi facendoli risultare saldati. */}
+              {quickPayClient.creditoPrecedente > 0.01 && (
+                <div className="flex justify-between items-center mb-2 sm:mb-3">
+                  <span className="text-amber-300 text-sm">Credito da mesi precedenti</span>
+                  <span className="font-bold text-amber-300">−{formatCurrency(quickPayClient.creditoPrecedente)}</span>
+                </div>
+              )}
               <div className="border-t border-slate-700 pt-3 flex justify-between items-center">
                 <span className="font-semibold">Da incassare</span>
-                <span className="font-bold text-2xl text-red-400">{formatCurrency(quickPayClient.saldo)}</span>
+                <span className="font-bold text-2xl text-red-400">{formatCurrency(quickPayClient.saldoConCredito)}</span>
               </div>
             </div>
             
@@ -2644,7 +2693,7 @@ export default function PagamentiPage() {
                     Incassa Totale
                   </p>
                   <p className={`text-sm text-center mt-1 ${paymentMode === "totale" ? "text-emerald-600" : "text-slate-500"}`}>
-                    {formatCurrency(quickPayClient.saldo)}
+                    {formatCurrency(quickPayClient.saldoConCredito)}
                   </p>
                 </button>
                 
@@ -2688,7 +2737,7 @@ export default function PagamentiPage() {
                   />
                 </div>
                 <p className="text-xs text-slate-500 mt-2 text-center">
-                  Residuo dopo acconto: {formatCurrency(quickPayClient.saldo - (parseFloat(customAmount) || 0))}
+                  Residuo dopo acconto: {formatCurrency(quickPayClient.saldoConCredito - (parseFloat(customAmount) || 0))}
                 </p>
               </div>
             )}
@@ -2728,13 +2777,12 @@ export default function PagamentiPage() {
               onClick={() => {
                 if (!paymentForm.method) { setMethodError(true); return; }
                 if (paymentMode === "totale") {
-                  setConfirmSaldoModal({ client: quickPayClient, amount: quickPayClient.saldo });
+                  setConfirmSaldoModal({ client: quickPayClient, amount: quickPayClient.saldoConCredito, requestId: nuovaChiave() });
                 } else if (finalAmount > 0) {
-                  handleSubmitPayment(quickPayClient.proprietarioId, quickPayClient.proprietarioName, finalAmount, quickPayClient.totaleEffettivo, quickPayClient.totalePagato);
-                  setQuickPayClient(null);
+                  handleSubmitPayment(quickPayClient.proprietarioId, quickPayClient.proprietarioName, finalAmount, quickPayClient.totaleEffettivo, quickPayClient.totalePagato, nuovaChiave());
                 }
               }}
-              disabled={paymentMode === "acconto" && finalAmount <= 0}
+              disabled={invioPagamento || (paymentMode === "acconto" && finalAmount <= 0)}
               className={`w-full py-4 rounded-2xl font-bold text-lg flex items-center justify-center gap-2 transition-all ${
                 paymentMode === "totale"
                   ? "bg-gradient-to-r from-emerald-500 to-emerald-600 text-white hover:from-emerald-600 hover:to-emerald-700 shadow-lg"
@@ -2746,7 +2794,7 @@ export default function PagamentiPage() {
               {Icons.check}
               <span>
                 {paymentMode === "totale" 
-                  ? `Incassa Totale ${formatCurrency(quickPayClient.saldo)}`
+                  ? `Incassa Totale ${formatCurrency(quickPayClient.saldoConCredito)}`
                   : finalAmount > 0 
                     ? `Registra Acconto ${formatCurrency(finalAmount)}`
                     : "Inserisci importo"
@@ -2774,9 +2822,15 @@ export default function PagamentiPage() {
               <p className="text-sm text-slate-500 mt-1">{confirmSaldoModal.client.proprietarioName}</p>
             </div>
             <div className="flex gap-3">
-              <button onClick={() => setConfirmSaldoModal(null)} className="flex-1 py-3 border-2 border-slate-200 rounded-xl font-semibold text-slate-600 hover:bg-slate-50">Annulla</button>
-              <button onClick={() => { handleSubmitPayment(confirmSaldoModal.client.proprietarioId, confirmSaldoModal.client.proprietarioName, confirmSaldoModal.amount, confirmSaldoModal.client.totaleEffettivo, confirmSaldoModal.client.totalePagato); setConfirmSaldoModal(null); setQuickPayClient(null); }}
-                className="flex-1 py-3 bg-emerald-500 text-white rounded-xl font-semibold hover:bg-emerald-600 flex items-center justify-center gap-2">{Icons.check} Conferma</button>
+              <button onClick={() => setConfirmSaldoModal(null)} disabled={invioPagamento} className="flex-1 py-3 border-2 border-slate-200 rounded-xl font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40">Annulla</button>
+              {/* La modale NON si chiude piu' al click: resta aperta e bloccata
+                  finche' il server non risponde. Prima si chiudeva subito e
+                  l'esito non si vedeva. */}
+              <button onClick={() => handleSubmitPayment(confirmSaldoModal.client.proprietarioId, confirmSaldoModal.client.proprietarioName, confirmSaldoModal.amount, confirmSaldoModal.client.totaleEffettivo, confirmSaldoModal.client.totalePagato, confirmSaldoModal.requestId)}
+                disabled={invioPagamento}
+                className="flex-1 py-3 bg-emerald-500 text-white rounded-xl font-semibold hover:bg-emerald-600 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-wait">
+                {invioPagamento ? (<><svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" /></svg> Registrazione...</>) : (<>{Icons.check} Conferma</>)}
+              </button>
             </div>
           </div>
         </div>
@@ -3990,7 +4044,7 @@ export default function PagamentiPage() {
               {mode === "edit" && (
                 <>
                   <button onClick={() => setEditingService(null)} disabled={serviceActionLoading} className="flex-1 py-3 border-2 border-slate-200 rounded-xl font-semibold text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50">Annulla</button>
-                  <button onClick={handleSubmitServiceEdit} disabled={serviceActionLoading} className="flex-1 py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl font-semibold hover:from-emerald-600 hover:to-emerald-700 flex items-center justify-center gap-2 shadow-lg disabled:opacity-50">{serviceActionLoading ? "Salvataggio..." : <>{Icons.check} Salva</>}</button>
+                  <button onClick={handleSubmitServiceEdit} disabled={serviceActionLoading} className={`flex-1 py-3 text-white rounded-xl font-semibold flex items-center justify-center gap-2 shadow-lg transition-all duration-300 disabled:opacity-100 ${faseSalvataggio === "fatto" ? "bg-gradient-to-r from-emerald-600 to-emerald-700 scale-[1.02]" : "bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700"}`}>{faseSalvataggio === "salvataggio" ? (<><svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" /></svg> Salvataggio...</>) : faseSalvataggio === "fatto" ? (<>{Icons.check} Salvato</>) : (<>{Icons.check} Salva</>)}</button>
                 </>
               )}
               {mode === "exclude" && (
@@ -4683,10 +4737,14 @@ export default function PagamentiPage() {
             <button onClick={() => setLocalError(null)} className="text-red-400">{Icons.x}</button>
           </div>
         )}
+        {/* Conferma FISSA in alto: prima era in linea nel flusso della pagina e
+            con la lista scrollata non si vedeva quasi mai. */}
         {successMessage && (
-          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-center gap-2 text-sm">
-            <span className="text-emerald-500">{Icons.check}</span>
-            <p className="text-emerald-700">{successMessage}</p>
+          <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[300] px-4 w-full max-w-sm pointer-events-none">
+            <div className="bg-emerald-600 text-white rounded-2xl px-4 py-3 flex items-center gap-2.5 shadow-2xl">
+              <span className="flex-shrink-0">{Icons.check}</span>
+              <p className="text-sm font-semibold">{successMessage}</p>
+            </div>
           </div>
         )}
 

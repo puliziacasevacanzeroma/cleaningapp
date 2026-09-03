@@ -96,9 +96,36 @@ export async function POST(request: NextRequest) {
     const { action } = body;
 
     if (action === "create_payment" || !action) {
-      const { proprietarioId, proprietarioName, month, year, amount, type, method, note, totalDue, totalPaid } = body;
+      const { proprietarioId, proprietarioName, month, year, amount, type, method, note, totalDue, totalPaid, clientRequestId } = body;
       if (!proprietarioId || !month || !year || !amount || !type || !method) {
         return NextResponse.json({ error: "Dati mancanti" }, { status: 400 });
+      }
+
+      // ═══════════════════════════════════════════════════════════════════
+      // 🔒 IDEMPOTENZA — un click, un pagamento. Sempre.
+      // ═══════════════════════════════════════════════════════════════════
+      // Il browser genera una chiave quando APRE la conferma, non al click.
+      // Due click sullo stesso pulsante mandano la STESSA chiave. Qui la
+      // scriviamo con .create(), che FALLISCE se il documento esiste gia':
+      // e' atomico lato Firestore, quindi regge anche due richieste partite
+      // nello stesso millisecondo, da due schede o da un tocco fantasma.
+      if (clientRequestId) {
+        const chiave = String(clientRequestId).slice(0, 200);
+        try {
+          await adminDb.collection("paymentLocks").doc(chiave).create({
+            proprietarioId,
+            month: Number(month),
+            year: Number(year),
+            amount: parseFloat(String(amount)),
+            createdBy: currentUser.id,
+            createdAt: new Date(),
+          });
+        } catch {
+          return NextResponse.json({
+            error: "Questo incasso risulta gia' registrato. Non l'ho registrato una seconda volta.",
+            duplicate: true,
+          }, { status: 409 });
+        }
       }
 
       // 🛡️ GUARDIA ANTI-DOPPIONE
@@ -120,11 +147,12 @@ export async function POST(request: NextRequest) {
             && Number(p.year) === Number(year)
             && p.type === type
             && Math.abs((p.amount || 0) - amtCheck) < 0.01
-            && recentMs < 60_000;
+            && recentMs < 7 * 24 * 60 * 60 * 1000; // 7 GIORNI (era 60s: il doppione
+            // reale su Lorenzo Ricci, giugno 2026, era a 3 giorni di distanza)
         });
         if (dup) {
           return NextResponse.json({
-            error: "Pagamento identico già registrato pochi secondi fa (possibile doppio clic): non l'ho registrato di nuovo per evitare un sovrapagamento.",
+            error: "Per questo cliente risulta gia' un incasso identico sullo stesso mese negli ultimi 7 giorni. Non l'ho registrato di nuovo per evitare un doppio pagamento. Se e' davvero un secondo incasso, aggiungi una nota o cambia l'importo.",
             duplicate: true,
             existingPaymentId: dup.id,
           }, { status: 409 });
