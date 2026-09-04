@@ -330,6 +330,13 @@ export function useOwnerBalance(userId: string | undefined): OwnerBalanceResult 
     // Mesi da controllare: ultimi 24 (escluso corrente)
     const monthsToCheck = getMonthsToCheck(new Date(), 24);
 
+    // Soglia di un centesimo. 231.18 - 231.18 in virgola mobile non fa 0 ma
+    // ~3e-14: con un confronto secco > 0 quel mese risultava a debito, veniva
+    // formattato "0,00 €" e, essendo la scadenza passata, marcato SCADUTO.
+    // Due mesi perfettamente saldati bastavano a far comparire l'avviso rosso.
+    // useOwnerDebts.ts aveva gia' questa soglia: qui mancava.
+    const SALDO_THRESHOLD = 0.01;
+
     const debts: MonthDebt[] = [];
     // ⚠️ Calcolo credito da mesi pagati in eccesso
     // Per ogni mese con saldo NEGATIVO, accumulo il valore assoluto
@@ -351,12 +358,12 @@ export function useOwnerBalance(userId: string | undefined): OwnerBalanceResult 
       if (!calc) continue;
 
       // Saldo negativo = pagato in eccesso → accumula come credito
-      if (calc.saldo < 0) {
+      if (calc.saldo < -SALDO_THRESHOLD) {
         creditoTotale += -calc.saldo;
       }
 
       // Aggiungi solo se c'è un debito residuo
-      if (calc.saldo > 0) {
+      if (calc.saldo > SALDO_THRESHOLD) {
         const status = getDebtStatus(month, year, calc.saldo);
         debts.push({
           month,

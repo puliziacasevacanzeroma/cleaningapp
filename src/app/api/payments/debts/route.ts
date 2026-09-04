@@ -117,7 +117,10 @@ function getDebtStatus(month: number, year: number, saldo: number): {
   statusLabel: string;
   daysToDeadline: number;
 } {
-  if (saldo <= 0) {
+  // Soglia di un centesimo: un residuo di virgola mobile (es. 3e-14) non e'
+  // un debito. Senza questa guardia un mese saldato al centesimo risultava
+  // "Scaduto" con importo 0,00 €.
+  if (saldo <= 0.01) {
     return { status: "SALDATO", statusLabel: "Saldato", daysToDeadline: 0 };
   }
   
@@ -596,8 +599,8 @@ export async function GET(request: NextRequest) {
           })),
         });
         
-        // Accumula totali
-        if (saldo > 0) {
+        // Accumula totali (stessa soglia di un centesimo)
+        if (saldo > 0.01) {
           totaleDebito += saldo;
           if (status === "SCADUTO") totaleScaduto += saldo;
           else if (status === "WARNING") totaleWarning += saldo;
