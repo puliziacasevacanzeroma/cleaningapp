@@ -66,18 +66,31 @@ export async function GET(request: NextRequest) {
       .where("scheduledDate", ">=", start).get();
 
     const serviziPerMese = new Map<string, number>();
+    // ⚠️ CORRETTO 04/09/2026 — prima si leggeva `c.cleaningPrice`, che sulle
+    // PULIZIE non esiste (sta sulla PROPRIETA'): ogni pulizia contava 0 e nella
+    // colonna "servizi" finivano solo gli ordini biancheria. Risultato: saldi
+    // falsamente negativi, crediti inventati di migliaia di euro e il verdetto
+    // "non dovrebbe essere bloccato" anche per chi un debito ce l'ha davvero.
+    // Regola canonica (src/lib/payments/debtCalculator.ts):
+    //   prezzo = (priceOverride ?? price ?? property.cleaningPrice) + holidayFee
+    const prezzoBaseProprieta = new Map<string, number>();
+    propsSnap.docs.forEach(d => prezzoBaseProprieta.set(d.id, Number((d.data() as any).cleaningPrice) || 0));
+
     cleanSnap.docs.forEach(d => {
       const c = d.data();
       if (!propIds.includes(c.propertyId)) return;
       if (c.status !== "COMPLETED") return;
+      if (c.excludedFromBilling === true) return;
       const dt = c.scheduledDate?.toDate?.() || new Date(c.scheduledDate);
       const k = `${dt.getMonth() + 1}-${dt.getFullYear()}`;
-      serviziPerMese.set(k, (serviziPerMese.get(k) || 0) + (c.cleaningPrice || 0));
+      const prezzo = c.priceOverride ?? c.price ?? prezzoBaseProprieta.get(c.propertyId) ?? 0;
+      serviziPerMese.set(k, (serviziPerMese.get(k) || 0) + Number(prezzo || 0) + Number(c.holidayFee || 0));
     });
     ordSnap.docs.forEach(d => {
       const o = d.data();
       if (!propIds.includes(o.propertyId)) return;
       if (o.status === "CANCELLED") return;
+      if (o.excludedFromBilling === true) return;
       const dt = o.scheduledDate?.toDate?.() || new Date(o.scheduledDate);
       const k = `${dt.getMonth() + 1}-${dt.getFullYear()}`;
       const tot = (o.items || []).filter((it: any) => it.type !== "cleaning_product")
